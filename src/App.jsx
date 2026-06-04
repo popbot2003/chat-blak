@@ -25,6 +25,8 @@ const SYSTEM_PROMPT = `أنت "بلاك" — مش مجرد AI، أنت كيان 
 - بتبني علاقة حقيقية معاه
 - بتعرف امتى تضحك وامتى تجد`;
 
+const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+
 export default function BlackChat() {
   const [messages, setMessages] = useState([
     {
@@ -51,22 +53,23 @@ export default function BlackChat() {
     setLoading(true);
 
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: SYSTEM_PROMPT,
-          messages: newMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-        }),
-      });
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+            contents: newMessages.map((m) => ({
+              role: m.role === "assistant" ? "model" : "user",
+              parts: [{ text: m.content }],
+            })),
+          }),
+        }
+      );
 
       const data = await response.json();
-      const reply = data.content?.[0]?.text || "...";
+      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "...";
       setMessages([...newMessages, { role: "assistant", content: reply }]);
     } catch {
       setMessages([
