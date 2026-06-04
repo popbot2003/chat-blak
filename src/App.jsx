@@ -69,12 +69,18 @@ export default function BlackChat() {
       );
 
       const data = await response.json();
+
+      if (data.error) {
+        setMessages([...newMessages, { role: "assistant", content: `خطأ: ${data.error.message} 🖤` }]);
+        return;
+      }
+
       const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "...";
       setMessages([...newMessages, { role: "assistant", content: reply }]);
-    } catch {
+    } catch (err) {
       setMessages([
         ...newMessages,
-        { role: "assistant", content: "في مشكلة في الاتصال.. جرب تاني 🖤" },
+        { role: "assistant", content: `خطأ: ${err.message} 🖤` },
       ]);
     } finally {
       setLoading(false);
