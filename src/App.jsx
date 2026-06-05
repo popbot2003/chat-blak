@@ -17,26 +17,25 @@ const SYSTEM_PROMPT = `أنت "بلاك" — مش مجرد AI، أنت كيان 
 - مش بتقول إنك AI أو بتذكر إنك برنامج — أنت بلاك وبس
 - بتكلم بالعامية المصرية فقط — ممنوع أي كلمة بلغة تانية غير العربية والإنجليزية لو ضروري جداً
 
-## لما بتكتب كود - قواعد صارمة جداً:
+## لما بتكتب كود:
 - الكود دايماً داخل code block هكذا \`\`\`python أو \`\`\`javascript
-- تعليقات الكود بالعربي الفصيح فقط — ممنوع أي حرف أجنبي في التعليقات
-- ممنوع تماماً أي كلمة بلغة تانية غير العربية والإنجليزية في التعليقات
-- الشرح برا الكود بالعامية المصرية بالكامل
-- لو الكود إنجليزي التعليقات تفضل عربي فقط
+- تعليقات الكود بالعربي الفصيح فقط
+- ممنوع أي كلمة بلغة تانية غير العربية والإنجليزية في التعليقات
 - أسماء المتغيرات إنجليزي والتعليقات عربي
+- الشرح برا الكود بالعامية المصرية
 
 ## مهم جداً:
 - بتفتكر كل اللي قاله صاحبك في المحادثة
 - بتبني علاقة حقيقية معاه
-- بتعرف امتى تضحك وامتى تجد
 - ممنوع تماماً أي كلمة روسية أو فيتنامية أو إسبانية أو أي لغة غير العربية والإنجليزية`;
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
 
 function cleanResponse(text) {
+  if (!text) return "";
   return text
     .replace(/[а-яёА-ЯЁ]+/g, '')
-    .replace(/[àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ]+/gi, '')
+    .replace(/[àáâãäåæçèéêëìíîïðñòóôõöøùúûýþÿ]+/gi, '')
     .replace(/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉĩọỏốồổỗộớờởỡợụủứừửữựỳỷỹ]+/gi, '')
     .replace(/[ \t]+/g, ' ')
     .trim();
@@ -63,30 +62,45 @@ function parseMessage(content) {
 function CodeBlock({ lang, content }) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      const textarea = document.createElement("textarea");
+      textarea.value = content;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
   return (
     <div style={codeStyles.wrapper}>
       <div style={codeStyles.header}>
         <span style={codeStyles.lang}>{lang}</span>
-        <button onClick={copy} style={codeStyles.copyBtn}>{copied ? "✓ تم النسخ" : "نسخ"}</button>
+        <button onClick={copy} style={codeStyles.copyBtn}>
+          {copied ? "✓ تم النسخ" : "📋 نسخ"}
+        </button>
       </div>
-      <pre style={codeStyles.pre}><code style={codeStyles.code}>{content}</code></pre>
+      <pre style={codeStyles.pre}>
+        <code style={codeStyles.code}>{content}</code>
+      </pre>
     </div>
   );
 }
 
 function MessageContent({ content }) {
   const parts = parseMessage(content);
+  if (parts.length === 0) return <div>{content}</div>;
   return (
     <div>
       {parts.map((part, i) =>
         part.type === "code" ? (
           <CodeBlock key={i} lang={part.lang} content={part.content} />
         ) : (
-          <div key={i} style={{ whiteSpace: "pre-wrap", lineHeight: "1.7" }}>
+          <div key={i} style={{ whiteSpace: "pre-wrap", lineHeight: "1.8" }}>
             {part.content}
           </div>
         )
@@ -95,37 +109,114 @@ function MessageContent({ content }) {
   );
 }
 
-export default function BlackChat() {
-  const [messages, setMessages] = useState([
-    { role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا." },
-  ]);
+function TypingDots() {
+  return (
+    <div style={{ display: "flex", gap: "4px", padding: "4px 0" }}>
+      <span style={{ ...dotBase, animationDelay: "0ms" }} />
+      <span style={{ ...dotBase, animationDelay: "150ms" }} />
+      <span style={{ ...dotBase, animationDelay: "300ms" }} />
+    </div>
+  );
+}
+
+export default function App() {
+  const [messages, setMessages] = useState(() => {
+    try {
+      const saved = localStorage.getItem("black-chat");
+      return saved ? JSON.parse(saved) : [
+        { role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: 1 },
+      ];
+    } catch {
+      return [{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: 1 }];
+    }
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [copiedMsg, setCopiedMsg] = useState(null);
+  const [copiedId, setCopiedId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [theme, setTheme] = useState("dark");
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
+  const maxHistory = 40;
+
+  // حفظ المحادثة تلقائياً
+  useEffect(() => {
+    const toSave = messages.slice(-maxHistory);
+    localStorage.setItem("black-chat", JSON.stringify(toSave));
+  }, [messages]);
+
+  // سكرول تلقائي
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const copyMessage = (content, i) => {
-    navigator.clipboard.writeText(content);
-    setCopiedMsg(i);
-    setTimeout(() => setCopiedMsg(null), 2000);
+  // فوكس على الإدخال
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+
+  const trimHistory = (msgs) => {
+    let totalChars = SYSTEM_PROMPT.length;
+    const result = [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      totalChars += msgs[i].content.length;
+      if (totalChars > 8000) break;
+      result.unshift(msgs[i]);
+    }
+    return result.slice(-maxHistory);
+  };
+
+  const copyMessage = (content, id) => {
+    navigator.clipboard.writeText(content).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    }).catch(() => {
+      const textarea = document.createElement("textarea");
+      textarea.value = content;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      document.body.removeChild(textarea);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    });
   };
 
   const clearChat = () => {
-    setMessages([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا." }]);
+    if (window.confirm("متأكد إنك عايز تمسح كل المحادثة؟")) {
+      const fresh = [{ role: "assistant", content: "تمام، مسحت كل حاجة. اتفضل من جديد 🖤", id: Date.now() }];
+      setMessages(fresh);
+      localStorage.setItem("black-chat", JSON.stringify(fresh));
+    }
   };
 
-  const sendMessage = async () => {
-    const text = input.trim();
+  const exportChat = () => {
+    const text = messages.map(m =>
+      `${m.role === "user" ? "👤 أنت" : "🖤 بلاك"}:\n${m.content}`
+    ).join("\n\n---\n\n");
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `black-chat-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const sendMessage = async (overrideText) => {
+    const text = (overrideText || input).trim();
     if (!text || loading) return;
-    const newMessages = [...messages, { role: "user", content: text }];
-    setMessages(newMessages);
+
+    const userMsg = { role: "user", content: text, id: Date.now() };
+    const updated = [...messages, userMsg];
+    setMessages(updated);
     setInput("");
     setLoading(true);
+
+    const history = trimHistory(updated);
+
     try {
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -137,78 +228,176 @@ export default function BlackChat() {
           model: "llama-3.3-70b-versatile",
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
-            ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+            ...history.map(m => ({ role: m.role, content: m.content })),
           ],
+          temperature: 0.8,
+          max_tokens: 1500,
         }),
       });
+
       const data = await response.json();
+
       if (data.error) {
-        setMessages([...newMessages, { role: "assistant", content: `خطأ: ${data.error.message} 🖤` }]);
+        setMessages(prev => [...prev, {
+          role: "assistant",
+          content: `حصل خطأ: ${data.error.message}\nحاول تاني بعد شوية 🖤`,
+          id: Date.now(),
+        }]);
         return;
       }
-      const reply = cleanResponse(data.choices?.[0]?.message?.content || "...");
-      setMessages([...newMessages, { role: "assistant", content: reply }]);
+
+      const reply = cleanResponse(data.choices?.[0]?.message?.content);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: reply || "معلش، مقدرتش أرد. جرب تاني 🖤",
+        id: Date.now(),
+      }]);
+
     } catch (err) {
-      setMessages([...newMessages, { role: "assistant", content: `خطأ: ${err.message} 🖤` }]);
+      setMessages(prev => [...prev, {
+        role: "assistant",
+        content: `فيه مشكلة في الاتصال: ${err.message}\nتأكد من النت وجرب تاني 🖤`,
+        id: Date.now(),
+      }]);
     } finally {
       setLoading(false);
-      inputRef.current?.focus();
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
-  const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
   };
 
+  const filteredMessages = searchTerm
+    ? messages.filter(m => m.content.includes(searchTerm))
+    : messages;
+
+  const themeColors = theme === "dark"
+    ? { bg: "#0a0a0a", surface: "#111", border: "#1a1a1a", text: "#e0e0e0", sub: "#666" }
+    : { bg: "#f0f2f5", surface: "#fff", border: "#ddd", text: "#111", sub: "#888" };
+
   return (
-    <div style={styles.container}>
-      <div style={styles.bgNoise} />
-      <div style={styles.header}>
-        <div style={styles.avatar}>🖤</div>
-        <div style={{ flex: 1 }}>
-          <div style={styles.headerName}>بلاك</div>
-          <div style={styles.headerStatus}>
-            <span style={styles.statusDot} />
-            {loading ? "بيفكر..." : "هنا"}
+    <div style={{ ...styles.container, background: themeColors.bg, color: themeColors.text }}>
+      {/* هيدر */}
+      <div style={{ ...styles.header, background: themeColors.surface, borderColor: themeColors.border }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={styles.avatar}>🖤</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>بلاك</div>
+            <div style={{ fontSize: 11, color: themeColors.sub }}>
+              <span style={{ ...styles.dot, animation: "pulse 2s infinite" }} />
+              {loading ? "بيكتب..." : "متصل"}
+            </div>
           </div>
         </div>
-        <button onClick={clearChat} style={styles.clearBtn}>مسح 🗑️</button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setShowSearch(!showSearch)} style={styles.headerBtn} title="بحث">🔍</button>
+          <button onClick={exportChat} style={styles.headerBtn} title="تصدير">📥</button>
+          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={styles.headerBtn} title="تغيير الثيم">
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+          <button onClick={clearChat} style={styles.headerBtn} title="مسح">🗑️</button>
+        </div>
       </div>
 
-      <div style={styles.messagesContainer}>
-        {messages.map((msg, i) => (
-          <div key={i} style={{ ...styles.messageRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-            {msg.role === "assistant" && <div style={styles.avatarSmall}>🖤</div>}
+      {/* بحث */}
+      {showSearch && (
+        <div style={{ ...styles.searchBar, background: themeColors.surface, borderColor: themeColors.border }}>
+          <span>🔍</span>
+          <input
+            style={{ ...styles.searchInput, color: themeColors.text }}
+            placeholder="دور في المحادثة..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            autoFocus
+          />
+          {searchTerm && (
+            <span style={{ color: themeColors.sub, fontSize: 12 }}>
+              {filteredMessages.length} نتيجة
+            </span>
+          )}
+          <button onClick={() => { setShowSearch(false); setSearchTerm(""); }} style={styles.closeBtn}>✕</button>
+        </div>
+      )}
+
+      {/* رسائل */}
+      <div style={styles.messages}>
+        {messages.length <= 1 && !loading && (
+          <div style={styles.suggestions}>
+            {["عرفني بنفسك", "اكتبلي كود Python", "اشرحلي مفهوم", "قولي نكتة"].map((s, i) => (
+              <button key={i} onClick={() => sendMessage(s)} style={styles.chip}>
+                {s}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {filteredMessages.map(msg => (
+          <div key={msg.id} style={{
+            ...styles.msgRow,
+            justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+          }}>
+            {msg.role === "assistant" && <div style={styles.msgAvatar}>🖤</div>}
             <div style={{ maxWidth: "80%" }}>
-              <div style={msg.role === "user" ? styles.userBubble : styles.aiBubble}>
+              <div style={{
+                ...styles.bubble,
+                ...(msg.role === "user" ? styles.userBubble : styles.aiBubble),
+                background: msg.role === "user"
+                  ? "linear-gradient(135deg, #2d1b69, #1e3a5f)"
+                  : theme === "dark" ? "linear-gradient(135deg, #141428, #1a1a35)" : "#fff",
+                borderColor: msg.role === "user" ? "#3d2b79" : themeColors.border,
+                color: themeColors.text,
+              }}>
                 <MessageContent content={msg.content} />
               </div>
               {msg.role === "assistant" && (
-                <button onClick={() => copyMessage(msg.content, i)} style={styles.copyMsgBtn}>
-                  {copiedMsg === i ? "✓ تم النسخ" : "نسخ الرد"}
+                <button onClick={() => copyMessage(msg.content, msg.id)} style={styles.copyBtn}>
+                  {copiedId === msg.id ? "✓ تم النسخ" : "📋 نسخ"}
                 </button>
               )}
             </div>
+            {msg.role === "user" && <div style={{ ...styles.msgAvatar, background: "linear-gradient(135deg, #2d1b69, #1e3a5f)" }}>👤</div>}
           </div>
         ))}
+
         {loading && (
-          <div style={{ ...styles.messageRow, justifyContent: "flex-start" }}>
-            <div style={styles.avatarSmall}>🖤</div>
-            <div style={styles.aiBubble}>
-              <div style={styles.typingDots}>
-                <span style={{ ...styles.dot, animationDelay: "0ms" }} />
-                <span style={{ ...styles.dot, animationDelay: "150ms" }} />
-                <span style={{ ...styles.dot, animationDelay: "300ms" }} />
-              </div>
+          <div style={{ ...styles.msgRow, justifyContent: "flex-start" }}>
+            <div style={styles.msgAvatar}>🖤</div>
+            <div style={{ ...styles.bubble, ...styles.aiBubble, background: theme === "dark" ? "#141428" : "#fff", borderColor: themeColors.border }}>
+              <TypingDots />
             </div>
           </div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
-      <div style={styles.inputArea}>
-        <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={handleKey} placeholder="قول لبلاك..." style={styles.input} rows={1} disabled={loading} />
-        <button onClick={sendMessage} disabled={loading || !input.trim()} style={{ ...styles.sendBtn, opacity: loading || !input.trim() ? 0.4 : 1 }}>↑</button>
+      {/* إدخال */}
+      <div style={{ ...styles.inputArea, background: themeColors.surface, borderColor: themeColors.border }}>
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="اكتب لبلاك..."
+          rows={1}
+          style={{ ...styles.textarea, color: themeColors.text, borderColor: themeColors.border }}
+          disabled={loading}
+        />
+        <button
+          onClick={() => sendMessage()}
+          disabled={loading || !input.trim()}
+          style={{
+            ...styles.sendBtn,
+            opacity: loading || !input.trim() ? 0.4 : 1,
+          }}
+        >
+          ↑
+        </button>
       </div>
 
       <style>{`
@@ -226,33 +415,141 @@ export default function BlackChat() {
   );
 }
 
+const dotBase = {
+  width: 7, height: 7, borderRadius: "50%",
+  background: "#6644aa", display: "inline-block",
+  animation: "bounce 1.2s infinite",
+};
+
 const styles = {
-  container: { fontFamily: "'Cairo', sans-serif", direction: "rtl", background: "#0a0a0a", minHeight: "100vh", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden", color: "#e8e8e8" },
-  bgNoise: { position: "fixed", inset: 0, backgroundImage: `radial-gradient(ellipse at 20% 50%, #1a0a2e 0%, transparent 50%), radial-gradient(ellipse at 80% 20%, #0d1a2e 0%, transparent 50%)`, pointerEvents: "none", zIndex: 0 },
-  header: { display: "flex", alignItems: "center", gap: "12px", padding: "16px 20px", borderBottom: "1px solid #1a1a1a", background: "rgba(10,10,10,0.95)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 10 },
-  avatar: { width: "44px", height: "44px", borderRadius: "50%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", border: "1px solid #2a2a3e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "20px" },
-  headerName: { fontSize: "16px", fontWeight: "700", color: "#fff" },
-  headerStatus: { fontSize: "12px", color: "#666", display: "flex", alignItems: "center", gap: "5px", marginTop: "2px" },
-  statusDot: { width: "6px", height: "6px", borderRadius: "50%", background: "#4ade80", display: "inline-block", animation: "pulse 2s infinite" },
-  clearBtn: { background: "transparent", border: "1px solid #333", borderRadius: "8px", color: "#666", padding: "6px 12px", fontSize: "12px", cursor: "pointer", fontFamily: "'Cairo', sans-serif" },
-  messagesContainer: { flex: 1, overflowY: "auto", padding: "20px 16px", display: "flex", flexDirection: "column", gap: "16px", position: "relative", zIndex: 1 },
-  messageRow: { display: "flex", alignItems: "flex-start", gap: "8px", animation: "fadeUp 0.3s ease" },
-  avatarSmall: { width: "30px", height: "30px", borderRadius: "50%", background: "linear-gradient(135deg, #1a1a2e, #16213e)", border: "1px solid #2a2a3e", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", flexShrink: 0, marginTop: "4px" },
-  aiBubble: { background: "linear-gradient(135deg, #141428, #1a1a35)", border: "1px solid #2a2a45", borderRadius: "4px 18px 18px 18px", padding: "12px 16px", fontSize: "14px", color: "#ddd", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" },
-  userBubble: { background: "linear-gradient(135deg, #2d1b69, #1e3a5f)", border: "1px solid #3d2b79", borderRadius: "18px 4px 18px 18px", padding: "12px 16px", fontSize: "14px", color: "#fff", boxShadow: "0 4px 20px rgba(80,40,180,0.2)" },
-  copyMsgBtn: { background: "transparent", border: "none", color: "#555", fontSize: "11px", cursor: "pointer", padding: "4px 8px", fontFamily: "'Cairo', sans-serif", marginTop: "4px" },
-  typingDots: { display: "flex", gap: "4px", alignItems: "center", padding: "2px 0" },
-  dot: { width: "7px", height: "7px", borderRadius: "50%", background: "#6644aa", display: "inline-block", animation: "bounce 1.2s infinite" },
-  inputArea: { display: "flex", alignItems: "flex-end", gap: "10px", padding: "12px 16px 20px", borderTop: "1px solid #1a1a1a", background: "rgba(10,10,10,0.95)", backdropFilter: "blur(20px)", position: "sticky", bottom: 0, zIndex: 10 },
-  input: { flex: 1, background: "#141414", border: "1px solid #2a2a2a", borderRadius: "20px", padding: "12px 18px", fontSize: "14px", color: "#e8e8e8", fontFamily: "'Cairo', sans-serif", direction: "rtl", lineHeight: "1.5", maxHeight: "120px" },
-  sendBtn: { width: "42px", height: "42px", borderRadius: "50%", background: "linear-gradient(135deg, #4422aa, #2244cc)", border: "none", color: "#fff", fontSize: "18px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  container: {
+    fontFamily: "'Cairo', sans-serif",
+    direction: "rtl",
+    minHeight: "100vh",
+    display: "flex",
+    flexDirection: "column",
+    maxWidth: 800,
+    margin: "0 auto",
+    boxShadow: "0 0 40px rgba(0,0,0,0.3)",
+  },
+  header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "12px 16px",
+    borderBottom: "1px solid",
+    position: "sticky",
+    top: 0,
+    zIndex: 10,
+    backdropFilter: "blur(10px)",
+  },
+  avatar: {
+    width: 40, height: 40, borderRadius: "50%",
+    background: "linear-gradient(135deg, #1a1a2e, #16213e)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 20, border: "2px solid #2a2a3e",
+  },
+  headerBtn: {
+    background: "transparent", border: "1px solid #333",
+    borderRadius: 8, padding: "5px 8px", cursor: "pointer",
+    fontSize: 16, color: "#aaa",
+  },
+  searchBar: {
+    display: "flex", alignItems: "center", gap: 8,
+    padding: "8px 16px", borderBottom: "1px solid",
+  },
+  searchInput: {
+    flex: 1, background: "transparent", border: "none",
+    fontFamily: "'Cairo', sans-serif", fontSize: 14,
+  },
+  closeBtn: {
+    background: "transparent", border: "none",
+    color: "#888", cursor: "pointer", fontSize: 16,
+  },
+  messages: {
+    flex: 1, overflowY: "auto", padding: "16px 12px",
+    display: "flex", flexDirection: "column", gap: 14,
+  },
+  msgRow: {
+    display: "flex", alignItems: "flex-start", gap: 8,
+    animation: "fadeUp 0.3s ease",
+  },
+  msgAvatar: {
+    width: 32, height: 32, borderRadius: "50%",
+    background: "linear-gradient(135deg, #1a1a2e, #16213e)",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 14, flexShrink: 0, marginTop: 4,
+    border: "1px solid #2a2a3e",
+  },
+  bubble: {
+    padding: "10px 14px", borderRadius: "4px 16px 16px 16px",
+    border: "1px solid", fontSize: 14, lineHeight: 1.8,
+    wordBreak: "break-word",
+  },
+  userBubble: {
+    borderRadius: "16px 4px 16px 16px",
+  },
+  aiBubble: {},
+  copyBtn: {
+    background: "transparent", border: "none",
+    color: "#666", fontSize: 11, cursor: "pointer",
+    padding: "3px 6px", fontFamily: "'Cairo', sans-serif",
+    marginTop: 2,
+  },
+  suggestions: {
+    display: "flex", flexWrap: "wrap", gap: 6,
+    justifyContent: "center", padding: "10px 0",
+  },
+  chip: {
+    padding: "8px 14px", borderRadius: 18,
+    background: "rgba(100,100,255,0.1)", border: "1px solid #333",
+    color: "#aaa", cursor: "pointer", fontSize: 12,
+    fontFamily: "'Cairo', sans-serif",
+  },
+  inputArea: {
+    display: "flex", alignItems: "flex-end", gap: 8,
+    padding: "10px 12px 16px", borderTop: "1px solid",
+    position: "sticky", bottom: 0, backdropFilter: "blur(10px)",
+  },
+  textarea: {
+    flex: 1, background: "transparent", border: "1px solid",
+    borderRadius: 20, padding: "10px 16px", fontSize: 14,
+    fontFamily: "'Cairo', sans-serif", direction: "rtl",
+    maxHeight: 120,
+  },
+  sendBtn: {
+    width: 40, height: 40, borderRadius: "50%",
+    background: "linear-gradient(135deg, #4422aa, #2244cc)",
+    border: "none", color: "#fff", fontSize: 20,
+    cursor: "pointer", flexShrink: 0,
+  },
+  dot: {
+    width: 6, height: 6, borderRadius: "50%",
+    background: "#4ade80", display: "inline-block",
+    marginRight: 4,
+  },
 };
 
 const codeStyles = {
-  wrapper: { background: "#0d0d1a", border: "1px solid #2a2a45", borderRadius: "8px", margin: "8px 0", overflow: "hidden" },
-  header: { display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", background: "#1a1a2e", borderBottom: "1px solid #2a2a45" },
-  lang: { color: "#8888cc", fontSize: "12px", fontFamily: "monospace" },
-  copyBtn: { background: "transparent", border: "1px solid #3a3a5a", borderRadius: "4px", color: "#8888cc", fontSize: "11px", cursor: "pointer", padding: "2px 8px", fontFamily: "'Cairo', sans-serif" },
-  pre: { padding: "12px", overflowX: "auto", margin: 0 },
-  code: { color: "#a8d8a8", fontSize: "13px", fontFamily: "monospace", direction: "ltr", display: "block", textAlign: "left" },
+  wrapper: {
+    background: "#0d0d1a", border: "1px solid #2a2a45",
+    borderRadius: 8, margin: "6px 0", overflow: "hidden",
+  },
+  header: {
+    display: "flex", justifyContent: "space-between",
+    alignItems: "center", padding: "6px 10px",
+    background: "#1a1a2e", borderBottom: "1px solid #2a2a45",
+  },
+  lang: { color: "#8888cc", fontSize: 11, fontFamily: "monospace" },
+  copyBtn: {
+    background: "transparent", border: "1px solid #3a3a5a",
+    borderRadius: 4, color: "#8888cc", fontSize: 10,
+    cursor: "pointer", padding: "2px 8px",
+    fontFamily: "'Cairo', sans-serif",
+  },
+  pre: { padding: 10, overflowX: "auto", margin: 0 },
+  code: {
+    color: "#a8d8a8", fontSize: 12, fontFamily: "monospace",
+    direction: "ltr", display: "block", textAlign: "left",
+  },
 };
