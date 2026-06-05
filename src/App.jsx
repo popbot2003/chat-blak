@@ -25,14 +25,11 @@ const SYSTEM_PROMPT = `أنت "بلاك" — مش مجرد AI، أنت كيان 
 - بتبني علاقة حقيقية معاه
 - بتعرف امتى تضحك وامتى تجد`;
 
-const GEMINI_KEY = import.meta.env.VITE_GEMINI_KEY;
+const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
 
 export default function BlackChat() {
   const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.",
-    },
+    { role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا." },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,42 +43,34 @@ export default function BlackChat() {
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || loading) return;
-
     const newMessages = [...messages, { role: "user", content: text }];
     setMessages(newMessages);
     setInput("");
     setLoading(true);
-
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            contents: newMessages.map((m) => ({
-              role: m.role === "assistant" ? "model" : "user",
-              parts: [{ text: m.content }],
-            })),
-          }),
-        }
-      );
-
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${GROQ_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            ...newMessages.map((m) => ({ role: m.role, content: m.content })),
+          ],
+        }),
+      });
       const data = await response.json();
-
       if (data.error) {
         setMessages([...newMessages, { role: "assistant", content: `خطأ: ${data.error.message} 🖤` }]);
         return;
       }
-
-      const reply = data.candidates?.[0]?.content?.parts?.[0]?.text || "...";
+      const reply = data.choices?.[0]?.message?.content || "...";
       setMessages([...newMessages, { role: "assistant", content: reply }]);
     } catch (err) {
-      setMessages([
-        ...newMessages,
-        { role: "assistant", content: `خطأ: ${err.message} 🖤` },
-      ]);
+      setMessages([...newMessages, { role: "assistant", content: `خطأ: ${err.message} 🖤` }]);
     } finally {
       setLoading(false);
       inputRef.current?.focus();
@@ -89,10 +78,7 @@ export default function BlackChat() {
   };
 
   const handleKey = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
   return (
