@@ -33,6 +33,15 @@ const SYSTEM_PROMPT = `أنت "بلاك" — مش مجرد AI، أنت كيان 
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
 
+function cleanResponse(text) {
+  return text
+    .replace(/[а-яёА-ЯЁ]+/g, '')
+    .replace(/[àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ]+/gi, '')
+    .replace(/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉĩọỏốồổỗộớờởỡợụủứừửữựỳỷỹ]+/gi, '')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
 function parseMessage(content) {
   const parts = [];
   const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
@@ -137,7 +146,7 @@ export default function BlackChat() {
         setMessages([...newMessages, { role: "assistant", content: `خطأ: ${data.error.message} 🖤` }]);
         return;
       }
-      const reply = data.choices?.[0]?.message?.content || "...";
+      const reply = cleanResponse(data.choices?.[0]?.message?.content || "...");
       setMessages([...newMessages, { role: "assistant", content: reply }]);
     } catch (err) {
       setMessages([...newMessages, { role: "assistant", content: `خطأ: ${err.message} 🖤` }]);
