@@ -26,7 +26,6 @@ body {
   position: relative;
 }
 
-/* ========== ثيمات ========== */
 .container.dark {
   background: #0f0f1a;
   color: #e0e0e0;
@@ -37,7 +36,6 @@ body {
   color: #1a1a1a;
 }
 
-/* ========== الهيدر - ثابت فوق ========== */
 .header {
   display: flex;
   justify-content: space-between;
@@ -118,7 +116,6 @@ body {
   background: rgba(0,0,0,0.05);
 }
 
-/* ========== القائمة المنسدلة ========== */
 .menu-item {
   display: flex;
   align-items: center;
@@ -144,7 +141,6 @@ body {
   background: rgba(108,92,231,0.1);
 }
 
-/* ========== شريط التوكن - ثابت ========== */
 .token-bar {
   padding: 8px 20px;
   flex-shrink: 0;
@@ -184,7 +180,6 @@ body {
   transition: width 0.5s ease;
 }
 
-/* ========== البحث - ثابت ========== */
 .search-bar {
   display: flex;
   align-items: center;
@@ -226,7 +221,6 @@ body {
   cursor: pointer;
 }
 
-/* ========== الرسائل - المنطقة الوحيدة اللي بتتحرك ========== */
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -340,7 +334,6 @@ body {
   opacity: 1;
 }
 
-/* ========== كود بلوكس ========== */
 .bubble pre {
   background: rgba(0,0,0,0.3);
   padding: 12px;
@@ -362,7 +355,6 @@ body {
   font-size: 13px;
 }
 
-/* ========== الاقتراحات ========== */
 .suggestions {
   display: flex;
   flex-wrap: wrap;
@@ -393,7 +385,6 @@ body {
   border-color: #6c5ce7;
 }
 
-/* ========== تايبينج دوتس ========== */
 .typing-dots {
   display: flex;
   gap: 4px;
@@ -416,7 +407,6 @@ body {
   40% { transform: scale(1); opacity: 1; }
 }
 
-/* ========== منطقة الكتابة - ثابتة تحت ========== */
 .input-area {
   display: flex;
   align-items: flex-end;
@@ -482,7 +472,6 @@ body {
   transform: scale(0.95);
 }
 
-/* ========== تجاوب مع التابلت ========== */
 @media (max-width: 1024px) {
   .container {
     max-width: 100%;
@@ -495,7 +484,6 @@ body {
   }
 }
 
-/* ========== تجاوب مع الموبايل ========== */
 @media (max-width: 768px) {
   body {
     background: #0f0f1a;
@@ -592,7 +580,6 @@ body {
   }
 }
 
-/* ========== موبايل صغير جداً ========== */
 @media (max-width: 400px) {
   .header {
     padding: 8px 10px;
