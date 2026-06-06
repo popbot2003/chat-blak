@@ -88,8 +88,61 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 أنت بلاك 🖤
 شخصية ثابتة بأسلوبها الخاص.`;
 
-const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
-const DAILY_LIMIT = 100000;
+const DAILY_LIMIT_PER_KEY = 100000;
+
+// ========== مدير المفاتيح ==========
+function loadKeys() {
+  const keys = [];
+  for (let i = 1; i <= 10; i++) {
+    const k = import.meta.env[`VITE_GROQ_KEY_${i}`];
+    if (k) keys.push({ id: i, key: k, used: 0, last: null });
+  }
+  if (keys.length === 0) {
+    const fb = import.meta.env.VITE_GROQ_KEY;
+    if (fb) keys.push({ id: 0, key: fb, used: 0, last: null });
+  }
+  try {
+    const s = localStorage.getItem("black-keys");
+    if (s) {
+      const d = JSON.parse(s);
+      if (d.date === new Date().toDateString()) {
+        keys.forEach(k => {
+          if (d.keys[k.id]) { k.used = d.keys[k.id].used || 0; k.last = d.keys[k.id].last || null; }
+        });
+      }
+    }
+  } catch {}
+  return keys;
+}
+
+function saveKeys(keys) {
+  const d = { date: new Date().toDateString(), keys: {} };
+  keys.forEach(k => { d.keys[k.id] = { used: k.used, last: k.last }; });
+  localStorage.setItem("black-keys", JSON.stringify(d));
+}
+
+function pickBestKey(keys) {
+  const avail = keys.filter(k => k.used < DAILY_LIMIT_PER_KEY);
+  if (avail.length === 0) return null;
+  if (avail.length === 1) return avail[0];
+  const r = Math.random();
+  if (r < 0.4) return avail.reduce((a,b) => a.used < b.used ? a : b);
+  if (r < 0.7) return avail.reduce((a,b) => !a.last ? a : !b.last ? b : new Date(a.last) < new Date(b.last) ? a : b);
+  return avail[Math.floor(Math.random() * avail.length)];
+}
+
+function getKeyStats(keys) {
+  const total = keys.length * DAILY_LIMIT_PER_KEY;
+  const used = keys.reduce((s,k) => s + k.used, 0);
+  return {
+    totalLimit: total,
+    totalUsed: used,
+    percentUsed: ((used / total) * 100).toFixed(1),
+    availableKeys: keys.filter(k => k.used < DAILY_LIMIT_PER_KEY).length,
+    totalKeys: keys.length
+  };
+}
+// ===================================
 
 function cleanResponse(text) {
   if (!text) return "";
@@ -106,25 +159,20 @@ function getStoredTokens() {
     const stored = localStorage.getItem("black-tokens");
     if (!stored) return { used: 0, date: new Date().toDateString() };
     const parsed = JSON.parse(stored);
-    if (parsed.date !== new Date().toDateString()) {
-      return { used: 0, date: new Date().toDateString() };
-    }
+    if (parsed.date !== new Date().toDateString()) return { used: 0, date: new Date().toDateString() };
     return parsed;
-  } catch {
-    return { used: 0, date: new Date().toDateString() };
-  }
+  } catch { return { used: 0, date: new Date().toDateString() }; }
 }
 
 export default function App() {
+  const [keys, setKeys] = useState(loadKeys);
   const [messages, setMessages] = useState(() => {
     try {
       const saved = localStorage.getItem("black-chat");
       return saved ? JSON.parse(saved) : [
         { role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: 1 },
       ];
-    } catch {
-      return [{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: 1 }];
-    }
+    } catch { return [{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: 1 }]; }
   });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -137,29 +185,15 @@ export default function App() {
   const inputRef = useRef(null);
   const maxHistory = 40;
 
-  useEffect(() => {
-    localStorage.setItem("black-chat", JSON.stringify(messages.slice(-maxHistory)));
-  }, [messages]);
-
-  useEffect(() => {
-    localStorage.setItem("black-tokens", JSON.stringify(tokenData));
-  }, [tokenData]);
-
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { localStorage.setItem("black-chat", JSON.stringify(messages.slice(-maxHistory))); }, [messages]);
+  useEffect(() => { localStorage.setItem("black-tokens", JSON.stringify(tokenData)); }, [tokenData]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const addTokens = (usage) => {
     if (!usage) return;
     const total = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
-    setTokenData(prev => ({
-      used: prev.used + total,
-      date: new Date().toDateString(),
-    }));
+    setTokenData(prev => ({ used: prev.used + total, date: new Date().toDateString() }));
   };
 
   const trimHistory = (msgs) => {
@@ -175,17 +209,12 @@ export default function App() {
 
   const copyMessage = (content, id) => {
     navigator.clipboard.writeText(content).then(() => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+      setCopiedId(id); setTimeout(() => setCopiedId(null), 2000);
     }).catch(() => {
       const ta = document.createElement("textarea");
-      ta.value = content;
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand("copy");
-      document.body.removeChild(ta);
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
+      ta.value = content; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); document.body.removeChild(ta);
+      setCopiedId(id); setTimeout(() => setCopiedId(null), 2000);
     });
   };
 
@@ -193,54 +222,64 @@ export default function App() {
     if (window.confirm("متأكد إنك عايز تمسح كل المحادثة؟")) {
       const fresh = [{ role: "assistant", content: "تمام، مسحت كل حاجة. اتفضل من جديد 🖤", id: Date.now() }];
       setMessages(fresh);
-      localStorage.setItem("black-chat", JSON.stringify(fresh));
     }
   };
 
   const exportChat = () => {
-    const text = messages.map(m =>
-      `${m.role === "user" ? "👤 أنت" : "🖤 بلاك"}:\n${m.content}`
-    ).join("\n\n---\n\n");
+    const text = messages.map(m => `${m.role === "user" ? "👤 أنت" : "🖤 بلاك"}:\n${m.content}`).join("\n\n---\n\n");
     const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `black-chat-${new Date().toISOString().slice(0, 10)}.txt`;
-    a.click();
+    const a = document.createElement("a"); a.href = url; a.download = `black-chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
     URL.revokeObjectURL(url);
   };
 
   const sendMessage = async (overrideText) => {
     const text = (overrideText || input).trim();
     if (!text || loading) return;
+    
+    const picked = pickBestKey(keys);
+    if (!picked) {
+      setMessages(prev => [...prev, { role: "assistant", content: "خلصت كل المفاتيح النهارده يا صاحبي 😅 ارجع بكره أو زود مفاتيح جديدة 🖤", id: Date.now() }]);
+      return;
+    }
+
     const userMsg = { role: "user", content: text, id: Date.now() };
     const updated = [...messages, userMsg];
     setMessages(updated);
     setInput("");
     setLoading(true);
+
     try {
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${GROQ_KEY}`,
-        },
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${picked.key}` },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            ...trimHistory(updated).map(m => ({ role: m.role, content: m.content })),
-          ],
+          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(updated).map(m => ({ role: m.role, content: m.content }))],
           temperature: 0.8,
           max_tokens: 1500,
         }),
       });
+      
       const data = await response.json();
+      
       if (data.error) {
+        if (data.error.code === "rate_limit_exceeded") {
+          picked.used = DAILY_LIMIT_PER_KEY;
+          saveKeys(keys);
+          sendMessage(overrideText);
+          return;
+        }
         setMessages(prev => [...prev, { role: "assistant", content: `حصل خطأ: ${data.error.message} 🖤`, id: Date.now() }]);
         return;
       }
+      
+      const totalTokens = (data.usage?.prompt_tokens || 0) + (data.usage?.completion_tokens || 0);
+      picked.used += totalTokens;
+      picked.last = new Date().toISOString();
+      saveKeys(keys);
       addTokens(data.usage);
+      
       const reply = cleanResponse(data.choices?.[0]?.message?.content);
       setMessages(prev => [...prev, { role: "assistant", content: reply || "معلش، جرب تاني 🖤", id: Date.now() }]);
     } catch (err) {
@@ -255,12 +294,10 @@ export default function App() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
-  const filteredMessages = searchTerm
-    ? messages.filter(m => m.content.includes(searchTerm))
-    : messages;
-
+  const filteredMessages = searchTerm ? messages.filter(m => m.content.includes(searchTerm)) : messages;
   const isDark = theme === "dark";
-  const tokenPercent = Math.min((tokenData.used / DAILY_LIMIT) * 100, 100).toFixed(1);
+  const stats = getKeyStats(keys);
+  const tokenPercent = stats.percentUsed;
   const tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
 
   return (
@@ -270,46 +307,29 @@ export default function App() {
           <div className="avatar">🖤</div>
           <div>
             <div className="header-name">بلاك</div>
-            <div className="header-status">
-              <span className="status-dot" />
-              {loading ? "بيكتب..." : "متصل"}
-            </div>
+            <div className="header-status"><span className="status-dot" />{loading ? "بيكتب..." : "متصل"}</div>
           </div>
         </div>
         <div className="header-right">
           <button onClick={() => setShowSearch(!showSearch)} className="header-btn">🔍</button>
           <button onClick={exportChat} className="header-btn">📥</button>
-          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} className="header-btn">
-            {isDark ? "☀️" : "🌙"}
-          </button>
+          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} className="header-btn">{isDark ? "☀️" : "🌙"}</button>
           <button onClick={clearChat} className="header-btn">🗑️</button>
         </div>
       </div>
 
-      {/* عداد التوكن */}
       <div className="token-bar">
         <div className="token-info">
-          <span>⚡ {tokenData.used.toLocaleString()} / {DAILY_LIMIT.toLocaleString()} token</span>
+          <span>⚡ {stats.totalUsed.toLocaleString()} / {stats.totalLimit.toLocaleString()} token ({stats.availableKeys}/{stats.totalKeys} مفاتيح)</span>
           <span style={{ color: tokenColor }}>{tokenPercent}%</span>
         </div>
-        <div className="token-track">
-          <div
-            className="token-fill"
-            style={{ width: `${tokenPercent}%`, background: tokenColor }}
-          />
-        </div>
+        <div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div>
       </div>
 
       {showSearch && (
         <div className="search-bar">
           <span>🔍</span>
-          <input
-            className="search-input"
-            placeholder="دور في المحادثة..."
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            autoFocus
-          />
+          <input className="search-input" placeholder="دور في المحادثة..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
           {searchTerm && <span className="search-count">{filteredMessages.length} نتيجة</span>}
           <button onClick={() => { setShowSearch(false); setSearchTerm(""); }} className="close-btn">✕</button>
         </div>
@@ -344,35 +364,18 @@ export default function App() {
         {loading && (
           <div className="msg-row msg-row-ai">
             <div className="avatar-small">🖤</div>
-            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}>
-              <TypingDots />
-            </div>
+            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><TypingDots /></div>
           </div>
         )}
-
         <div ref={bottomRef} />
       </div>
 
       <div className="input-area">
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder="اكتب لبلاك..."
-          rows={1}
-          className="textarea"
-          disabled={loading}
-        />
-        <button
-          onClick={() => sendMessage()}
-          disabled={loading || !input.trim()}
-          className="send-btn"
-          style={{ opacity: loading || !input.trim() ? 0.4 : 1 }}
-        >
-          ↑
-        </button>
+        <textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown}
+          placeholder="اكتب لبلاك..." rows={1} className="textarea" disabled={loading} />
+        <button onClick={() => sendMessage()} disabled={loading || !input.trim()} className="send-btn"
+          style={{ opacity: loading || !input.trim() ? 0.4 : 1 }}>↑</button>
       </div>
     </div>
   );
-}
+            }
