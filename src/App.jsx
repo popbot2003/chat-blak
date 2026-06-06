@@ -97,7 +97,6 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 
 const DAILY_LIMIT_PER_KEY = 100000;
 
-// ========== مدير المفاتيح ==========
 function loadKeys() {
   const keys = [];
   for (let i = 1; i <= 10; i++) {
@@ -173,7 +172,6 @@ function getStoredTokens() {
   } catch { return { used: 0, date: new Date().toDateString() }; }
 }
 
-// ========== مدير المحادثات ==========
 function loadAllChats() {
   try {
     const saved = localStorage.getItem("black-all-chats");
@@ -185,7 +183,6 @@ function saveAllChats(chats) {
   localStorage.setItem("black-all-chats", JSON.stringify(chats.slice(-20)));
 }
 
-// ========== قارئ الملفات ==========
 async function readFileAsText(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -194,13 +191,13 @@ async function readFileAsText(file) {
     
     if (file.type === "application/pdf") {
       reader.readAsArrayBuffer();
-      resolve("📄 ملف PDF: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)\n[ملاحظة: محتوى PDF بيحتاج استخراج - هحاول أقرأ النص المتاح]");
+      resolve("PDF: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)");
       return;
     }
     
     if (file.type.startsWith("image/")) {
       reader.readAsDataURL();
-      resolve("🖼️ صورة: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)\n[بلاك بيشوف الصورة أهي، بس محتاج تسأله عنها]");
+      resolve("Image: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)");
       return;
     }
     
@@ -282,7 +279,6 @@ export default function App() {
     });
   };
 
-  // ========== رفع الملفات ==========
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
@@ -308,14 +304,12 @@ export default function App() {
     setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
-  // ========== تحديث المفاتيح ==========
   const refreshKeys = () => {
     const freshKeys = loadKeys();
     setKeys(freshKeys);
     alert(`✅ تم تحديث المفاتيح\n📊 ${freshKeys.length} مفاتيح متصلة`);
   };
 
-  // ========== حذف الذاكرة ==========
   const clearAllStorage = () => {
     if (window.confirm("⚠️ متأكد إنك عايز تمسح كل حاجة؟\n\nهيمسح:\n- كل المحادثات\n- سجل المفاتيح\n- عداد التوكن\n- إعدادات الموقع\n\nمافيش رجوع!")) {
       localStorage.clear();
@@ -335,7 +329,6 @@ export default function App() {
     }
   };
 
-  // ========== محادثة جديدة ==========
   const newChat = () => {
     if (messages.length > 1) {
       const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
@@ -562,7 +555,6 @@ export default function App() {
 
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
-      {/* ========== الهيدر ========== */}
       <div className="header">
         <div className="header-left">
           <div className="avatar">🖤</div>
@@ -577,7 +569,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* ========== القائمة المنسدلة ========== */}
         {showMenu && (
           <>
             <div onClick={() => setShowMenu(false)} style={{
@@ -621,7 +612,6 @@ export default function App() {
         )}
       </div>
 
-      {/* ========== شريط التوكن ========== */}
       <div className="token-bar">
         <div className="token-info">
           <span>⚡ {stats.totalUsed.toLocaleString()} / {stats.totalLimit.toLocaleString()} token ({stats.availableKeys}/{stats.totalKeys} مفاتيح)</span>
@@ -630,7 +620,6 @@ export default function App() {
         <div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div>
       </div>
 
-      {/* ========== سجل المحادثات ========== */}
       {showHistory && (
         <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -660,7 +649,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ========== البحث ========== */}
       {showSearch && !showHistory && (
         <div className="search-bar">
           <span>🔍</span>
@@ -670,7 +658,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ========== الرسائل ========== */}
       <div className="messages">
         {messages.length <= 1 && !loading && (
           <div className="suggestions">
@@ -715,7 +702,6 @@ export default function App() {
         <div ref={bottomRef} />
       </div>
 
-      {/* ========== الملفات المرفقة ========== */}
       {attachedFiles.length > 0 && (
         <div style={{
           display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap",
@@ -736,7 +722,6 @@ export default function App() {
         </div>
       )}
 
-      {/* ========== منطقة الكتابة ========== */}
       <div className="input-area">
         <button onClick={() => fileInputRef.current?.click()} className="header-btn" title="رفع ملفات"
           style={{ fontSize: "20px", padding: "8px" }}>📎</button>
@@ -755,4 +740,4 @@ export default function App() {
       </div>
     </div>
   );
-    }https://github.com/popbot2003/chat-blak.git
+      }
