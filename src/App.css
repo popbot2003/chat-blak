@@ -190,6 +190,46 @@
   font-size: 18px;
   line-height: 1;
 }
+/* ===== عداد التوكن ===== */
+.token-bar {
+  padding: 8px 20px;
+  border-bottom: 1px solid;
+}
+
+.dark .token-bar {
+  background: #0d0d12;
+  border-color: #1e1e2e;
+}
+
+.light .token-bar {
+  background: #f4f6fb;
+  border-color: #dde1f0;
+}
+
+.token-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 5px;
+}
+
+.dark .token-info { color: #666688; }
+.light .token-info { color: #888aaa; }
+
+.token-track {
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dark .token-track { background: #1e1e2e; }
+.light .token-track { background: #dde1f0; }
+
+.token-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
 
 /* ===== منطقة الرسائل ===== */
 .messages {
