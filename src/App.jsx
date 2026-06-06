@@ -97,6 +97,7 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 
 const DAILY_LIMIT_PER_KEY = 100000;
 
+// ========== مدير المفاتيح ==========
 function loadKeys() {
   const keys = [];
   for (let i = 1; i <= 10; i++) {
@@ -221,16 +222,24 @@ function getFileIcon(file) {
 export default function App() {
   const [keys, setKeys] = useState(() => loadKeys());
   const [allChats, setAllChats] = useState(loadAllChats);
-  const [currentChatId, setCurrentChatId] = useState(() => Date.now());
+  const [currentChatId, setCurrentChatId] = useState(() => {
+    const chats = loadAllChats();
+    return chats.length > 0 ? chats[0].id : Date.now();
+  });
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [messages, setMessages] = useState(() => {
     try {
-      const saved = localStorage.getItem(`black-chat-${Date.now()}`);
-      return saved ? JSON.parse(saved) : [
-        { role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎", id: 1 },
-      ];
-    } catch { return [{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎", id: 1 }]; }
+      const chats = loadAllChats();
+      if (chats.length > 0) {
+        const lastChat = chats[0];
+        const saved = localStorage.getItem(`black-chat-${lastChat.id}`);
+        if (saved) return JSON.parse(saved);
+      }
+      return [{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎", id: 1 }];
+    } catch {
+      return [{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎", id: 1 }];
+    }
   });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -246,7 +255,51 @@ export default function App() {
   const abortRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  useEffect(() => { localStorage.setItem(`black-chat-${currentChatId}`, JSON.stringify(messages.slice(-40))); }, [messages, currentChatId]);
+  // حفظ المحادثة الحالية في localStorage كل ما تتغير
+  useEffect(() => {
+    if (messages.length > 0) {
+      localStorage.setItem(`black-chat-${currentChatId}`, JSON.stringify(messages.slice(-40)));
+    }
+  }, [messages, currentChatId]);
+
+  // حفظ المحادثة في السجل كل ما تتغير
+  useEffect(() => {
+    if (messages.length > 1) {
+      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
+      const chatRecord = {
+        id: currentChatId,
+        title,
+        date: new Date().toISOString(),
+        messageCount: messages.length,
+      };
+      const updated = [chatRecord, ...allChats.filter(c => c.id !== currentChatId)];
+      setAllChats(updated);
+      saveAllChats(updated);
+    }
+  }, [messages]);
+
+  // حفظ المحادثة قبل الخروج من الصفحة (refresh)
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (messages.length > 1) {
+        const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
+        const chatRecord = {
+          id: currentChatId,
+          title,
+          date: new Date().toISOString(),
+          messageCount: messages.length,
+        };
+        const currentChats = loadAllChats();
+        const updated = [chatRecord, ...currentChats.filter(c => c.id !== currentChatId)];
+        localStorage.setItem("black-all-chats", JSON.stringify(updated.slice(-20)));
+        localStorage.setItem(`black-chat-${currentChatId}`, JSON.stringify(messages.slice(-40)));
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [messages, currentChatId]);
+
   useEffect(() => { localStorage.setItem("black-tokens", JSON.stringify(tokenData)); }, [tokenData]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -330,24 +383,11 @@ export default function App() {
   };
 
   const newChat = () => {
-    if (messages.length > 1) {
-      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
-      const chatRecord = {
-        id: currentChatId,
-        title,
-        date: new Date().toISOString(),
-        messageCount: messages.length,
-      };
-      const updated = [chatRecord, ...allChats.filter(c => c.id !== currentChatId)];
-      setAllChats(updated);
-      saveAllChats(updated);
-    }
-
     const newId = Date.now();
     setCurrentChatId(newId);
     setMessages([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nمحادثة جديدة، اتفضل. تقدر ترفع ملفات 📎", id: Date.now() }]);
-    setShowHistory(false);
     setShowMenu(false);
+    setShowHistory(false);
     setInput("");
     setSearchTerm("");
     setShowSearch(false);
@@ -355,19 +395,6 @@ export default function App() {
   };
 
   const openChat = (chatId) => {
-    if (messages.length > 1) {
-      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
-      const chatRecord = {
-        id: currentChatId,
-        title,
-        date: new Date().toISOString(),
-        messageCount: messages.length,
-      };
-      const updated = [chatRecord, ...allChats.filter(c => c.id !== currentChatId)];
-      setAllChats(updated);
-      saveAllChats(updated);
-    }
-
     setCurrentChatId(chatId);
     const saved = localStorage.getItem(`black-chat-${chatId}`);
     if (saved) {
@@ -740,4 +767,4 @@ export default function App() {
       </div>
     </div>
   );
-      }
+}
