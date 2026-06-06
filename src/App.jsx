@@ -192,22 +192,18 @@ async function readFileAsText(file) {
     reader.onload = () => resolve(reader.result);
     reader.onerror = reject;
     
-    // أنواع الملفات المدعومة
     if (file.type === "application/pdf") {
-      // PDF يحتاج مكتبة خاصة، نقرأه كمصفوفة بايتات ونحول أجزاء منه
       reader.readAsArrayBuffer();
       resolve("📄 ملف PDF: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)\n[ملاحظة: محتوى PDF بيحتاج استخراج - هحاول أقرأ النص المتاح]");
       return;
     }
     
     if (file.type.startsWith("image/")) {
-      // الصور مش هتقرأ كنص
       reader.readAsDataURL();
       resolve("🖼️ صورة: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)\n[بلاك بيشوف الصورة أهي، بس محتاج تسأله عنها]");
       return;
     }
     
-    // الملفات النصية
     reader.readAsText();
   });
 }
@@ -226,7 +222,7 @@ function getFileIcon(file) {
 }
 
 export default function App() {
-  const [keys, setKeys] = useState(loadKeys);
+  const [keys, setKeys] = useState(() => loadKeys());
   const [allChats, setAllChats] = useState(loadAllChats);
   const [currentChatId, setCurrentChatId] = useState(() => Date.now());
   const [showHistory, setShowHistory] = useState(false);
@@ -309,6 +305,13 @@ export default function App() {
 
   const removeFile = (fileId) => {
     setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
+  };
+
+  // ========== تحديث المفاتيح ==========
+  const refreshKeys = () => {
+    const freshKeys = loadKeys();
+    setKeys(freshKeys);
+    alert(`✅ تم تحديث المفاتيح\n📊 ${freshKeys.length} مفاتيح متصلة`);
   };
 
   // ========== محادثة جديدة ==========
@@ -417,7 +420,6 @@ export default function App() {
       return;
     }
 
-    // بناء محتوى الملفات
     let fileContent = "";
     if (attachedFiles.length > 0) {
       fileContent = "\n\n📎 **الملفات المرفوعة:**\n";
@@ -498,11 +500,12 @@ export default function App() {
       setMessages(prev => [...prev, { role: "assistant", content: finalText, id: Date.now() }]);
       setStreamingText("");
       
-      const estimatedTokens = tokenCount + Math.ceil(updated.reduce((s, m) => s + m.content.length, 0) / 4);
+      const promptEstimate = 2000 + Math.ceil(updated.reduce((s, m) => s + m.content.length, 0) / 6);
+      const estimatedTokens = tokenCount + promptEstimate;
       picked.used += estimatedTokens;
       picked.last = new Date().toISOString();
       saveKeys(keys);
-      addTokens({ prompt_tokens: estimatedTokens, completion_tokens: tokenCount });
+      addTokens({ prompt_tokens: promptEstimate, completion_tokens: tokenCount });
 
     } catch (err) {
       if (err.name === "AbortError") return;
@@ -546,6 +549,7 @@ export default function App() {
           </div>
         </div>
         <div className="header-right">
+          <button onClick={refreshKeys} className="header-btn" title="تحديث المفاتيح">🔑</button>
           <button onClick={() => setShowHistory(!showHistory)} className="header-btn" title="سجل المحادثات">💬</button>
           <button onClick={newChat} className="header-btn" title="محادثة جديدة">➕</button>
           <button onClick={() => setShowSearch(!showSearch)} className="header-btn" title="بحث">🔍</button>
@@ -672,7 +676,6 @@ export default function App() {
 
       {/* ========== منطقة الكتابة ========== */}
       <div className="input-area">
-        {/* زر رفع الملفات */}
         <button onClick={() => fileInputRef.current?.click()} className="header-btn" title="رفع ملفات"
           style={{ fontSize: "20px", padding: "8px" }}>📎</button>
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple
