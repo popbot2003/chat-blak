@@ -89,6 +89,7 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 شخصية ثابتة بأسلوبها الخاص.`;
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY;
+const DAILY_LIMIT = 100000;
 
 function cleanResponse(text) {
   if (!text) return "";
@@ -98,6 +99,20 @@ function cleanResponse(text) {
     .replace(/[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉĩọỏốồổỗộớờởỡợụủứừửữựỳỷỹ]+/gi, '')
     .replace(/[ \t]+/g, ' ')
     .trim();
+}
+
+function getStoredTokens() {
+  try {
+    const stored = localStorage.getItem("black-tokens");
+    if (!stored) return { used: 0, date: new Date().toDateString() };
+    const parsed = JSON.parse(stored);
+    if (parsed.date !== new Date().toDateString()) {
+      return { used: 0, date: new Date().toDateString() };
+    }
+    return parsed;
+  } catch {
+    return { used: 0, date: new Date().toDateString() };
+  }
 }
 
 export default function App() {
@@ -117,6 +132,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [tokenData, setTokenData] = useState(getStoredTokens);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const maxHistory = 40;
@@ -126,12 +142,25 @@ export default function App() {
   }, [messages]);
 
   useEffect(() => {
+    localStorage.setItem("black-tokens", JSON.stringify(tokenData));
+  }, [tokenData]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  const addTokens = (usage) => {
+    if (!usage) return;
+    const total = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
+    setTokenData(prev => ({
+      used: prev.used + total,
+      date: new Date().toDateString(),
+    }));
+  };
 
   const trimHistory = (msgs) => {
     let totalChars = SYSTEM_PROMPT.length;
@@ -211,6 +240,7 @@ export default function App() {
         setMessages(prev => [...prev, { role: "assistant", content: `حصل خطأ: ${data.error.message} 🖤`, id: Date.now() }]);
         return;
       }
+      addTokens(data.usage);
       const reply = cleanResponse(data.choices?.[0]?.message?.content);
       setMessages(prev => [...prev, { role: "assistant", content: reply || "معلش، جرب تاني 🖤", id: Date.now() }]);
     } catch (err) {
@@ -230,6 +260,8 @@ export default function App() {
     : messages;
 
   const isDark = theme === "dark";
+  const tokenPercent = Math.min((tokenData.used / DAILY_LIMIT) * 100, 100).toFixed(1);
+  const tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
 
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
@@ -251,6 +283,20 @@ export default function App() {
             {isDark ? "☀️" : "🌙"}
           </button>
           <button onClick={clearChat} className="header-btn">🗑️</button>
+        </div>
+      </div>
+
+      {/* عداد التوكن */}
+      <div className="token-bar">
+        <div className="token-info">
+          <span>⚡ {tokenData.used.toLocaleString()} / {DAILY_LIMIT.toLocaleString()} token</span>
+          <span style={{ color: tokenColor }}>{tokenPercent}%</span>
+        </div>
+        <div className="token-track">
+          <div
+            className="token-fill"
+            style={{ width: `${tokenPercent}%`, background: tokenColor }}
+          />
         </div>
       </div>
 
@@ -329,4 +375,4 @@ export default function App() {
       </div>
     </div>
   );
-    }
+}
