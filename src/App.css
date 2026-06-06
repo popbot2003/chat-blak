@@ -449,10 +449,23 @@ body {
   transform: scale(0.95);
 }
 
+/* ========== تجاوب مع التابلت ========== */
+@media (max-width: 1024px) {
+  .container {
+    max-width: 100%;
+    height: 100vh;
+    border-radius: 0;
+  }
+  
+  .bubble {
+    max-width: 75%;
+  }
+}
+
 /* ========== تجاوب مع الموبايل ========== */
 @media (max-width: 768px) {
   body {
-    background: #1a1a2e;
+    background: #0f0f1a;
   }
 
   .container {
@@ -464,8 +477,6 @@ body {
 
   .header {
     padding: 10px 14px;
-    top: 0;
-    z-index: 100;
   }
 
   .avatar {
@@ -490,7 +501,6 @@ body {
   .token-bar {
     padding: 6px 14px;
     top: 58px;
-    z-index: 99;
   }
 
   .token-info {
@@ -500,7 +510,6 @@ body {
   .search-bar {
     padding: 8px 14px;
     top: 94px;
-    z-index: 98;
   }
 
   .messages {
@@ -557,12 +566,12 @@ body {
   }
 
   .header-name {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .header-btn {
     font-size: 14px;
-    padding: 5px 6px;
+    padding: 4px 6px;
   }
 
   .token-bar {
@@ -572,6 +581,7 @@ body {
 
   .search-bar {
     top: 78px;
+    padding: 6px 10px;
   }
 
   .messages {
@@ -586,6 +596,15 @@ body {
 
   .msg-content-wrapper {
     max-width: 88%;
+  }
+
+  .suggestions {
+    gap: 4px;
+  }
+
+  .chip {
+    font-size: 11px;
+    padding: 6px 10px;
   }
 
   .input-area {
