@@ -90,7 +90,6 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 
 const DAILY_LIMIT_PER_KEY = 100000;
 
-// ========== مدير المفاتيح ==========
 function loadKeys() {
   const keys = [];
   for (let i = 1; i <= 10; i++) {
@@ -107,7 +106,10 @@ function loadKeys() {
       const d = JSON.parse(s);
       if (d.date === new Date().toDateString()) {
         keys.forEach(k => {
-          if (d.keys[k.id]) { k.used = d.keys[k.id].used || 0; k.last = d.keys[k.id].last || null; }
+          if (d.keys[k.id]) {
+            k.used = d.keys[k.id].used || 0;
+            k.last = d.keys[k.id].last || null;
+          }
         });
       }
     }
@@ -142,7 +144,6 @@ function getKeyStats(keys) {
     totalKeys: keys.length
   };
 }
-// ===================================
 
 function cleanResponse(text) {
   if (!text) return "";
@@ -183,9 +184,8 @@ export default function App() {
   const [tokenData, setTokenData] = useState(getStoredTokens);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
-  const maxHistory = 40;
 
-  useEffect(() => { localStorage.setItem("black-chat", JSON.stringify(messages.slice(-maxHistory))); }, [messages]);
+  useEffect(() => { localStorage.setItem("black-chat", JSON.stringify(messages.slice(-40))); }, [messages]);
   useEffect(() => { localStorage.setItem("black-tokens", JSON.stringify(tokenData)); }, [tokenData]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -204,7 +204,7 @@ export default function App() {
       if (totalChars > 8000) break;
       result.unshift(msgs[i]);
     }
-    return result.slice(-maxHistory);
+    return result.slice(-40);
   };
 
   const copyMessage = (content, id) => {
@@ -378,4 +378,4 @@ export default function App() {
       </div>
     </div>
   );
-            }
+    }
