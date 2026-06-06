@@ -191,28 +191,11 @@ export default function App() {
   const [copiedId, setCopiedId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
-  const [theme, setTheme] = useState(() => {
-    // التحقق من تفضيل النظام
-    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
-      return "light";
-    }
-    return "dark";
-  });
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [theme, setTheme] = useState("dark");
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
   const maxHistory = 40;
-
-  // مراقبة تغيير حجم الشاشة
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useEffect(() => {
     const toSave = messages.slice(-maxHistory);
@@ -224,11 +207,8 @@ export default function App() {
   }, [messages]);
 
   useEffect(() => {
-    // تركيز input فقط على الأجهزة غير اللمسية
-    if (!isMobile) {
-      inputRef.current?.focus();
-    }
-  }, [isMobile]);
+    inputRef.current?.focus();
+  }, []);
 
   const trimHistory = (msgs) => {
     let totalChars = SYSTEM_PROMPT.length;
@@ -334,6 +314,7 @@ export default function App() {
       }]);
     } finally {
       setLoading(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
     }
   };
 
@@ -353,66 +334,30 @@ export default function App() {
     : { bg: "#f0f2f5", surface: "#fff", border: "#ddd", text: "#111", sub: "#888" };
 
   return (
-    <div style={{ 
-      ...styles.container, 
-      background: themeColors.bg, 
-      color: themeColors.text,
-      padding: isMobile ? '0' : '0',
-    }}>
-      <div style={{ 
-        ...styles.header, 
-        background: themeColors.surface, 
-        borderColor: themeColors.border,
-        padding: isMobile ? '10px 12px' : '12px 16px',
-      }}>
+    <div style={{ ...styles.container, background: themeColors.bg, color: themeColors.text }}>
+      <div style={{ ...styles.header, background: themeColors.surface, borderColor: themeColors.border }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{
-            ...styles.avatar,
-            width: isMobile ? 35 : 40,
-            height: isMobile ? 35 : 40,
-            fontSize: isMobile ? 18 : 20,
-          }}>🖤</div>
+          <div style={styles.avatar}>🖤</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: isMobile ? 15 : 16 }}>بلاك</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>بلاك</div>
             <div style={{ fontSize: 11, color: themeColors.sub }}>
               <span style={{ ...styles.dot, animation: "pulse 2s infinite" }} />
               {loading ? "بيكتب..." : "متصل"}
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: isMobile ? 4 : 6 }}>
-          <button onClick={() => setShowSearch(!showSearch)} style={{
-            ...styles.headerBtn, 
-            fontSize: isMobile ? 14 : 16,
-            padding: isMobile ? '4px 6px' : '5px 8px',
-          }} title="بحث">🔍</button>
-          <button onClick={exportChat} style={{
-            ...styles.headerBtn,
-            fontSize: isMobile ? 14 : 16,
-            padding: isMobile ? '4px 6px' : '5px 8px',
-          }} title="تصدير">📥</button>
-          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={{
-            ...styles.headerBtn,
-            fontSize: isMobile ? 14 : 16,
-            padding: isMobile ? '4px 6px' : '5px 8px',
-          }}>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={() => setShowSearch(!showSearch)} style={styles.headerBtn} title="بحث">🔍</button>
+          <button onClick={exportChat} style={styles.headerBtn} title="تصدير">📥</button>
+          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} style={styles.headerBtn}>
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
-          <button onClick={clearChat} style={{
-            ...styles.headerBtn,
-            fontSize: isMobile ? 14 : 16,
-            padding: isMobile ? '4px 6px' : '5px 8px',
-          }} title="مسح">🗑️</button>
+          <button onClick={clearChat} style={styles.headerBtn} title="مسح">🗑️</button>
         </div>
       </div>
 
       {showSearch && (
-        <div style={{ 
-          ...styles.searchBar, 
-          background: themeColors.surface, 
-          borderColor: themeColors.border,
-          padding: isMobile ? '8px 12px' : '8px 16px',
-        }}>
+        <div style={{ ...styles.searchBar, background: themeColors.surface, borderColor: themeColors.border }}>
           <span>🔍</span>
           <input
             style={{ ...styles.searchInput, color: themeColors.text }}
@@ -430,17 +375,9 @@ export default function App() {
         </div>
       )}
 
-      <div style={{ 
-        ...styles.messages,
-        padding: isMobile ? '12px 8px' : '16px 12px',
-        gap: isMobile ? 12 : 14,
-      }}>
+      <div style={styles.messages}>
         {messages.length <= 1 && !loading && (
-          <div style={{
-            ...styles.suggestions,
-            padding: isMobile ? '8px 4px' : '10px 0',
-            gap: isMobile ? 4 : 6,
-          }}>
+          <div style={styles.suggestions}>
             {[
               "عرفني بنفسك",
               "اكتبلي كود Python",
@@ -449,11 +386,7 @@ export default function App() {
               "اشرحلي مفهوم برمجي",
               "نصيحة في الإنتاجية",
             ].map((s, i) => (
-              <button key={i} onClick={() => sendMessage(s)} style={{
-                ...styles.chip,
-                fontSize: isMobile ? 11 : 12,
-                padding: isMobile ? '6px 10px' : '8px 14px',
-              }}>
+              <button key={i} onClick={() => sendMessage(s)} style={styles.chip}>
                 {s}
               </button>
             ))}
@@ -464,17 +397,9 @@ export default function App() {
           <div key={msg.id} style={{
             ...styles.msgRow,
             justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
-            gap: isMobile ? 6 : 8,
           }}>
-            {msg.role === "assistant" && (
-              <div style={{
-                ...styles.msgAvatar,
-                width: isMobile ? 28 : 32,
-                height: isMobile ? 28 : 32,
-                fontSize: isMobile ? 12 : 14,
-              }}>🖤</div>
-            )}
-            <div style={{ maxWidth: isMobile ? "85%" : "80%" }}>
+            {msg.role === "assistant" && <div style={styles.msgAvatar}>🖤</div>}
+            <div style={{ maxWidth: "80%" }}>
               <div style={{
                 ...styles.bubble,
                 ...(msg.role === "user" ? styles.userBubble : styles.aiBubble),
@@ -483,47 +408,23 @@ export default function App() {
                   : theme === "dark" ? "linear-gradient(135deg, #141428, #1a1a35)" : "#fff",
                 borderColor: msg.role === "user" ? "#3d2b79" : themeColors.border,
                 color: themeColors.text,
-                fontSize: isMobile ? 13 : 14,
-                padding: isMobile ? '8px 12px' : '10px 14px',
               }}>
                 <MessageContent content={msg.content} />
               </div>
               {msg.role === "assistant" && (
-                <button onClick={() => copyMessage(msg.content, msg.id)} style={{
-                  ...styles.copyBtn,
-                  fontSize: isMobile ? 10 : 11,
-                }}>
+                <button onClick={() => copyMessage(msg.content, msg.id)} style={styles.copyBtn}>
                   {copiedId === msg.id ? "✓ تم النسخ" : "📋 نسخ"}
                 </button>
               )}
             </div>
-            {msg.role === "user" && (
-              <div style={{
-                ...styles.msgAvatar, 
-                background: "linear-gradient(135deg, #2d1b69, #1e3a5f)",
-                width: isMobile ? 28 : 32,
-                height: isMobile ? 28 : 32,
-                fontSize: isMobile ? 12 : 14,
-              }}>👤</div>
-            )}
+            {msg.role === "user" && <div style={{ ...styles.msgAvatar, background: "linear-gradient(135deg, #2d1b69, #1e3a5f)" }}>👤</div>}
           </div>
         ))}
 
         {loading && (
-          <div style={{ ...styles.msgRow, justifyContent: "flex-start", gap: isMobile ? 6 : 8 }}>
-            <div style={{
-              ...styles.msgAvatar,
-              width: isMobile ? 28 : 32,
-              height: isMobile ? 28 : 32,
-              fontSize: isMobile ? 12 : 14,
-            }}>🖤</div>
-            <div style={{ 
-              ...styles.bubble, 
-              ...styles.aiBubble, 
-              background: theme === "dark" ? "#141428" : "#fff", 
-              borderColor: themeColors.border,
-              padding: isMobile ? '8px 12px' : '10px 14px',
-            }}>
+          <div style={{ ...styles.msgRow, justifyContent: "flex-start" }}>
+            <div style={styles.msgAvatar}>🖤</div>
+            <div style={{ ...styles.bubble, ...styles.aiBubble, background: theme === "dark" ? "#141428" : "#fff", borderColor: themeColors.border }}>
               <TypingDots />
             </div>
           </div>
@@ -532,13 +433,7 @@ export default function App() {
         <div ref={bottomRef} />
       </div>
 
-      <div style={{ 
-        ...styles.inputArea, 
-        background: themeColors.surface, 
-        borderColor: themeColors.border,
-        padding: isMobile ? '8px 10px 12px' : '10px 12px 16px',
-        gap: isMobile ? 6 : 8,
-      }}>
+      <div style={{ ...styles.inputArea, background: themeColors.surface, borderColor: themeColors.border }}>
         <textarea
           ref={inputRef}
           value={input}
@@ -546,25 +441,13 @@ export default function App() {
           onKeyDown={handleKeyDown}
           placeholder="اكتب لبلاك..."
           rows={1}
-          style={{ 
-            ...styles.textarea, 
-            color: themeColors.text, 
-            borderColor: themeColors.border,
-            fontSize: isMobile ? 14 : 14,
-            padding: isMobile ? '8px 12px' : '10px 16px',
-          }}
+          style={{ ...styles.textarea, color: themeColors.text, borderColor: themeColors.border }}
           disabled={loading}
         />
         <button
           onClick={() => sendMessage()}
           disabled={loading || !input.trim()}
-          style={{ 
-            ...styles.sendBtn, 
-            opacity: loading || !input.trim() ? 0.4 : 1,
-            width: isMobile ? 36 : 40,
-            height: isMobile ? 36 : 40,
-            fontSize: isMobile ? 18 : 20,
-          }}
+          style={{ ...styles.sendBtn, opacity: loading || !input.trim() ? 0.4 : 1 }}
         >
           ↑
         </button>
@@ -572,44 +455,14 @@ export default function App() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
-        * { 
-          box-sizing: border-box; 
-          margin: 0; 
-          padding: 0; 
-          -webkit-tap-highlight-color: transparent;
-        }
-        @keyframes fadeUp { 
-          from { opacity: 0; transform: translateY(10px); } 
-          to { opacity: 1; transform: translateY(0); } 
-        }
-        @keyframes bounce { 
-          0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 
-          40% { transform: scale(1); opacity: 1; } 
-        }
-        @keyframes pulse { 
-          0%, 100% { opacity: 1; } 
-          50% { opacity: 0.4; } 
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes bounce { 0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         textarea:focus { outline: none; }
         textarea { resize: none; }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
-        
-        /* تحسينات للموبايل */
-        @media (max-width: 768px) {
-          * {
-            -webkit-user-select: none;
-            user-select: none;
-          }
-          input, textarea {
-            -webkit-user-select: text;
-            user-select: text;
-            font-size: 16px !important; /* منع الزووم في iOS */
-          }
-          button {
-            touch-action: manipulation;
-          }
-        }
       `}</style>
     </div>
   );
@@ -626,205 +479,128 @@ const styles = {
     fontFamily: "'Cairo', sans-serif",
     direction: "rtl",
     minHeight: "100vh",
-    height: "100dvh", // استخدام dvh للموبايل
     display: "flex",
     flexDirection: "column",
     maxWidth: 800,
     margin: "0 auto",
     boxShadow: "0 0 40px rgba(0,0,0,0.3)",
-    overflow: "hidden",
-    position: "relative",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
+    padding: "12px 16px",
     borderBottom: "1px solid",
     position: "sticky",
     top: 0,
     zIndex: 10,
     backdropFilter: "blur(10px)",
-    flexShrink: 0,
   },
   avatar: {
-    borderRadius: "50%",
+    width: 40, height: 40, borderRadius: "50%",
     background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-    display: "flex", 
-    alignItems: "center", 
-    justifyContent: "center",
-    border: "2px solid #2a2a3e",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 20, border: "2px solid #2a2a3e",
   },
   headerBtn: {
-    background: "transparent", 
-    border: "1px solid #333",
-    borderRadius: 8, 
-    cursor: "pointer",
-    color: "#aaa",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    background: "transparent", border: "1px solid #333",
+    borderRadius: 8, padding: "5px 8px", cursor: "pointer",
+    fontSize: 16, color: "#aaa",
   },
   searchBar: {
-    display: "flex", 
-    alignItems: "center", 
-    gap: 8,
-    borderBottom: "1px solid",
-    flexShrink: 0,
+    display: "flex", alignItems: "center", gap: 8,
+    padding: "8px 16px", borderBottom: "1px solid",
   },
   searchInput: {
-    flex: 1, 
-    background: "transparent", 
-    border: "none",
-    fontFamily: "'Cairo', sans-serif", 
+    flex: 1, background: "transparent", border: "none",
+    fontFamily: "'Cairo', sans-serif", fontSize: 14,
   },
   closeBtn: {
-    background: "transparent", 
-    border: "none",
-    color: "#888", 
-    cursor: "pointer", 
-    fontSize: 16,
-    padding: "4px",
+    background: "transparent", border: "none",
+    color: "#888", cursor: "pointer", fontSize: 16,
   },
   messages: {
-    flex: 1, 
-    overflowY: "auto",
-    display: "flex", 
-    flexDirection: "column",
-    WebkitOverflowScrolling: "touch", // تمرير سلس في iOS
+    flex: 1, overflowY: "auto", padding: "16px 12px",
+    display: "flex", flexDirection: "column", gap: 14,
   },
   msgRow: {
-    display: "flex", 
-    alignItems: "flex-start",
+    display: "flex", alignItems: "flex-start", gap: 8,
     animation: "fadeUp 0.3s ease",
   },
   msgAvatar: {
-    borderRadius: "50%",
+    width: 32, height: 32, borderRadius: "50%",
     background: "linear-gradient(135deg, #1a1a2e, #16213e)",
-    display: "flex", 
-    alignItems: "center", 
-    justifyContent: "center",
-    flexShrink: 0, 
-    marginTop: 4,
+    display: "flex", alignItems: "center", justifyContent: "center",
+    fontSize: 14, flexShrink: 0, marginTop: 4,
     border: "1px solid #2a2a3e",
   },
   bubble: {
-    borderRadius: "4px 16px 16px 16px",
-    border: "1px solid", 
-    lineHeight: 1.8,
+    padding: "10px 14px", borderRadius: "4px 16px 16px 16px",
+    border: "1px solid", fontSize: 14, lineHeight: 1.8,
     wordBreak: "break-word",
   },
-  userBubble: { 
-    borderRadius: "16px 4px 16px 16px",
-  },
+  userBubble: { borderRadius: "16px 4px 16px 16px" },
   aiBubble: {},
   copyBtn: {
-    background: "transparent", 
-    border: "none",
-    color: "#666", 
-    cursor: "pointer",
-    padding: "3px 6px", 
-    fontFamily: "'Cairo', sans-serif",
+    background: "transparent", border: "none",
+    color: "#666", fontSize: 11, cursor: "pointer",
+    padding: "3px 6px", fontFamily: "'Cairo', sans-serif",
     marginTop: 2,
   },
   suggestions: {
-    display: "flex", 
-    flexWrap: "wrap",
-    justifyContent: "center",
+    display: "flex", flexWrap: "wrap", gap: 6,
+    justifyContent: "center", padding: "10px 0",
   },
   chip: {
-    borderRadius: 18,
-    background: "rgba(100,100,255,0.1)", 
-    border: "1px solid #333",
-    color: "#aaa", 
-    cursor: "pointer",
+    padding: "8px 14px", borderRadius: 18,
+    background: "rgba(100,100,255,0.1)", border: "1px solid #333",
+    color: "#aaa", cursor: "pointer", fontSize: 12,
     fontFamily: "'Cairo', sans-serif",
-    whiteSpace: "nowrap",
   },
   inputArea: {
-    display: "flex", 
-    alignItems: "flex-end",
-    borderTop: "1px solid",
-    position: "sticky", 
-    bottom: 0, 
-    backdropFilter: "blur(10px)",
-    flexShrink: 0,
-    paddingBottom: "env(safe-area-inset-bottom, 12px)", // دعم notch
+    display: "flex", alignItems: "flex-end", gap: 8,
+    padding: "10px 12px 16px", borderTop: "1px solid",
+    position: "sticky", bottom: 0, backdropFilter: "blur(10px)",
   },
   textarea: {
-    flex: 1, 
-    background: "transparent", 
-    border: "1px solid",
-    borderRadius: 20, 
-    fontFamily: "'Cairo', sans-serif", 
-    direction: "rtl",
+    flex: 1, background: "transparent", border: "1px solid",
+    borderRadius: 20, padding: "10px 16px", fontSize: 14,
+    fontFamily: "'Cairo', sans-serif", direction: "rtl",
     maxHeight: 120,
   },
   sendBtn: {
-    borderRadius: "50%",
+    width: 40, height: 40, borderRadius: "50%",
     background: "linear-gradient(135deg, #4422aa, #2244cc)",
-    border: "none", 
-    color: "#fff",
-    cursor: "pointer", 
-    flexShrink: 0,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    border: "none", color: "#fff", fontSize: 20,
+    cursor: "pointer", flexShrink: 0,
   },
   dot: {
-    width: 6, 
-    height: 6, 
-    borderRadius: "50%",
-    background: "#4ade80", 
-    display: "inline-block",
+    width: 6, height: 6, borderRadius: "50%",
+    background: "#4ade80", display: "inline-block",
     marginRight: 4,
   },
 };
 
 const codeStyles = {
   wrapper: {
-    background: "#0d0d1a", 
-    border: "1px solid #2a2a45",
-    borderRadius: 8, 
-    margin: "6px 0", 
-    overflow: "hidden",
-    maxWidth: "100%",
+    background: "#0d0d1a", border: "1px solid #2a2a45",
+    borderRadius: 8, margin: "6px 0", overflow: "hidden",
   },
   header: {
-    display: "flex", 
-    justifyContent: "space-between",
-    alignItems: "center", 
-    padding: "6px 10px",
-    background: "#1a1a2e", 
-    borderBottom: "1px solid #2a2a45",
+    display: "flex", justifyContent: "space-between",
+    alignItems: "center", padding: "6px 10px",
+    background: "#1a1a2e", borderBottom: "1px solid #2a2a45",
   },
-  lang: { 
-    color: "#8888cc", 
-    fontSize: 11, 
-    fontFamily: "monospace" 
-  },
+  lang: { color: "#8888cc", fontSize: 11, fontFamily: "monospace" },
   copyBtn: {
-    background: "transparent", 
-    border: "1px solid #3a3a5a",
-    borderRadius: 4, 
-    color: "#8888cc", 
-    fontSize: 10,
-    cursor: "pointer", 
-    padding: "2px 8px",
+    background: "transparent", border: "1px solid #3a3a5a",
+    borderRadius: 4, color: "#8888cc", fontSize: 10,
+    cursor: "pointer", padding: "2px 8px",
     fontFamily: "'Cairo', sans-serif",
   },
-  pre: { 
-    padding: 10, 
-    overflowX: "auto", 
-    margin: 0,
-    WebkitOverflowScrolling: "touch",
-  },
+  pre: { padding: 10, overflowX: "auto", margin: 0 },
   code: {
-    color: "#a8d8a8", 
-    fontSize: 12, 
-    fontFamily: "monospace",
-    direction: "ltr", 
-    display: "block", 
-    textAlign: "left",
-    wordBreak: "break-all",
+    color: "#a8d8a8", fontSize: 12, fontFamily: "monospace",
+    direction: "ltr", display: "block", textAlign: "left",
   },
-      }
+};
