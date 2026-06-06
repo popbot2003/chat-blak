@@ -226,6 +226,7 @@ export default function App() {
   const [allChats, setAllChats] = useState(loadAllChats);
   const [currentChatId, setCurrentChatId] = useState(() => Date.now());
   const [showHistory, setShowHistory] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [messages, setMessages] = useState(() => {
     try {
       const saved = localStorage.getItem(`black-chat-${Date.now()}`);
@@ -314,6 +315,26 @@ export default function App() {
     alert(`✅ تم تحديث المفاتيح\n📊 ${freshKeys.length} مفاتيح متصلة`);
   };
 
+  // ========== حذف الذاكرة ==========
+  const clearAllStorage = () => {
+    if (window.confirm("⚠️ متأكد إنك عايز تمسح كل حاجة؟\n\nهيمسح:\n- كل المحادثات\n- سجل المفاتيح\n- عداد التوكن\n- إعدادات الموقع\n\nمافيش رجوع!")) {
+      localStorage.clear();
+      setKeys(loadKeys());
+      setAllChats([]);
+      setMessages([{ role: "assistant", content: "تمام، مسحت كل حاجة من الذاكرة. الدنيا زي الفل 🖤", id: Date.now() }]);
+      setTokenData({ used: 0, date: new Date().toDateString() });
+      setCurrentChatId(Date.now());
+      setShowHistory(false);
+      setShowMenu(false);
+      setInput("");
+      setSearchTerm("");
+      setShowSearch(false);
+      setAttachedFiles([]);
+      setTheme("dark");
+      alert("✅ تم مسح كل البيانات بنجاح!");
+    }
+  };
+
   // ========== محادثة جديدة ==========
   const newChat = () => {
     if (messages.length > 1) {
@@ -333,6 +354,7 @@ export default function App() {
     setCurrentChatId(newId);
     setMessages([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nمحادثة جديدة، اتفضل. تقدر ترفع ملفات 📎", id: Date.now() }]);
     setShowHistory(false);
+    setShowMenu(false);
     setInput("");
     setSearchTerm("");
     setShowSearch(false);
@@ -359,6 +381,7 @@ export default function App() {
       setMessages(JSON.parse(saved));
     }
     setShowHistory(false);
+    setShowMenu(false);
     setInput("");
     setSearchTerm("");
     setShowSearch(false);
@@ -549,14 +572,53 @@ export default function App() {
           </div>
         </div>
         <div className="header-right">
-          <button onClick={refreshKeys} className="header-btn" title="تحديث المفاتيح">🔑</button>
-          <button onClick={() => setShowHistory(!showHistory)} className="header-btn" title="سجل المحادثات">💬</button>
-          <button onClick={newChat} className="header-btn" title="محادثة جديدة">➕</button>
-          <button onClick={() => setShowSearch(!showSearch)} className="header-btn" title="بحث">🔍</button>
-          <button onClick={exportChat} className="header-btn" title="تصدير">📥</button>
-          <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} className="header-btn" title="تغيير المظهر">{isDark ? "☀️" : "🌙"}</button>
-          <button onClick={clearChat} className="header-btn" title="مسح المحادثة">🗑️</button>
+          <button onClick={() => setShowMenu(!showMenu)} className="header-btn" title="القائمة" style={{ fontSize: "22px" }}>
+            {showMenu ? "✕" : "☰"}
+          </button>
         </div>
+
+        {/* ========== القائمة المنسدلة ========== */}
+        {showMenu && (
+          <>
+            <div onClick={() => setShowMenu(false)} style={{
+              position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+              zIndex: 200, background: "rgba(0,0,0,0.5)"
+            }} />
+            <div style={{
+              position: "absolute", top: "60px", right: "10px",
+              background: isDark ? "#1a1a2e" : "#fff",
+              border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`,
+              borderRadius: "16px", padding: "8px", zIndex: 201,
+              display: "flex", flexDirection: "column", gap: "2px",
+              minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)"
+            }}>
+              <button onClick={() => { refreshKeys(); setShowMenu(false); }} className="menu-item">
+                🔑 تحديث المفاتيح
+              </button>
+              <button onClick={() => { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">
+                💬 سجل المحادثات
+              </button>
+              <button onClick={() => { newChat(); }} className="menu-item">
+                ➕ محادثة جديدة
+              </button>
+              <button onClick={() => { setShowSearch(!showSearch); setShowMenu(false); }} className="menu-item">
+                🔍 بحث
+              </button>
+              <button onClick={() => { exportChat(); setShowMenu(false); }} className="menu-item">
+                📥 تصدير المحادثة
+              </button>
+              <button onClick={() => { setTheme(t => t === "dark" ? "light" : "dark"); }} className="menu-item">
+                {isDark ? "☀️" : "🌙"} تغيير المظهر
+              </button>
+              <button onClick={() => { clearChat(); setShowMenu(false); }} className="menu-item">
+                🗑️ مسح المحادثة
+              </button>
+              <button onClick={() => { clearAllStorage(); setShowMenu(false); }} className="menu-item" style={{ color: "#f87171" }}>
+                🧹 مسح الذاكرة
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       {/* ========== شريط التوكن ========== */}
@@ -693,4 +755,4 @@ export default function App() {
       </div>
     </div>
   );
-}
+    }https://github.com/popbot2003/chat-blak.git
