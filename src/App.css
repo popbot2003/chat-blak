@@ -245,7 +245,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 80%;
+  max-width: 92%;
 }
 
 .msg-row-user .msg-content-wrapper {
@@ -277,6 +277,7 @@ body {
   border-radius: 18px;
   line-height: 1.6;
   word-break: break-word;
+  overflow-wrap: anywhere;
   font-size: 14px;
 }
 
@@ -462,8 +463,8 @@ body {
     border-radius: 0;
   }
   
-  .bubble {
-    max-width: 75%;
+  .msg-content-wrapper {
+    max-width: 94%;
   }
 }
 
@@ -528,7 +529,7 @@ body {
   }
 
   .msg-content-wrapper {
-    max-width: 85%;
+    max-width: 95%;
   }
 
   .avatar-small {
@@ -600,7 +601,7 @@ body {
   }
 
   .msg-content-wrapper {
-    max-width: 88%;
+    max-width: 96%;
   }
 
   .suggestions {
@@ -627,4 +628,4 @@ body {
     height: 38px;
     font-size: 16px;
   }
-    }
+                              }
