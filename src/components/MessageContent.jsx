@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function MessageContent({ content }) {
   if (!content) return null;
   if (typeof content !== "string") return <span>{JSON.stringify(content)}</span>;
@@ -18,7 +16,7 @@ export default function MessageContent({ content }) {
 
   return parts.map((p, i) => 
     p.t === "code" 
-      ? <pre key={i} style={{ background: "rgba(0,0,0,0.3)", padding: "12px", borderRadius: "10px", overflowX: "auto", margin: "8px 0", fontSize: "13px", direction: "ltr", textAlign: "left" }}><code>{p.c}</code></pre>
+      ? <pre key={i}><code>{p.c}</code></pre>
       : <span key={i} dangerouslySetInnerHTML={{ __html: p.c.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>").replace(/\n/g, "<br/>") }} />
   );
 }
