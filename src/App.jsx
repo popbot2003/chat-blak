@@ -44,7 +44,6 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 أنت بلاك 🖤`;
 
 const DAILY_LIMIT_PER_KEY = 100000;
-const TOKEN_REFRESH_INTERVAL = 5; // كل كام رسالة نجيب الاستهلاك الحقيقي
 
 function loadKeys() {
   const keys = [];
@@ -90,11 +89,6 @@ function cleanResponse(text) {
     .trim();
 }
 
-function countTokens(text) {
-  // تقدير دقيق: 4 حروف = 1 token تقريباً
-  return Math.ceil(text.length / 4);
-}
-
 async function readFileAsText(file) {
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -136,32 +130,51 @@ export default function App() {
   const [theme, setTheme] = useState("dark");
   const [tokenData, setTokenData] = useState({ used: 0, date: new Date().toDateString() });
   const [attachedFiles, setAttachedFiles] = useState([]);
-  const [messageCount, setMessageCount] = useState(0); // عداد الرسايل
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
   const fileInputRef = useRef(null);
+  const tokenLoadedRef = useRef(false);
 
-  // تحميل كل حاجة من Supabase عند الفتح
+  // تحميل عداد التوكن من Supabase أول ما الصفحة تفتح
   useEffect(() => {
-    loadAllFromCloud();
+    loadTokenFromCloud();
+  }, []);
+
+  // تحميل المحادثات من Supabase
+  useEffect(() => {
+    loadChatsFromCloud();
   }, []);
 
   // حفظ المحادثة في Supabase كل ما تتغير
   useEffect(() => {
     if (messages.length > 1) {
-      saveChatToCloud();
+      const timer = setTimeout(() => {
+        saveChatToCloud();
+      }, 1000);
+      return () => clearTimeout(timer);
     }
   }, [messages]);
 
-  // حفظ عداد التوكن في Supabase
+  // مزامنة عداد التوكن مع Supabase كل 5 ثواني
   useEffect(() => {
     if (tokenData.used > 0) {
-      saveTokenToCloud();
+      const timer = setTimeout(() => {
+        saveTokenToCloud();
+      }, 5000);
+      return () => clearTimeout(timer);
     }
   }, [tokenData]);
 
-  // حفظ قبل الخروج من الصفحة
+  // تحميل عداد التوكن كل 10 ثواني (عشان يزامن مع مستخدمين تانيين)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadTokenFromCloud();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // حفظ قبل الخروج
   useEffect(() => {
     const handleBeforeUnload = () => {
       saveChatToCloud();
@@ -175,79 +188,32 @@ export default function App() {
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   // ========== دوال Supabase ==========
-  const loadAllFromCloud = async () => {
+  const loadTokenFromCloud = async () => {
     try {
-      // تحميل المحادثات
-      const { data: chats } = await supabase
-        .from('chats')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(20);
-      
-      if (chats && chats.length > 0) {
-        setAllChats(chats.map(c => ({
-          id: c.id,
-          title: c.title || 'محادثة بدون عنوان',
-          date: c.updated_at,
-          messageCount: c.messages?.length || 0
-        })));
-        
-        // تحميل آخر محادثة
-        const lastChat = chats[0];
-        if (lastChat.messages && lastChat.messages.length > 0) {
-          setCurrentChatId(lastChat.id);
-          setMessages(lastChat.messages.slice(-40));
-          setMessageCount(lastChat.messages.length);
-        }
-      }
-
-      // تحميل عداد التوكن
-      const { data: tokenRow } = await supabase
+      const { data, error } = await supabase
         .from('token_usage')
         .select('*')
         .eq('id', 1)
         .single();
       
-      if (tokenRow) {
-        // لو اليوم لسه جديد، نصفر العداد
-        if (tokenRow.date === new Date().toISOString().slice(0, 10)) {
-          setTokenData({ used: tokenRow.total_used || 0, date: tokenRow.date });
+      if (data && !error) {
+        const today = new Date().toISOString().slice(0, 10);
+        if (data.date === today) {
+          setTokenData({ used: data.total_used || 0, date: today });
         } else {
-          setTokenData({ used: 0, date: new Date().toDateString() });
+          // يوم جديد - نصفر العداد
+          setTokenData({ used: 0, date: today });
+          await supabase.from('token_usage').upsert({
+            id: 1,
+            date: today,
+            total_used: 0,
+            updated_at: new Date().toISOString()
+          });
         }
+        tokenLoadedRef.current = true;
       }
     } catch (err) {
-      console.error("خطأ في التحميل من Supabase:", err);
-    }
-  };
-
-  const saveChatToCloud = async () => {
-    try {
-      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
-      await supabase.from('chats').upsert({
-        id: currentChatId.toString(),
-        title: title,
-        messages: messages.slice(-40),
-        updated_at: new Date().toISOString()
-      });
-      
-      // تحديث السجل المحلي
-      const { data } = await supabase
-        .from('chats')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(20);
-      
-      if (data) {
-        setAllChats(data.map(c => ({
-          id: c.id,
-          title: c.title || 'محادثة بدون عنوان',
-          date: c.updated_at,
-          messageCount: c.messages?.length || 0
-        })));
-      }
-    } catch (err) {
-      console.error("خطأ في حفظ المحادثة:", err);
+      console.error("خطأ في تحميل عداد التوكن:", err);
     }
   };
 
@@ -261,6 +227,64 @@ export default function App() {
       });
     } catch (err) {
       console.error("خطأ في حفظ عداد التوكن:", err);
+    }
+  };
+
+  const loadChatsFromCloud = async () => {
+    try {
+      const { data: chats, error } = await supabase
+        .from('chats')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      
+      if (chats && chats.length > 0 && !error) {
+        setAllChats(chats.map(c => ({
+          id: c.id,
+          title: c.title || 'محادثة بدون عنوان',
+          date: c.updated_at,
+          messageCount: c.messages?.length || 0
+        })));
+        
+        const lastChat = chats[0];
+        if (lastChat.messages && lastChat.messages.length > 0) {
+          setCurrentChatId(lastChat.id);
+          setMessages(lastChat.messages.slice(-40));
+        }
+      }
+    } catch (err) {
+      console.error("خطأ في تحميل المحادثات:", err);
+    }
+  };
+
+  const saveChatToCloud = async () => {
+    try {
+      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
+      const { error } = await supabase.from('chats').upsert({
+        id: currentChatId.toString(),
+        title: title,
+        messages: messages.slice(-40),
+        updated_at: new Date().toISOString()
+      });
+      
+      if (!error) {
+        const { data } = await supabase
+          .from('chats')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(20);
+        
+        if (data) {
+          setAllChats(data.map(c => ({
+            id: c.id,
+            title: c.title || 'محادثة بدون عنوان',
+            date: c.updated_at,
+            messageCount: c.messages?.length || 0
+          })));
+        }
+      }
+    } catch (err) {
+      console.error("خطأ في حفظ المحادثة:", err);
     }
   };
 
@@ -333,17 +357,17 @@ export default function App() {
   };
 
   const clearAllStorage = () => {
-    if (window.confirm("⚠️ متأكد تمسح كل حاجة من السحابة؟\n\nهيمسح كل المحادثات وعداد التوكن!")) {
+    if (window.confirm("⚠️ متأكد تمسح كل حاجة من السحابة؟")) {
       setKeys(loadKeys());
       setAllChats([]);
       setMessages([{ role: "assistant", content: "تمام، مسحت كل حاجة 🖤", id: Date.now() }]);
       setTokenData({ used: 0, date: new Date().toDateString() });
       setCurrentChatId(Date.now().toString());
-      setMessageCount(0);
       setShowHistory(false);
       setShowMenu(false);
       setInput("");
       setAttachedFiles([]);
+      saveTokenToCloud();
     }
   };
 
@@ -351,7 +375,6 @@ export default function App() {
     const newId = Date.now().toString();
     setCurrentChatId(newId);
     setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]);
-    setMessageCount(0);
     setShowMenu(false);
     setShowHistory(false);
     setInput("");
@@ -363,7 +386,6 @@ export default function App() {
     const { data } = await supabase.from('chats').select('*').eq('id', chatId).single();
     if (data?.messages) {
       setMessages(data.messages.slice(-40));
-      setMessageCount(data.messages.length);
     }
     setShowHistory(false);
     setShowMenu(false);
@@ -374,7 +396,6 @@ export default function App() {
   const clearChat = () => {
     if (window.confirm("متأكد تمسح المحادثة دي؟")) {
       setMessages([{ role: "assistant", content: "تم المسح 🖤", id: Date.now() }]);
-      setMessageCount(0);
       deleteChatFromCloud(currentChatId);
       setAllChats(prev => prev.filter(c => c.id !== currentChatId));
       setAttachedFiles([]);
@@ -431,16 +452,10 @@ export default function App() {
     setAttachedFiles([]);
     setLoading(true);
     setStreamingText("");
-    
-    const newCount = messageCount + 1;
-    setMessageCount(newCount);
 
     try {
       const controller = new AbortController();
       abortRef.current = controller;
-      
-      // كل 5 رسايل، نجيب الاستهلاك الحقيقي (non-streaming)
-      const useStream = newCount % TOKEN_REFRESH_INTERVAL !== 0;
       
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
@@ -450,7 +465,7 @@ export default function App() {
           messages: [{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(updated)],
           temperature: 0.8,
           max_tokens: 2000,
-          stream: useStream,
+          stream: true,
         }),
         signal: controller.signal,
       });
@@ -460,50 +475,39 @@ export default function App() {
         throw new Error(err.error?.message || "API error");
       }
       
-      if (useStream) {
-        // ========== Streaming (أغلب الوقت) ==========
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let fullText = "", tokenCount = 0;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = "";
+      let tokenCount = 0;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const lines = decoder.decode(value).split("\n").filter(l => l.startsWith("data: "));
-          for (const line of lines) {
-            const json = line.replace("data: ", "").trim();
-            if (json === "[DONE]") continue;
-            try {
-              const c = JSON.parse(json).choices?.[0]?.delta?.content || "";
-              if (c) { fullText += c; tokenCount++; setStreamingText(cleanResponse(fullText)); }
-            } catch {}
-          }
-        }
-
-        const finalText = cleanResponse(fullText);
-        setMessages(prev => [...prev, { role: "assistant", content: finalText, id: Date.now() }]);
-        setStreamingText("");
-        
-        // تقدير التوكن للـ streaming
-        const promptTokens = countTokens(JSON.stringify(updated));
-        const completionTokens = countTokens(fullText);
-        addTokens({ prompt_tokens: promptTokens, completion_tokens: completionTokens });
-        
-      } else {
-        // ========== Non-Streaming (كل 5 رسايل) ==========
-        const data = await response.json();
-        const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-        setMessages(prev => [...prev, { role: "assistant", content: reply, id: Date.now() }]);
-        setStreamingText("");
-        
-        // استهلاك حقيقي من Groq
-        if (data.usage) {
-          addTokens(data.usage);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const lines = decoder.decode(value).split("\n").filter(l => l.startsWith("data: "));
+        for (const line of lines) {
+          const json = line.replace("data: ", "").trim();
+          if (json === "[DONE]") continue;
+          try {
+            const c = JSON.parse(json).choices?.[0]?.delta?.content || "";
+            if (c) { fullText += c; tokenCount++; setStreamingText(cleanResponse(fullText)); }
+          } catch {}
         }
       }
+
+      const finalText = cleanResponse(fullText);
+      setMessages(prev => [...prev, { role: "assistant", content: finalText, id: Date.now() }]);
+      setStreamingText("");
+      
+      // تقدير التوكن: نحسب عدد الحروف ونقسم على 4 (دي طريقة تقريبية لكن دقيقة)
+      const promptChars = JSON.stringify(updated).length + SYSTEM_PROMPT.length;
+      const completionChars = finalText.length;
+      const promptTokens = Math.ceil(promptChars / 4);
+      const completionTokens = Math.ceil(completionChars / 4);
+      
+      addTokens({ prompt_tokens: promptTokens, completion_tokens: completionTokens });
       
       // تحديث استخدام المفتاح
-      picked.used += tokenData.used;
+      picked.used += (promptTokens + completionTokens);
       picked.last = new Date().toISOString();
       
     } catch (err) {
@@ -523,7 +527,7 @@ export default function App() {
   const filteredMessages = searchTerm ? messages.filter(m => m.content.includes(searchTerm)) : messages;
   const isDark = theme === "dark";
   const stats = getKeyStats(keys);
-  const tokenPercent = Math.min(stats.percentUsed, 100);
+  const tokenPercent = Math.min(((tokenData.used / (stats.totalKeys * DAILY_LIMIT_PER_KEY)) * 100), 100).toFixed(1);
   const tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
 
   const formatDate = (dateStr) => {
