@@ -319,6 +319,30 @@ export default function Chat({ user, onLogout }) {
 
   if (!isLoaded) return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}><div>🖤 جاري التحميل...</div></div>;
 
+  // ✅ صفحة "مفيش مفاتيح"
+  if (isLoaded && keys.length === 0) {
+    return (
+      <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui, sans-serif", textAlign: "center", padding: "20px" }}>
+        <div>
+          <div style={{ fontSize: "80px", marginBottom: "20px" }}>🔑</div>
+          <h2 style={{ fontSize: "24px", marginBottom: "15px" }}>مفيش مفاتيح متاحة</h2>
+          <p style={{ opacity: 0.7, fontSize: "16px", marginBottom: "10px", lineHeight: "1.6" }}>
+            تواصل مع المدير عشان يضيفلك مفتاح API
+          </p>
+          <p style={{ opacity: 0.5, fontSize: "14px", marginBottom: "30px" }}>
+            لما المفتاح يتضاف، دوس على الزر بالأسفل
+          </p>
+          <button onClick={loadAllData} style={{ padding: "14px 40px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "16px", fontWeight: "bold", marginBottom: "15px", display: "block", width: "100%", maxWidth: "300px", margin: "0 auto 15px auto" }}>
+            🔄 تحديث
+          </button>
+          <button onClick={onLogout} style={{ padding: "10px 25px", background: "transparent", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>
+            🚪 تسجيل خروج
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
       <div className="header">
