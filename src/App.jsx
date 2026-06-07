@@ -30,13 +30,10 @@ const SYSTEM_PROMPT = `اسمك بلاك 🖤
 ## أسلوبك:
 - مباشر وواضح.
 - مختصر إلا لو المستخدم طلب تفاصيل.
-- خفيف الدم من غير مبالغة.
 
 ## قواعد البرمجة:
 - عند طلب كود، اكتبه داخل code block.
-- فكر في الكود خطوة بخطوة قبل ما تكتبه.
 - الكود لازم يكون كامل وقابل للتشغيل فوراً.
-- أسماء المتغيرات بالإنجليزية والتعليقات بالعربية.
 
 ## التعامل مع الملفات:
 - لو المستخدم رفع ملف، اقرأه وحلله.
@@ -70,8 +67,14 @@ function pickBestKey(keys) {
 
 function getKeyStats(keys) {
   const total = keys.length * DAILY_LIMIT_PER_KEY;
-  const used = keys.reduce((s,k) => s + k.used, 0);
-  return { totalLimit: total, totalUsed: used, percentUsed: ((used / total) * 100).toFixed(1), availableKeys: keys.filter(k => k.used < DAILY_LIMIT_PER_KEY).length, totalKeys: keys.length };
+  const used = keys.reduce((s,k) => s + (k.used || 0), 0);
+  return {
+    totalLimit: total,
+    totalUsed: used,
+    percentUsed: total > 0 ? ((used / total) * 100).toFixed(1) : "0.0",
+    availableKeys: keys.filter(k => (k.used || 0) < DAILY_LIMIT_PER_KEY).length,
+    totalKeys: keys.length
+  };
 }
 
 function cleanResponse(text) {
@@ -112,7 +115,6 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [theme, setTheme] = useState("dark");
-  const [tokenData, setTokenData] = useState({ used: 0, date: new Date().toDateString() });
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const bottomRef = useRef(null);
@@ -124,61 +126,66 @@ export default function App() {
 
   useEffect(() => { keysRef.current = keys; }, [keys]);
   useEffect(() => { loadAllData(); }, []);
-  useEffect(() => { if (!isLoaded) return; const i = setInterval(() => loadTokenFromCloud(), 15000); return () => clearInterval(i); }, [isLoaded]);
-  useEffect(() => { if (!isLoaded || messages.length <= 1) return; const t = setTimeout(() => saveChatToCloud(), 2000); return () => clearTimeout(t); }, [messages, isLoaded]);
-  useEffect(() => { if (!isLoaded) return; const t = setTimeout(() => saveTokenToCloud(), 5000); return () => clearTimeout(t); }, [tokenData, isLoaded]);
-  useEffect(() => { const h = () => { if (isLoaded) { saveChatToCloud(); saveTokenToCloud(); } }; window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h); }, [messages, tokenData, isLoaded]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
-  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const loadAllData = async () => {
-    await loadTokenFromCloud();
-    await loadChatsFromCloud();
+    await loadFromCloud();
     setIsLoaded(true);
   };
 
-  const loadTokenFromCloud = async () => {
+  const loadFromCloud = async () => {
     try {
-      const { data, error } = await supabase.from('token_usage').select('*').eq('id', 1).single();
-      if (!error && data) {
+      const { data } = await supabase.from('token_usage').select('*').eq('id', 1).single();
+      if (data) {
         const today = new Date().toISOString().slice(0, 10);
-        if (data.date === today) { setTokenData({ used: data.total_used || 0, date: today }); }
-        else { setTokenData({ used: 0, date: today }); await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() }); }
+        if (data.date === today) {
+          if (data.keys_data) {
+            setKeys(prev => prev.map(k => {
+              const saved = data.keys_data.find(sk => sk.id === k.id);
+              return saved ? { ...k, used: saved.used || 0, last: saved.last } : k;
+            }));
+          }
+        } else {
+          setKeys(loadKeys());
+          await saveKeysToCloud([]);
+        }
       }
     } catch {}
-  };
-
-  const saveTokenToCloud = async () => {
-    try { await supabase.from('token_usage').upsert({ id: 1, date: new Date().toISOString().slice(0, 10), total_used: tokenData.used, updated_at: new Date().toISOString() }); } catch {}
-  };
-
-  const loadChatsFromCloud = async () => {
     try {
-      const { data: chats, error } = await supabase.from('chats').select('*').order('updated_at', { ascending: false }).limit(20);
-      if (!error && chats && chats.length > 0) {
-        setAllChats(chats.map(c => ({ id: c.id, title: c.title || 'محادثة بدون عنوان', date: c.updated_at, messageCount: c.messages?.length || 0 })));
+      const { data: chats } = await supabase.from('chats').select('*').order('updated_at', { ascending: false }).limit(20);
+      if (chats?.length > 0) {
+        setAllChats(chats.map(c => ({ id: c.id, title: c.title || 'محادثة', date: c.updated_at, messageCount: c.messages?.length || 0 })));
         const last = chats[0];
         if (last.messages?.length > 0) { setCurrentChatId(last.id); setMessages(last.messages.slice(-40)); }
       }
     } catch {}
   };
 
-  const saveChatToCloud = async () => {
+  const saveKeysToCloud = async (keysData) => {
+    const kd = keysData.length > 0 ? keysData : keysRef.current.map(k => ({ id: k.id, used: k.used, last: k.last }));
+    const totalUsed = kd.reduce((s, k) => s + (k.used || 0), 0);
     try {
-      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة بدون عنوان";
-      await supabase.from('chats').upsert({ id: currentChatId.toString(), title, messages: messages.slice(-40), updated_at: new Date().toISOString() });
-      const { data } = await supabase.from('chats').select('*').order('updated_at', { ascending: false }).limit(20);
-      if (data) setAllChats(data.map(c => ({ id: c.id, title: c.title || 'محادثة بدون عنوان', date: c.updated_at, messageCount: c.messages?.length || 0 })));
+      await supabase.from('token_usage').upsert({
+        id: 1,
+        date: new Date().toISOString().slice(0, 10),
+        total_used: totalUsed,
+        keys_data: kd,
+        updated_at: new Date().toISOString()
+      });
     } catch {}
   };
 
-  const deleteChatFromCloud = async (chatId) => { try { await supabase.from('chats').delete().eq('id', chatId.toString()); } catch {} };
-
-  const addTokens = (usage) => {
-    if (!usage) return;
-    const total = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
-    setTokenData(prev => ({ used: prev.used + total, date: new Date().toDateString() }));
+  const saveChat = async () => {
+    try {
+      const title = messages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة";
+      await supabase.from('chats').upsert({ id: currentChatId, title, messages: messages.slice(-40), updated_at: new Date().toISOString() });
+    } catch {}
   };
+
+  useEffect(() => { if (!isLoaded) return; const i = setInterval(() => loadFromCloud(), 15000); return () => clearInterval(i); }, [isLoaded]);
+  useEffect(() => { if (!isLoaded || messages.length <= 1) return; const t = setTimeout(() => saveChat(), 2000); return () => clearTimeout(t); }, [messages, isLoaded]);
+  useEffect(() => { const h = () => { saveChat(); saveKeysToCloud([]); }; window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h); }, [isLoaded]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   const copyMessage = (content, id) => {
     navigator.clipboard.writeText(content).then(() => { setCopiedId(id); setTimeout(() => setCopiedId(null), 2000); }).catch(() => {
@@ -190,153 +197,74 @@ export default function App() {
   const handleFileUpload = async (e) => {
     const files = Array.from(e.target.files); if (files.length === 0) return;
     const newFiles = [];
-    for (const file of files) { const content = await readFileAsText(file); newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content }); }
+    for (const file of files) { const content = await readFileAsText(file); newFiles.push({ id: Date.now(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content }); }
     setAttachedFiles(prev => [...prev, ...newFiles]); inputRef.current?.focus();
   };
 
   const removeFile = (fileId) => setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
-  
-  const refreshKeys = () => {
-    const freshKeys = loadKeys();
-    setKeys(freshKeys);
-    alert(`✅ ${freshKeys.length} مفاتيح متصلة`);
-  };
+  const refreshKeys = () => { const freshKeys = loadKeys(); setKeys(freshKeys); alert(`✅ ${freshKeys.length} مفاتيح`); };
+  const clearAllStorage = () => { if (window.confirm("متأكد؟")) { setAllChats([]); setMessages([{ role: "assistant", content: "تم 🖤", id: Date.now() }]); setCurrentChatId(Date.now().toString()); setShowMenu(false); setInput(""); } };
+  const resetTokenCounter = () => { if (window.confirm("تصفر؟")) { const fk = keysRef.current.map(k => ({ ...k, used: 0 })); setKeys(fk); saveKeysToCloud(fk.map(k => ({ id: k.id, used: 0 }))); setShowMenu(false); } };
+  const newChat = () => { const id = Date.now().toString(); setCurrentChatId(id); setMessages([{ role: "assistant", content: "جديد 🖤", id: Date.now() }]); setShowMenu(false); setInput(""); };
+  const openChat = async (chatId) => { setCurrentChatId(chatId); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) setMessages(data.messages.slice(-40)); setShowHistory(false); setInput(""); };
+  const clearChat = () => { if (window.confirm("تمسح؟")) { setMessages([{ role: "assistant", content: "تم 🖤", id: Date.now() }]); supabase.from('chats').delete().eq('id', currentChatId).then(); setAllChats(p => p.filter(c => c.id !== currentChatId)); } };
+  const deleteChat = (chatId, e) => { e.stopPropagation(); supabase.from('chats').delete().eq('id', chatId).then(); setAllChats(p => p.filter(c => c.id !== chatId)); };
+  const exportChat = () => { const t = messages.map(m => `${m.role === "user" ? "👤" : "🖤"}:\n${m.content}`).join("\n\n---\n\n"); const b = new Blob([t], { type: "text/plain" }); const u = URL.createObjectURL(b); const a = document.createElement("a"); a.href = u; a.download = `chat.txt`; a.click(); URL.revokeObjectURL(u); };
+  const stopStreaming = () => { if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; } if (streamingText) { setMessages(p => [...p, { role: "assistant", content: streamingText, id: Date.now() }]); setStreamingText(""); } setLoading(false); };
 
-  const clearAllStorage = () => {
-    if (window.confirm("⚠️ متأكد تمسح كل المحادثات من السحابة؟")) {
-      setAllChats([]); setMessages([{ role: "assistant", content: "تمام، مسحت كل المحادثات 🖤", id: Date.now() }]);
-      setCurrentChatId(Date.now().toString()); setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]);
-    }
-  };
-
-  const resetTokenCounter = () => {
-    if (window.confirm("⚠️ تصفر عداد التوكن؟")) {
-      setTokenData({ used: 0, date: new Date().toDateString() });
-      const freshKeys = keysRef.current.map(k => ({ ...k, used: 0, last: null }));
-      setKeys(freshKeys);
-      saveTokenToCloud();
-      setShowMenu(false);
-      alert("✅ تم تصفير العداد");
-    }
-  };
-
-  const newChat = () => { const newId = Date.now().toString(); setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); };
-
-  const openChat = async (chatId) => {
-    setCurrentChatId(chatId);
-    const { data } = await supabase.from('chats').select('*').eq('id', chatId).single();
-    if (data?.messages) setMessages(data.messages.slice(-40));
-    setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]);
-  };
-
-  const clearChat = () => {
-    if (window.confirm("متأكد تمسح المحادثة دي؟")) { setMessages([{ role: "assistant", content: "تم المسح 🖤", id: Date.now() }]); deleteChatFromCloud(currentChatId); setAllChats(prev => prev.filter(c => c.id !== currentChatId)); setAttachedFiles([]); }
-  };
-
-  const deleteChat = (chatId, e) => { e.stopPropagation(); deleteChatFromCloud(chatId); setAllChats(prev => prev.filter(c => c.id !== chatId)); if (currentChatId === chatId) newChat(); };
-
-  const exportChat = () => {
-    const text = messages.map(m => `${m.role === "user" ? "👤" : "🖤"}:\n${m.content}`).join("\n\n---\n\n");
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" }); const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.txt`; a.click(); URL.revokeObjectURL(url);
-  };
-
-  const stopStreaming = () => {
-    if (abortRef.current) { abortRef.current.abort(); abortRef.current = null; }
-    if (streamingText) { setMessages(prev => [...prev, { role: "assistant", content: streamingText, id: Date.now() }]); setStreamingText(""); }
-    setLoading(false);
-  };
-
-  const sendMessage = async (overrideText, retry = false) => {
+  const sendMessage = async (text, retry = false) => {
     if (loading && !retry) { stopStreaming(); return; }
-    const text = (overrideText || input).trim();
-    if (!text && attachedFiles.length === 0 && !retry) return;
-
-    const currentKeys = retry ? keysRef.current : keys;
-    const picked = pickBestKey(currentKeys);
-    if (!picked) { setMessages(prev => [...prev, { role: "assistant", content: "خلصت كل المفاتيح النهارده 😅🖤", id: Date.now() }]); setLoading(false); return; }
-
-    let fileContent = "";
-    if (attachedFiles.length > 0) { fileContent = "\n\n📎 ملفات:\n"; attachedFiles.forEach(f => { fileContent += `\n${f.icon} ${f.name}\n\`\`\`\n${f.content}\n\`\`\`\n`; }); }
-
-    const userMsg = { role: "user", content: (overrideText || input).trim() + fileContent, id: Date.now() };
+    const msg = (text || input).trim();
+    if (!msg && !retry) return;
+    const picked = pickBestKey(retry ? keysRef.current : keys);
+    if (!picked) { setMessages(p => [...p, { role: "assistant", content: "خلصت كل المفاتيح النهارده 😅🖤", id: Date.now() }]); setLoading(false); return; }
+    const userMsg = { role: "user", content: msg, id: Date.now() };
     const updated = retry ? messages : [...messages, userMsg];
-    if (!retry) { setMessages(updated); setInput(""); setAttachedFiles([]); }
+    if (!retry) { setMessages(updated); setInput(""); }
     setLoading(true); setStreamingText("");
-
     try {
-      const controller = new AbortController(); abortRef.current = controller;
-      const cleanMessages = updated.map(m => ({ role: m.role, content: m.content }));
-      
-      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${picked.key}` },
-        body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "system", content: SYSTEM_PROMPT }, ...cleanMessages.slice(-40)], temperature: 0.8, max_tokens: 2000, stream: true }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
+      const c = new AbortController(); abortRef.current = c;
+      const clean = updated.map(m => ({ role: m.role, content: m.content }));
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": `Bearer ${picked.key}` }, body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean.slice(-40)], temperature: 0.8, max_tokens: 2000, stream: true }), signal: c.signal });
+      if (!res.ok) {
+        const err = await res.json();
         if (err.error?.code === "rate_limit_exceeded") {
-          const updatedKeys = keysRef.current.map(k => k.id === picked.id ? { ...k, used: DAILY_LIMIT_PER_KEY, last: new Date().toISOString() } : k);
-          setKeys(updatedKeys);
-          if (retryRef.current < 3) { retryRef.current++; setTimeout(() => sendMessage(text || overrideText, true), 500); return; }
-          retryRef.current = 0;
-          setMessages(prev => [...prev, { role: "assistant", content: "كل المفاتيح وصلت للحد الأقصى 😅🖤", id: Date.now() }]);
-          setLoading(false); return;
+          const uk = keysRef.current.map(k => k.id === picked.id ? { ...k, used: DAILY_LIMIT_PER_KEY, last: new Date().toISOString() } : k);
+          setKeys(uk);
+          saveKeysToCloud(uk.map(k => ({ id: k.id, used: k.used, last: k.last })));
+          if (retryRef.current < 3) { retryRef.current++; setTimeout(() => sendMessage(msg, true), 500); return; }
+          retryRef.current = 0; setMessages(p => [...p, { role: "assistant", content: "كل المفاتيح خلصت 😅", id: Date.now() }]); setLoading(false); return;
         }
-        throw new Error(err.error?.message || "خطأ");
+        throw new Error(err.error?.message);
       }
-
       retryRef.current = 0;
-      const reader = response.body.getReader(); const decoder = new TextDecoder(); let fullText = "";
-      while (true) {
-        const { done, value } = await reader.read(); if (done) break;
-        const lines = decoder.decode(value).split("\n").filter(l => l.startsWith("data: "));
-        for (const line of lines) {
-          const json = line.replace("data: ", "").trim(); if (json === "[DONE]") continue;
-          try { const c = JSON.parse(json).choices?.[0]?.delta?.content || ""; if (c) { fullText += c; setStreamingText(cleanResponse(fullText)); } } catch {}
-        }
-      }
-
-      const finalText = cleanResponse(fullText);
-      setMessages(prev => [...prev, { role: "assistant", content: finalText, id: Date.now() }]);
-      setStreamingText("");
-      
-      const promptChars = JSON.stringify(cleanMessages).length + SYSTEM_PROMPT.length;
-      const completionChars = finalText.length;
-      addTokens({ prompt_tokens: Math.ceil(promptChars / 4), completion_tokens: Math.ceil(completionChars / 4) });
-      
-      const updatedKeys = keysRef.current.map(k => k.id === picked.id ? { ...k, used: k.used + Math.ceil(promptChars / 4) + Math.ceil(completionChars / 4), last: new Date().toISOString() } : k);
-      setKeys(updatedKeys);
-    } catch (err) {
-      if (err.name === "AbortError") return;
-      setMessages(prev => [...prev, { role: "assistant", content: `خطأ: ${err.message} 🖤`, id: Date.now() }]);
-    } finally { setLoading(false); abortRef.current = null; if (!retry) setTimeout(() => inputRef.current?.focus(), 100); }
+      const reader = res.body.getReader(); const d = new TextDecoder(); let full = "";
+      while (true) { const { done, value } = await reader.read(); if (done) break; d.decode(value).split("\n").filter(l => l.startsWith("data: ")).forEach(l => { const j = l.replace("data: ", "").trim(); if (j === "[DONE]") return; try { const ct = JSON.parse(j).choices?.[0]?.delta?.content || ""; if (ct) { full += ct; setStreamingText(cleanResponse(full)); } } catch {} }); }
+      const final = cleanResponse(full);
+      setMessages(p => [...p, { role: "assistant", content: final, id: Date.now() }]); setStreamingText("");
+      const pt = Math.ceil((JSON.stringify(clean).length + SYSTEM_PROMPT.length) / 4);
+      const ct = Math.ceil(final.length / 4);
+      const uk = keysRef.current.map(k => k.id === picked.id ? { ...k, used: k.used + pt + ct, last: new Date().toISOString() } : k);
+      setKeys(uk);
+      saveKeysToCloud(uk.map(k => ({ id: k.id, used: k.used, last: k.last })));
+    } catch (err) { if (err.name !== "AbortError") setMessages(p => [...p, { role: "assistant", content: `خطأ: ${err.message}`, id: Date.now() }]); }
+    finally { setLoading(false); abortRef.current = null; if (!retry) setTimeout(() => inputRef.current?.focus(), 100); }
   };
 
   const handleKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
-
   const filteredMessages = searchTerm ? messages.filter(m => m.content.includes(searchTerm)) : messages;
   const isDark = theme === "dark";
   const stats = getKeyStats(keys);
-  const tokenPercent = Math.min(((tokenData.used / (stats.totalKeys * DAILY_LIMIT_PER_KEY)) * 100), 100).toFixed(1);
+  const tokenPercent = stats.percentUsed;
   const tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
+  const formatDate = (d) => { if (!d) return ""; const dt = new Date(d); const n = new Date(); const diff = n - dt; if (diff < 60000) return "الآن"; if (diff < 3600000) return `منذ ${Math.floor(diff/60000)} د`; if (diff < 86400000) return `منذ ${Math.floor(diff/3600000)} س`; return dt.toLocaleDateString("ar-EG"); };
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return ""; const d = new Date(dateStr); const now = new Date(); const diff = now - d;
-    if (diff < 60000) return "الآن"; if (diff < 3600000) return `منذ ${Math.floor(diff / 60000)} د`; if (diff < 86400000) return `منذ ${Math.floor(diff / 3600000)} س`;
-    return d.toLocaleDateString("ar-EG");
-  };
-
-  if (!isLoaded) {
-    return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui" }}><div style={{ textAlign: "center" }}><div style={{ fontSize: "40px" }}>🖤</div><div style={{ fontSize: "18px", marginTop: "10px" }}>جاري التحميل...</div></div></div>;
-  }
+  if (!isLoaded) return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}><div>🖤 جاري التحميل...</div></div>;
 
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
       <div className="header"><div className="header-left"><div className="avatar">🖤</div><div><div className="header-name">بلاك</div><div className="header-status"><span className="status-dot" />{loading ? "بيكتب..." : "متصل"}</div></div></div><div className="header-right"><button onClick={() => setShowMenu(!showMenu)} className="header-btn" style={{ fontSize: "22px" }}>{showMenu ? "✕" : "☰"}</button></div>
-        {showMenu && (<><div onClick={() => setShowMenu(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} /><div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", border: `1px solid ${isDark ? "rgba(255,255,255,0.1)" : "rgba(0,0,0,0.1)"}`, borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
+        {showMenu && (<><div onClick={() => setShowMenu(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} /><div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
           <button onClick={() => { refreshKeys(); setShowMenu(false); }} className="menu-item">🔑 تحديث المفاتيح</button>
           <button onClick={() => { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
           <button onClick={() => { newChat(); }} className="menu-item">➕ محادثة جديدة</button>
@@ -345,21 +273,21 @@ export default function App() {
           <button onClick={() => { setTheme(t => t === "dark" ? "light" : "dark"); }} className="menu-item">{isDark ? "☀️" : "🌙"} المظهر</button>
           <button onClick={() => { clearChat(); setShowMenu(false); }} className="menu-item">🗑️ مسح المحادثة</button>
           <button onClick={() => { clearAllStorage(); setShowMenu(false); }} className="menu-item" style={{ color: "#f87171" }}>🧹 مسح المحادثات</button>
-          <button onClick={() => { resetTokenCounter(); }} className="menu-item" style={{ color: "#fbbf24" }}>⚡ تصفير العداد</button>
+          <button onClick={() => { resetTokenCounter(); }} className="menu-item" style={{ color: "#fbbf24" }}>⚡ تصفير العداد والمفاتيح</button>
         </div></>)}
       </div>
-      <div className="token-bar"><div className="token-info"><span>⚡ {tokenData.used.toLocaleString()} / {(stats.totalKeys * DAILY_LIMIT_PER_KEY).toLocaleString()} token ({stats.availableKeys}/{stats.totalKeys} مفاتيح)</span><span style={{ color: tokenColor }}>{tokenPercent}%</span></div><div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div></div>
+      <div className="token-bar"><div className="token-info"><span>⚡ {stats.totalUsed.toLocaleString()} / {stats.totalLimit.toLocaleString()} token ({stats.availableKeys}/{stats.totalKeys} مفاتيح)</span><span style={{ color: tokenColor }}>{tokenPercent}%</span></div><div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div></div>
       {showHistory && (<div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px", maxHeight: "200px", overflowY: "auto" }}><div style={{ display: "flex", justifyContent: "space-between" }}><strong>📝 سجل المحادثات</strong><button onClick={() => setShowHistory(false)} className="close-btn">✕</button></div>{allChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "10px" }}>مفيش محادثات</div> : allChats.map(chat => (<div key={chat.id} onClick={() => openChat(chat.id)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: chat.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)" }}><div style={{ flex: 1, overflow: "hidden" }}><div style={{ fontSize: "14px", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chat.title}</div><div style={{ fontSize: "11px", opacity: 0.5 }}>{formatDate(chat.date)} · {chat.messageCount} رسالة</div></div><button onClick={(e) => deleteChat(chat.id, e)} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5 }}>🗑️</button></div>))}</div>)}
-      {showSearch && !showHistory && (<div className="search-bar"><span>🔍</span><input className="search-input" placeholder="دور في المحادثة..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />{searchTerm && <span className="search-count">{filteredMessages.length} نتيجة</span>}<button onClick={() => { setShowSearch(false); setSearchTerm(""); }} className="close-btn">✕</button></div>)}
+      {showSearch && !showHistory && (<div className="search-bar"><span>🔍</span><input className="search-input" placeholder="دور..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />{searchTerm && <span>{filteredMessages.length} نتيجة</span>}<button onClick={() => { setShowSearch(false); setSearchTerm(""); }} className="close-btn">✕</button></div>)}
       <div className="messages">
         {messages.length <= 1 && !loading && (<div className="suggestions">{["عرفني بنفسك", "اكتبلي كود Python", "قولي نكتة 😂"].map((s, i) => (<button key={i} onClick={() => sendMessage(s)} className="chip">{s}</button>))}</div>)}
-        {filteredMessages.map(msg => (<div key={msg.id} className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}>{msg.role === "assistant" && <div className="avatar-small">🖤</div>}<div className="msg-content-wrapper"><div className={`bubble ${msg.role === "user" ? "bubble-user" : isDark ? "bubble-ai" : "bubble-ai-light"}`}><MessageContent content={msg.content} /></div>{msg.role === "assistant" && <button onClick={() => copyMessage(msg.content, msg.id)} className="copy-msg-btn">{copiedId === msg.id ? "✓ تم النسخ" : "📋 نسخ"}</button>}</div>{msg.role === "user" && <div className="avatar-small avatar-user">👤</div>}</div>))}
+        {filteredMessages.map(msg => (<div key={msg.id} className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}>{msg.role === "assistant" && <div className="avatar-small">🖤</div>}<div className="msg-content-wrapper"><div className={`bubble ${msg.role === "user" ? "bubble-user" : isDark ? "bubble-ai" : "bubble-ai-light"}`}><MessageContent content={msg.content} /></div>{msg.role === "assistant" && <button onClick={() => copyMessage(msg.content, msg.id)} className="copy-msg-btn">{copiedId === msg.id ? "✓" : "📋"}</button>}</div>{msg.role === "user" && <div className="avatar-small avatar-user">👤</div>}</div>))}
         {streamingText && (<div className="msg-row msg-row-ai"><div className="avatar-small">🖤</div><div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><MessageContent content={streamingText} /></div></div>)}
         {loading && !streamingText && (<div className="msg-row msg-row-ai"><div className="avatar-small">🖤</div><div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><TypingDots /></div></div>)}
         <div ref={bottomRef} />
       </div>
-      {attachedFiles.length > 0 && (<div style={{ display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)" }}>{attachedFiles.map(file => (<div key={file.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(108,92,231,0.15)", border: "1px solid rgba(108,92,231,0.3)", borderRadius: "10px", padding: "6px 10px", fontSize: "12px" }}><span>{file.icon}</span><span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span><button onClick={() => removeFile(file.id)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: "14px" }}>✕</button></div>))}</div>)}
-      <div className="input-area"><button onClick={() => fileInputRef.current?.click()} className="header-btn" title="رفع ملفات" style={{ fontSize: "20px", padding: "8px" }}>📎</button><input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.pdf,image/*" /><textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={loading ? "بلاك بيكتب..." : "اكتب لبلاك..."} rows={1} className="textarea" disabled={loading && !streamingText} /><button onClick={() => sendMessage()} className="send-btn" style={{ opacity: (!input.trim() && attachedFiles.length === 0 && !loading) ? 0.4 : 1, background: loading ? "#f87171" : "" }}>{loading ? "■" : "↑"}</button></div>
+      {attachedFiles.length > 0 && (<div style={{ display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap" }}>{attachedFiles.map(f => (<div key={f.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(108,92,231,0.15)", borderRadius: "10px", padding: "6px 10px", fontSize: "12px" }}><span>{f.icon}</span><span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span><button onClick={() => removeFile(f.id)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>✕</button></div>))}</div>)}
+      <div className="input-area"><button onClick={() => fileInputRef.current?.click()} className="header-btn" style={{ fontSize: "20px" }}>📎</button><input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.pdf,image/*" /><textarea ref={inputRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKeyDown} placeholder={loading ? "بلاك بيكتب..." : "اكتب لبلاك..."} rows={1} className="textarea" disabled={loading && !streamingText} /><button onClick={() => sendMessage()} className="send-btn" style={{ opacity: (!input.trim() && attachedFiles.length === 0 && !loading) ? 0.4 : 1, background: loading ? "#f87171" : "" }}>{loading ? "■" : "↑"}</button></div>
     </div>
   );
 }
