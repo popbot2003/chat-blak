@@ -76,6 +76,7 @@ export default function Chat({ user, onLogout }) {
   const [currentChatId, setCurrentChatId] = useState(Date.now().toString());
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showModelMenu, setShowModelMenu] = useState(false);
   const [messages, setMessages] = useState([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: Date.now() }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -246,6 +247,13 @@ export default function Chat({ user, onLogout }) {
     processQueue();
   }
 
+  async function changeModel(modelName) {
+    const newSettings = { ...userSettings, selectedModel: modelName };
+    setUserSettings(newSettings);
+    await supabase.from('users').update({ selected_model: modelName }).eq('id', user.id);
+    alert("✅ تم تغيير النموذج إلى: " + (modelName === 'llama-3.1-8b-instant' ? '🟢 سريع' : '🟣 ذكي'));
+  }
+
   async function saveKeyUsage(keyId, newUsed) {
     if (typeof keyId === 'string' && keyId.startsWith('uk-')) {
       await supabase.from('user_keys').update({ used_today: newUsed }).eq('id', parseInt(keyId.replace('uk-', '')));
@@ -303,7 +311,7 @@ export default function Chat({ user, onLogout }) {
       <div className="header">
         <div className="header-left"><div className="avatar">🖤</div><div><div className="header-name">بلاك</div><div className="header-status"><span className="status-dot" />{loading ? "بيكتب..." : "متصل"}</div></div></div>
         <div className="header-right">
-          <span style={{ fontSize: "10px", opacity: 0.5, marginRight: "8px" }}>{userSettings.smartMode ? '🧠' : ''} RPM:{userSettings.rateLimitRPM}</span>
+          <span style={{ fontSize: "10px", opacity: 0.5, marginRight: "8px" }}>{userSettings.selectedModel === 'llama-3.1-8b-instant' ? '🟢' : '🟣'} RPM:{userSettings.rateLimitRPM}</span>
           <button onClick={newChat} className="header-btn" title="محادثة جديدة" style={{ fontSize: "20px" }}>➕</button>
           <button onClick={function() { setShowMenu(!showMenu); }} className="header-btn" style={{ fontSize: "22px" }}>{showMenu ? "✕" : "☰"}</button>
         </div>
@@ -312,8 +320,15 @@ export default function Chat({ user, onLogout }) {
             <div onClick={function() { setShowMenu(false); }} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} />
             <div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
               <div style={{ padding: "8px 16px", fontSize: "12px", opacity: 0.5 }}>⚙️ إعداداتك</div>
-              <div style={{ padding: "4px 16px", fontSize: "11px", opacity: 0.4 }}>🎯 نموذج: {userSettings.selectedModel}<br/>⏱️ تبريد: {userSettings.cooldownSeconds}ث<br/>📊 RPM: {userSettings.rateLimitRPM}<br/>💰 يومي: {userSettings.dailyLimit.toLocaleString()}</div>
+              <div style={{ padding: "4px 16px", fontSize: "11px", opacity: 0.4 }}>🎯 نموذج: {userSettings.selectedModel === 'llama-3.1-8b-instant' ? '🟢 سريع' : '🟣 ذكي'}<br/>⏱️ تبريد: {userSettings.cooldownSeconds}ث<br/>📊 RPM: {userSettings.rateLimitRPM}<br/>💰 يومي: {userSettings.dailyLimit.toLocaleString()}</div>
               <hr style={{ borderColor: "rgba(255,255,255,0.1)", margin: "8px 0" }} />
+              <button onClick={function() { setShowModelMenu(!showModelMenu); }} className="menu-item">🎯 تغيير النموذج ▸</button>
+              {showModelMenu && (
+                <div style={{ paddingRight: "12px", borderLeft: "2px solid rgba(108,92,231,0.3)", marginRight: "8px" }}>
+                  <button onClick={function() { changeModel('llama-3.1-8b-instant'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟢 سريع (8b) - أسرع، استهلاك أقل</button>
+                  <button onClick={function() { changeModel('llama-3.3-70b-versatile'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟣 ذكي (70b) - أذكى، أفضل للبرمجة</button>
+                </div>
+              )}
               <button onClick={function() { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
               <button onClick={function() { setTheme(function(t) { return t === "dark" ? "light" : "dark"; }); }} className="menu-item">{isDark ? "☀️ الوضع النهاري" : "🌙 الوضع الليلي"}</button>
               <button onClick={function() { onLogout(); }} className="menu-item" style={{ color: "#f87171" }}>🚪 تسجيل خروج</button>
