@@ -455,6 +455,118 @@ body {
 .send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 /* ─────────────────────────────────────────
+   CODE BLOCK
+───────────────────────────────────────── */
+.code-wrapper {
+  margin: 10px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.08);
+  /* منع الـ code block من يكسر الـ bubble */
+  max-width: 100%;
+  direction: ltr;
+}
+
+.light .code-wrapper {
+  border: 1px solid rgba(0,0,0,0.1);
+}
+
+/* الشريط العلوي — اسم اللغة + زر النسخ */
+.code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: rgba(0,0,0,0.35);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.light .code-header {
+  background: #1e1e2e;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.code-lang {
+  font-size: 12px;
+  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  color: #a29bfe;
+  text-transform: lowercase;
+  letter-spacing: 0.5px;
+  opacity: 0.9;
+}
+
+.code-copy-btn {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #e0e0e0;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.code-copy-btn:hover {
+  background: rgba(108,92,231,0.3);
+  border-color: #6c5ce7;
+  color: #fff;
+}
+
+/* حالة "تم النسخ" */
+.code-copy-btn:active {
+  transform: scale(0.95);
+}
+
+/* الكود نفسه */
+.code-pre {
+  margin: 0;
+  padding: 16px;
+  background: #13131f;
+  overflow-x: auto;
+  direction: ltr;
+  text-align: left;
+  -webkit-overflow-scrolling: touch;
+}
+
+.light .code-pre {
+  background: #1e1e2e;
+}
+
+.code-content {
+  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #e0e0e0;
+  white-space: pre;
+  display: block;
+}
+
+/* scrollbar داخل الكود */
+.code-pre::-webkit-scrollbar { height: 4px; }
+.code-pre::-webkit-scrollbar-track { background: transparent; }
+.code-pre::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 4px;
+}
+
+/* على موبايل نصغر الفونت شوية */
+@media (max-width: 768px) {
+  .code-header      { padding: 6px 12px; }
+  .code-lang        { font-size: 11px; }
+  .code-copy-btn    { font-size: 11px; padding: 3px 8px; }
+  .code-pre         { padding: 12px; }
+  .code-content     { font-size: 12px; }
+}
+
+@media (max-width: 400px) {
+  .code-content  { font-size: 11.5px; }
+  .code-pre      { padding: 10px; }
+}
+
+/* ─────────────────────────────────────────
    RESPONSIVE — TABLET (≤ 1024px)
 ───────────────────────────────────────── */
 @media (max-width: 1024px) {
@@ -551,4 +663,3 @@ body {
   .input-area    { padding: 6px 14px; }
   .suggestions   { padding: 6px 0; }
 }
-
