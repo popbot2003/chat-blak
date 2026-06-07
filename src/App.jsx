@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import "./App.css";
 import MessageContent from "./components/MessageContent";
 import TypingDots from "./components/TypingDots";
@@ -114,32 +114,77 @@ export default function App() {
   const [theme, setTheme] = useState("dark");
   const [tokenData, setTokenData] = useState({ used: 0, date: new Date().toDateString() });
   const [attachedFiles, setAttachedFiles] = useState([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
   const fileInputRef = useRef(null);
+  const mountedRef = useRef(false);
 
-  useEffect(() => { loadTokenFromCloud(); loadChatsFromCloud(); }, []);
-  useEffect(() => { const i = setInterval(() => { loadTokenFromCloud(); }, 10000); return () => clearInterval(i); }, []);
-  useEffect(() => { if (messages.length > 1) { const t = setTimeout(() => { saveChatToCloud(); }, 1000); return () => clearTimeout(t); } }, [messages]);
-  useEffect(() => { if (tokenData.used >= 0) { const t = setTimeout(() => { saveTokenToCloud(); }, 3000); return () => clearTimeout(t); } }, [tokenData]);
-  useEffect(() => { const h = () => { saveChatToCloud(); saveTokenToCloud(); }; window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h); }, [messages, tokenData]);
+  // تحميل أول مرة فقط
+  useEffect(() => {
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      loadAllData();
+    }
+  }, []);
+
+  // مزامنة مستمرة للعداد (كل 15 ثانية)
+  useEffect(() => {
+    if (!isLoaded) return;
+    const interval = setInterval(() => { loadTokenFromCloud(); }, 15000);
+    return () => clearInterval(interval);
+  }, [isLoaded]);
+
+  // حفظ المحادثة كل ما تتغير
+  useEffect(() => {
+    if (!isLoaded || messages.length <= 1) return;
+    const timer = setTimeout(() => { saveChatToCloud(); }, 2000);
+    return () => clearTimeout(timer);
+  }, [messages, isLoaded]);
+
+  // حفظ العداد كل ما يتغير
+  useEffect(() => {
+    if (!isLoaded || tokenData.used < 0) return;
+    const timer = setTimeout(() => { saveTokenToCloud(); }, 5000);
+    return () => clearTimeout(timer);
+  }, [tokenData, isLoaded]);
+
+  // حفظ قبل الخروج
+  useEffect(() => {
+    const h = () => { if (isLoaded) { saveChatToCloud(); saveTokenToCloud(); } };
+    window.addEventListener("beforeunload", h);
+    return () => window.removeEventListener("beforeunload", h);
+  }, [messages, tokenData, isLoaded]);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
   useEffect(() => { inputRef.current?.focus(); }, []);
+
+  const loadAllData = async () => {
+    await loadTokenFromCloud();
+    await loadChatsFromCloud();
+    setIsLoaded(true);
+  };
 
   const loadTokenFromCloud = async () => {
     try {
       const { data } = await supabase.from('token_usage').select('*').eq('id', 1).single();
       if (data) {
         const today = new Date().toISOString().slice(0, 10);
-        if (data.date === today) { setTokenData({ used: data.total_used || 0, date: today }); }
-        else { setTokenData({ used: 0, date: today }); await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() }); }
+        if (data.date === today) {
+          setTokenData({ used: data.total_used || 0, date: today });
+        } else {
+          setTokenData({ used: 0, date: today });
+          await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() });
+        }
       }
     } catch {}
   };
 
   const saveTokenToCloud = async () => {
-    try { await supabase.from('token_usage').upsert({ id: 1, date: new Date().toISOString().slice(0, 10), total_used: tokenData.used, updated_at: new Date().toISOString() }); } catch {}
+    try {
+      await supabase.from('token_usage').upsert({ id: 1, date: new Date().toISOString().slice(0, 10), total_used: tokenData.used, updated_at: new Date().toISOString() });
+    } catch {}
   };
 
   const loadChatsFromCloud = async () => {
@@ -148,7 +193,10 @@ export default function App() {
       if (chats && chats.length > 0) {
         setAllChats(chats.map(c => ({ id: c.id, title: c.title || 'محادثة بدون عنوان', date: c.updated_at, messageCount: c.messages?.length || 0 })));
         const lastChat = chats[0];
-        if (lastChat.messages && lastChat.messages.length > 0) { setCurrentChatId(lastChat.id); setMessages(lastChat.messages.slice(-40)); }
+        if (lastChat.messages && lastChat.messages.length > 0) {
+          setCurrentChatId(lastChat.id);
+          setMessages(lastChat.messages.slice(-40));
+        }
       }
     } catch {}
   };
@@ -199,7 +247,13 @@ export default function App() {
   };
 
   const newChat = () => { const newId = Date.now().toString(); setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); };
-  const openChat = async (chatId) => { setCurrentChatId(chatId); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) setMessages(data.messages.slice(-40)); setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); };
+  
+  const openChat = async (chatId) => {
+    setCurrentChatId(chatId);
+    const { data } = await supabase.from('chats').select('*').eq('id', chatId).single();
+    if (data?.messages) setMessages(data.messages.slice(-40));
+    setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]);
+  };
 
   const clearChat = () => {
     if (window.confirm("متأكد تمسح المحادثة دي؟")) { setMessages([{ role: "assistant", content: "تم المسح 🖤", id: Date.now() }]); deleteChatFromCloud(currentChatId); setAllChats(prev => prev.filter(c => c.id !== currentChatId)); setAttachedFiles([]); }
@@ -237,7 +291,6 @@ export default function App() {
     try {
       const controller = new AbortController(); abortRef.current = controller;
       
-      // بنشيل الـ id قبل ما نبعت لـ Groq
       const cleanMessages = updated.map(m => ({ role: m.role, content: m.content }));
       
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -290,6 +343,17 @@ export default function App() {
     if (diff < 60000) return "الآن"; if (diff < 3600000) return `منذ ${Math.floor(diff / 60000)} د`; if (diff < 86400000) return `منذ ${Math.floor(diff / 3600000)} س`;
     return d.toLocaleDateString("ar-EG");
   };
+
+  if (!isLoaded) {
+    return (
+      <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: "40px" }}>🖤</div>
+          <div style={{ fontSize: "18px", marginTop: "10px" }}>جاري التحميل...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
