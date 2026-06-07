@@ -1,17 +1,9 @@
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════
    RESET & BASE
-───────────────────────────────────────── */
-*, *::before, *::after {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+═══════════════════════════════════════════ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
-html {
-  height: 100%;
-  /* منع الـ bounce على iOS */
-  overscroll-behavior: none;
-}
+html { height: 100%; overscroll-behavior: none; }
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
@@ -21,16 +13,13 @@ body {
   align-items: center;
   min-height: 100vh;
   min-height: 100dvh;
-  /* RTL على body بيكسر الـ scrollbar — نحطه على الـ container بس */
   direction: ltr;
   overflow: hidden;
 }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════
    CONTAINER
-   الإصلاح: شلنا overflow:hidden اللي كان بيكسر الـ sticky
-   وخلينا الـ overflow على الـ messages بس
-───────────────────────────────────────── */
+═══════════════════════════════════════════ */
 .container {
   width: 100%;
   max-width: 850px;
@@ -39,259 +28,188 @@ body {
   display: flex;
   flex-direction: column;
   border-radius: 20px;
-  /* overflow: hidden  ← ده كان أصل المشكلة، اتشال */
-  overflow: hidden; /* لازم يفضل بس نعوضه بطريقة تانية */
+  overflow: hidden;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   position: relative;
-  direction: rtl; /* RTL هنا بس مش على body */
+  direction: rtl;
 }
 
 .container.dark  { background: #0f0f1a; color: #e0e0e0; }
 .container.light { background: #f5f5f5; color: #1a1a1a; }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════
    HEADER
-   الإصلاح: شلنا position:sticky وخلينا flex-shrink:0 يكفي
-   لأن الـ sticky مش بيشتغل جوه overflow:hidden
-───────────────────────────────────────── */
+═══════════════════════════════════════════ */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 20px;
+  padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
   z-index: 100;
   background: #0f0f1a;
-  /* بدل sticky نحط min-height عشان متتضغطش */
-  min-height: 60px;
+  min-height: 58px;
 }
 
-.light .header {
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
-}
+.light .header { background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.1); }
 
-.header-left { display: flex; align-items: center; gap: 12px; }
+.header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 
 .avatar {
-  width: 44px;
-  height: 44px;
+  width: 40px; height: 40px;
   border-radius: 50%;
   background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
-  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
 }
 
-.header-info { display: flex; flex-direction: column; gap: 2px; }
-.header-name   { font-size: 18px; font-weight: 700; line-height: 1.2; }
-.header-status { font-size: 12px; display: flex; align-items: center; gap: 6px; opacity: 0.7; }
-.status-dot    { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+.header-name   { font-size: 17px; font-weight: 700; line-height: 1.2; }
+.header-status { font-size: 11px; display: flex; align-items: center; gap: 5px; opacity: 0.7; margin-top: 2px; }
+.status-dot    { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
 
-.header-right { display: flex; gap: 4px; flex-shrink: 0; }
+.header-right  { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
 
 .header-btn {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 18px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s;
-  line-height: 1;
+  background: transparent; border: none; color: inherit;
+  font-size: 18px; padding: 7px 9px;
+  border-radius: 10px; cursor: pointer; transition: background 0.2s; line-height: 1;
 }
-
 .header-btn:hover { background: rgba(255,255,255,0.1); }
 .light .header-btn:hover { background: rgba(0,0,0,0.06); }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════
    MENU
-───────────────────────────────────────── */
+═══════════════════════════════════════════ */
 .menu-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: transparent;
-  border: none;
-  color: inherit;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: background 0.2s;
-  text-align: right;
-  width: 100%;
-  font-family: inherit;
+  display: flex; align-items: center; gap: 10px;
+  background: transparent; border: none; color: inherit;
+  padding: 11px 16px; border-radius: 12px;
+  font-size: 14px; cursor: pointer; transition: background 0.2s;
+  text-align: right; width: 100%; font-family: inherit;
 }
-
 .menu-item:hover { background: rgba(108,92,231,0.15); }
 .light .menu-item:hover { background: rgba(108,92,231,0.1); }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════
    TOKEN BAR
-───────────────────────────────────────── */
+═══════════════════════════════════════════ */
 .token-bar {
-  padding: 8px 20px;
-  flex-shrink: 0;
-  z-index: 99;
+  padding: 7px 16px; flex-shrink: 0;
   background: #0f0f1a;
   border-bottom: 1px solid rgba(255,255,255,0.04);
 }
-
-.light .token-bar {
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-}
+.light .token-bar { background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.06); }
 
 .token-info {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 4px;
-  opacity: 0.75;
+  display: flex; justify-content: space-between;
+  font-size: 11px; margin-bottom: 4px; opacity: 0.75;
 }
 
 .token-track {
-  width: 100%;
-  height: 4px;
+  width: 100%; height: 3px;
   background: rgba(255,255,255,0.1);
-  border-radius: 2px;
-  overflow: hidden;
+  border-radius: 2px; overflow: hidden;
 }
-
 .light .token-track { background: rgba(0,0,0,0.1); }
 
-.token-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.5s ease;
-}
+.token-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
 
-/* ─────────────────────────────────────────
-   SEARCH BAR
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════
+   SEARCH / HISTORY BAR
+═══════════════════════════════════════════ */
 .search-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
-  z-index: 98;
-  background: #0f0f1a;
+  flex-shrink: 0; z-index: 98; background: #0f0f1a;
 }
-
-.light .search-bar {
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
-}
+.light .search-bar { background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.1); }
 
 .search-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: inherit;
-  font-size: 14px;
-  font-family: inherit;
+  flex: 1; background: transparent; border: none;
+  outline: none; color: inherit; font-size: 14px; font-family: inherit;
 }
+.search-count { font-size: 12px; opacity: 0.6; white-space: nowrap; }
+.close-btn { background: transparent; border: none; color: inherit; font-size: 18px; cursor: pointer; padding: 4px; line-height: 1; }
 
-.search-count  { font-size: 12px; opacity: 0.6; white-space: nowrap; }
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
-}
-
-/* ─────────────────────────────────────────
-   MESSAGES AREA
-   ده الوحيد اللي فيه overflow-y: auto
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════
+   MESSAGES — الجزء الوحيد اللي فيه scroll
+═══════════════════════════════════════════ */
 .messages {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 16px 20px;
+  padding: 14px 12px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  /* منع مشكلة الـ rubber-band على iOS */
+  gap: 14px;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
 }
 
-.messages::-webkit-scrollbar { width: 5px; }
+.messages::-webkit-scrollbar { width: 4px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
-.messages::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 10px;
-}
-.light .messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+.messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
+.light .messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
 
-/* ─────────────────────────────────────────
-   MESSAGE ROWS & BUBBLES
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════
+   MESSAGE ROWS
+═══════════════════════════════════════════ */
 .msg-row {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  max-width: 100%;
-  /* منع التمدد برا الشاشة */
+  width: 100%;
+  /* منع أي حاجة تطلع برا */
   min-width: 0;
-  overflow: hidden;
 }
-
 .msg-row-user { justify-content: flex-end; }
 .msg-row-ai   { justify-content: flex-start; }
 
+/* ═══════════════════════════════════════════
+   MSG CONTENT WRAPPER
+   max-width على الـ wrapper مش الـ bubble
+═══════════════════════════════════════════ */
 .msg-content-wrapper {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 82%;
-  /* منع الـ wrapper من يتمد برا الشاشة */
+  /* 85% من عرض الـ row ناقص حجم الـ avatar */
+  max-width: calc(85% - 40px);
   min-width: 0;
-  overflow: hidden;
 }
-
 .msg-row-user .msg-content-wrapper { align-items: flex-end; }
 .msg-row-ai   .msg-content-wrapper { align-items: flex-start; }
 
+/* ═══════════════════════════════════════════
+   AVATARS
+═══════════════════════════════════════════ */
 .avatar-small {
-  width: 32px;
-  height: 32px;
+  width: 30px; height: 30px; min-width: 30px;
   border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
   background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  /* منع انضغاطه */
-  min-width: 32px;
+  align-self: flex-end;
+  margin-bottom: 2px;
 }
-
 .avatar-user { background: linear-gradient(135deg, #4ade80, #22c55e); }
 
+/* ═══════════════════════════════════════════
+   BUBBLE — الفقاعة
+═══════════════════════════════════════════ */
 .bubble {
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-radius: 18px;
   line-height: 1.65;
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 14px;
-  /* مهم جداً — منع الـ bubble من يكبر برا الـ wrapper */
+  /* مهم: يأخذ عرض الـ wrapper بالكامل */
   width: 100%;
   min-width: 0;
+  /* منع الـ code block من يكسره */
   overflow: hidden;
 }
 
@@ -300,378 +218,281 @@ body {
   color: #fff;
   border-bottom-left-radius: 4px;
 }
-
 .bubble-ai {
   background: rgba(255,255,255,0.06);
   border-bottom-right-radius: 4px;
 }
-
 .bubble-ai-light {
   background: #fff;
   border-bottom-right-radius: 4px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
+/* ═══════════════════════════════════════════
+   COPY BUTTON
+═══════════════════════════════════════════ */
 .copy-msg-btn {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 11px;
-  opacity: 0.4;
-  cursor: pointer;
-  padding: 2px 6px;
-  transition: opacity 0.2s;
+  background: transparent; border: none; color: inherit;
+  font-size: 11px; opacity: 0.4; cursor: pointer;
+  padding: 2px 6px; transition: opacity 0.2s;
 }
-
 .copy-msg-btn:hover { opacity: 1; }
 
-/* bubble-ai اللي فيها code — نشيل الـ padding الجانبي */
-.bubble-ai:has(.code-wrapper),
-.bubble-ai-light:has(.code-wrapper) {
-  padding-left: 0;
-  padding-right: 0;
-}
-
-/* النص قبل/بعد الكود يأخذ padding */
-.bubble .code-wrapper + span,
-.bubble span:first-child {
-  display: block;
-  padding: 0 4px;
-}
-
-/* ─────────────────────────────────────────
-   SUGGESTIONS / CHIPS
-───────────────────────────────────────── */
-.suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  padding: 20px 0 8px;
-}
-
-.chip {
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
-  color: inherit;
-  padding: 10px 16px;
-  border-radius: 20px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-  white-space: nowrap;
-}
-
-.light .chip { background: #fff; border: 1px solid #ddd; color: #333; }
-
-.chip:hover {
-  background: rgba(108,92,231,0.2);
-  border-color: #6c5ce7;
-  transform: translateY(-1px);
-}
-
-/* ─────────────────────────────────────────
-   TYPING DOTS
-───────────────────────────────────────── */
-.typing-dots { display: flex; gap: 4px; padding: 4px 2px; align-items: center; }
-
-.typing-dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #a29bfe;
-  animation: bounce 1.4s infinite ease-in-out both;
-  display: block;
-}
-
-.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
-  40%            { transform: scale(1); opacity: 1; }
-}
-
-/* ─────────────────────────────────────────
-   INPUT AREA
-───────────────────────────────────────── */
-.input-area {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 12px 20px;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
-  z-index: 100;
-  background: #0f0f1a;
-  /* padding-bottom للـ safe area على iPhone */
-  padding-bottom: max(12px, env(safe-area-inset-bottom));
-}
-
-.light .input-area {
-  background: #f5f5f5;
-  border-top: 1px solid rgba(0,0,0,0.1);
-}
-
-.textarea {
-  flex: 1;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 16px;
-  padding: 12px 16px;
-  color: inherit;
-  font-size: 16px; /* 16px منع zoom على iOS لكل الأجهزة */
-  resize: none;
-  outline: none;
-  max-height: 120px;
-  min-height: 44px;
-  font-family: inherit;
-  line-height: 1.5;
-  transition: border-color 0.2s;
-}
-
-.light .textarea { background: #fff; border: 1px solid #ddd; }
-.textarea:focus  { border-color: #6c5ce7; }
-.textarea::placeholder { opacity: 0.5; }
-
-.send-btn {
-  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
-  border: none;
-  color: #fff;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  font-size: 20px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: transform 0.2s, opacity 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.send-btn:hover  { transform: scale(1.05); }
-.send-btn:active { transform: scale(0.95); }
-.send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-
-/* ─────────────────────────────────────────
-   CODE BLOCK
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════
+   CODE BLOCK — الإصلاح الأساسي
+═══════════════════════════════════════════ */
 .code-wrapper {
-  margin: 8px -16px; /* يمتد لحواف الـ bubble */
-  overflow: hidden;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  border-bottom: 1px solid rgba(255,255,255,0.08);
   direction: ltr;
-  /* مهم — منع التمدد برا الـ bubble */
-  width: calc(100% + 32px);
-  max-width: calc(100% + 32px);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.1);
+  /* يمتد لحواف الـ bubble ويكسر الـ padding */
+  margin: 8px -14px;
+  /* يأخذ العرض الكامل للـ bubble + padding الاتجاهين */
+  width: calc(100% + 28px);
 }
 
-/* أول code-wrapper في الـ bubble */
-.bubble > .code-wrapper:first-child { margin-top: -12px; border-top: none; border-radius: 18px 18px 0 0; }
-/* آخر code-wrapper في الـ bubble */  
-.bubble > .code-wrapper:last-child  { margin-bottom: -12px; border-bottom: none; border-radius: 0 0 18px 18px; }
-/* لو الكود لوحده في الـ bubble */
-.bubble > .code-wrapper:only-child  { margin: -12px -16px; border-radius: 18px; border: none; }
-
-.light .code-wrapper {
-  border-color: rgba(0,0,0,0.1);
+/* لو الكود أول عنصر في الـ bubble */
+.bubble > .code-wrapper:first-child {
+  margin-top: -10px;
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+/* لو الكود آخر عنصر */
+.bubble > .code-wrapper:last-child {
+  margin-bottom: -10px;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-left-radius: 18px;
+  border-bottom-right-radius: 18px;
+}
+/* لو الكود لوحده */
+.bubble > .code-wrapper:only-child {
+  margin: -10px -14px;
+  border-radius: 18px;
 }
 
-/* الشريط العلوي — اسم اللغة + زر النسخ */
+.light .code-wrapper { border-color: rgba(0,0,0,0.1); }
+
+/* شريط اسم اللغة + زر النسخ */
 .code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 14px;
-  background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 14px;
+  background: rgba(0,0,0,0.4);
   border-bottom: 1px solid rgba(255,255,255,0.06);
 }
-
-.light .code-header {
-  background: #1e1e2e;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-}
+.light .code-header { background: #161625; }
 
 .code-lang {
-  font-size: 12px;
-  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  font-family: 'Fira Code', 'Consolas', monospace;
   color: #a29bfe;
-  text-transform: lowercase;
   letter-spacing: 0.5px;
-  opacity: 0.9;
+  text-transform: lowercase;
 }
 
 .code-copy-btn {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.12);
-  color: #e0e0e0;
-  font-size: 12px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
+  color: #d0d0d0;
+  font-size: 11px; padding: 3px 10px;
+  border-radius: 6px; cursor: pointer;
+  transition: all 0.2s; font-family: inherit;
   white-space: nowrap;
-  line-height: 1.4;
 }
+.code-copy-btn:hover { background: rgba(108,92,231,0.3); border-color: #6c5ce7; color: #fff; }
+.code-copy-btn:active { transform: scale(0.95); }
 
-.code-copy-btn:hover {
-  background: rgba(108,92,231,0.3);
-  border-color: #6c5ce7;
-  color: #fff;
-}
-
-/* حالة "تم النسخ" */
-.code-copy-btn:active {
-  transform: scale(0.95);
-}
-
-/* الكود نفسه */
+/* منطقة الكود */
 .code-pre {
   margin: 0;
   padding: 14px 16px;
-  background: #13131f;
+  background: #111120;
+  /* الـ scroll الأفقي هنا بس */
   overflow-x: auto;
   overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
   direction: ltr;
   text-align: left;
-  -webkit-overflow-scrolling: touch;
-  /* منع التمدد */
-  width: 100%;
-  max-width: 100%;
 }
-
-.light .code-pre { background: #1e1e2e; }
+.light .code-pre { background: #1a1a2e; }
 
 .code-content {
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.7;
   color: #e0e0e0;
-  white-space: pre;        /* pre بدون wrap عشان الكود يتقرأ صح */
+  white-space: pre;
   display: block;
-  min-width: max-content;  /* يخلي الـ scroll يشتغل بدل ما يكسر */
 }
 
 /* scrollbar داخل الكود */
 .code-pre::-webkit-scrollbar { height: 4px; }
 .code-pre::-webkit-scrollbar-track { background: transparent; }
-.code-pre::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.15);
-  border-radius: 4px;
+.code-pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+
+/* ═══════════════════════════════════════════
+   SUGGESTIONS / CHIPS
+═══════════════════════════════════════════ */
+.suggestions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: center; padding: 16px 0 6px;
 }
 
-/* على موبايل نصغر الفونت شوية */
-@media (max-width: 768px) {
-  .code-header      { padding: 6px 12px; }
-  .code-lang        { font-size: 11px; }
-  .code-copy-btn    { font-size: 11px; padding: 3px 8px; }
-  .code-pre         { padding: 12px; }
-  .code-content     { font-size: 12px; }
+.chip {
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.11);
+  color: inherit; padding: 9px 15px;
+  border-radius: 20px; font-size: 13px;
+  cursor: pointer; transition: all 0.2s;
+  font-family: inherit; white-space: nowrap;
+}
+.light .chip { background: #fff; border: 1px solid #ddd; color: #333; }
+.chip:hover { background: rgba(108,92,231,0.2); border-color: #6c5ce7; transform: translateY(-1px); }
+
+/* ═══════════════════════════════════════════
+   TYPING DOTS
+═══════════════════════════════════════════ */
+.typing-dots { display: flex; gap: 4px; padding: 2px; align-items: center; }
+
+.typing-dots span {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: #a29bfe; display: block;
+  animation: bounce 1.4s infinite ease-in-out both;
+}
+.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
+.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+@keyframes bounce {
+  0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
+  40%           { transform: scale(1); opacity: 1; }
 }
 
-@media (max-width: 400px) {
-  .code-content  { font-size: 11.5px; }
-  .code-pre      { padding: 10px; }
+/* ═══════════════════════════════════════════
+   INPUT AREA
+═══════════════════════════════════════════ */
+.input-area {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0; z-index: 100; background: #0f0f1a;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
+.light .input-area { background: #f5f5f5; border-top: 1px solid rgba(0,0,0,0.1); }
 
-/* ─────────────────────────────────────────
-   RESPONSIVE — TABLET (≤ 1024px)
-───────────────────────────────────────── */
+.textarea {
+  flex: 1; min-width: 0;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 16px; padding: 11px 14px;
+  color: inherit;
+  font-size: 16px; /* 16px مهم على iOS — يمنع الـ zoom */
+  resize: none; outline: none;
+  max-height: 120px; min-height: 44px;
+  font-family: inherit; line-height: 1.5;
+  transition: border-color 0.2s;
+}
+.light .textarea { background: #fff; border: 1px solid #ddd; }
+.textarea:focus  { border-color: #6c5ce7; }
+.textarea::placeholder { opacity: 0.45; }
+
+.send-btn {
+  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
+  border: none; color: #fff;
+  width: 44px; height: 44px; min-width: 44px;
+  border-radius: 50%; font-size: 20px;
+  cursor: pointer; flex-shrink: 0;
+  transition: transform 0.2s, opacity 0.2s;
+  display: flex; align-items: center; justify-content: center;
+}
+.send-btn:hover  { transform: scale(1.05); }
+.send-btn:active { transform: scale(0.95); }
+
+/* ═══════════════════════════════════════════
+   RESPONSIVE — TABLET ≤ 1024px
+═══════════════════════════════════════════ */
 @media (max-width: 1024px) {
-  .container {
-    max-width: 100%;
-    height: 100vh;
-    height: 100dvh;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .msg-content-wrapper { max-width: 86%; }
+  .container { max-width: 100%; height: 100vh; height: 100dvh; border-radius: 0; box-shadow: none; }
+  .msg-content-wrapper { max-width: calc(88% - 38px); }
 }
 
-/* ─────────────────────────────────────────
-   RESPONSIVE — MOBILE (≤ 768px)
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════
+   RESPONSIVE — MOBILE ≤ 768px
+═══════════════════════════════════════════ */
 @media (max-width: 768px) {
   body { background: #0f0f1a; }
 
-  .container {
-    height: 100vh;
-    height: 100dvh;      /* dvh بيحسب الـ keyboard */
-    max-width: 100%;
-    border-radius: 0;
-    box-shadow: none;
-  }
+  .container { height: 100vh; height: 100dvh; max-width: 100%; border-radius: 0; box-shadow: none; }
 
-  /* Header */
-  .header        { padding: 10px 14px; min-height: 54px; }
-  .avatar        { width: 38px; height: 38px; font-size: 18px; }
-  .header-name   { font-size: 16px; }
-  .header-status { font-size: 11px; }
-  .header-btn    { font-size: 16px; padding: 6px 8px; }
+  .header      { padding: 8px 12px; min-height: 52px; }
+  .avatar      { width: 36px; height: 36px; font-size: 17px; }
+  .header-name { font-size: 15px; }
 
-  /* Bars */
-  .token-bar  { padding: 6px 14px; }
-  .search-bar { padding: 8px 14px; }
+  .token-bar   { padding: 5px 12px; }
+  .search-bar  { padding: 7px 12px; }
 
-  /* Messages */
-  .messages               { padding: 10px 12px; gap: 12px; }
-  .bubble                 { font-size: 14px; padding: 10px 14px; }
-  .msg-content-wrapper    { max-width: 88%; }
-  .avatar-small           { width: 28px; height: 28px; font-size: 14px; min-width: 28px; }
+  .messages    { padding: 10px 10px; gap: 11px; }
 
-  /* Chips */
-  .suggestions { padding: 12px 0 4px; gap: 6px; }
-  .chip        { font-size: 12px; padding: 8px 12px; }
+  /* الفقاعة على موبايل */
+  .bubble      { font-size: 14px; padding: 9px 12px; }
 
-  /* Input */
-  .input-area { padding: 10px 12px; gap: 8px; padding-bottom: max(10px, env(safe-area-inset-bottom)); }
-  .send-btn   { width: 42px; height: 42px; font-size: 18px; }
+  /* تعديل الـ margin على الكود بناءً على الـ padding الجديد */
+  .code-wrapper           { margin: 8px -12px; width: calc(100% + 24px); }
+  .bubble > .code-wrapper:first-child  { margin-top: -9px; }
+  .bubble > .code-wrapper:last-child   { margin-bottom: -9px; }
+  .bubble > .code-wrapper:only-child   { margin: -9px -12px; }
+
+  .msg-content-wrapper { max-width: calc(90% - 38px); }
+  .avatar-small        { width: 28px; height: 28px; min-width: 28px; font-size: 14px; }
+
+  .suggestions { padding: 10px 0 4px; gap: 6px; }
+  .chip        { font-size: 12px; padding: 7px 12px; }
+
+  .input-area  { padding: 8px 10px; gap: 7px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  .send-btn    { width: 42px; height: 42px; min-width: 42px; font-size: 18px; }
+
+  .code-pre    { padding: 12px 14px; }
+  .code-content { font-size: 12.5px; }
 }
 
-/* ─────────────────────────────────────────
-   RESPONSIVE — SMALL MOBILE (≤ 400px)
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════
+   RESPONSIVE — SMALL MOBILE ≤ 400px
+═══════════════════════════════════════════ */
 @media (max-width: 400px) {
-  /* Header */
-  .header        { padding: 8px 10px; min-height: 50px; }
-  .avatar        { width: 34px; height: 34px; font-size: 16px; }
-  .header-name   { font-size: 14px; }
-  .header-btn    { font-size: 14px; padding: 4px 6px; }
+  .header      { padding: 7px 10px; min-height: 48px; }
+  .avatar      { width: 32px; height: 32px; font-size: 15px; }
+  .header-name { font-size: 14px; }
+  .header-btn  { font-size: 15px; padding: 5px 7px; }
 
-  /* Bars */
-  .token-bar  { padding: 5px 10px; }
-  .search-bar { padding: 6px 10px; }
+  .messages    { padding: 8px 8px; gap: 10px; }
+  .bubble      { font-size: 13px; padding: 8px 11px; }
 
-  /* Messages */
-  .messages            { padding: 8px 10px; gap: 10px; }
-  .bubble              { font-size: 13px; padding: 9px 12px; }
-  .msg-content-wrapper { max-width: 90%; }
+  .code-wrapper          { margin: 7px -11px; width: calc(100% + 22px); }
+  .bubble > .code-wrapper:first-child { margin-top: -8px; }
+  .bubble > .code-wrapper:last-child  { margin-bottom: -8px; }
+  .bubble > .code-wrapper:only-child  { margin: -8px -11px; }
 
-  /* Chips */
-  .suggestions { gap: 5px; }
+  .msg-content-wrapper { max-width: calc(92% - 36px); }
+  .avatar-small        { width: 26px; height: 26px; min-width: 26px; font-size: 13px; }
+
   .chip        { font-size: 11px; padding: 6px 10px; }
-
-  /* Input */
-  .input-area { padding: 8px 10px; gap: 6px; }
-  .send-btn   { width: 40px; height: 40px; font-size: 16px; }
+  .input-area  { padding: 7px 8px; gap: 6px; }
+  .send-btn    { width: 40px; height: 40px; min-width: 40px; font-size: 16px; }
+  .code-content { font-size: 12px; }
 }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════
    LANDSCAPE على MOBILE
-   لما الموبايل ينقلب أفقي الـ height بتتقلص
-───────────────────────────────────────── */
+═══════════════════════════════════════════ */
 @media (max-width: 768px) and (orientation: landscape) {
-  .header        { padding: 6px 14px; min-height: 44px; }
-  .avatar        { width: 32px; height: 32px; font-size: 15px; }
-  .header-name   { font-size: 14px; }
-  .header-status { display: none; } /* نخبيها في landscape عشان مفيش مكان */
-  .token-bar     { padding: 4px 14px; }
-  .messages      { padding: 6px 14px; gap: 8px; }
-  .input-area    { padding: 6px 14px; }
-  .suggestions   { padding: 6px 0; }
+  .header        { padding: 5px 12px; min-height: 42px; }
+  .avatar        { width: 30px; height: 30px; font-size: 14px; }
+  .header-name   { font-size: 13px; }
+  .header-status { display: none; }
+  .token-bar     { padding: 3px 12px; }
+  .messages      { padding: 6px 10px; gap: 8px; }
+  .input-area    { padding: 6px 10px; }
 }
+
