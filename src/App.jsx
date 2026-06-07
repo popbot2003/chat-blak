@@ -119,67 +119,27 @@ export default function App() {
   const abortRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // ========== تحميل من Supabase عند الفتح ==========
   useEffect(() => { loadTokenFromCloud(); loadChatsFromCloud(); }, []);
-
-  // ========== مزامنة مستمرة للعداد (كل 10 ثواني) ==========
-  useEffect(() => {
-    const interval = setInterval(() => { loadTokenFromCloud(); }, 10000);
-    return () => clearInterval(interval);
-  }, []);
-
-  // ========== حفظ المحادثة كل ما تتغير ==========
-  useEffect(() => {
-    if (messages.length > 1) {
-      const timer = setTimeout(() => { saveChatToCloud(); }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [messages]);
-
-  // ========== حفظ العداد كل ما يتغير ==========
-  useEffect(() => {
-    if (tokenData.used >= 0) {
-      const timer = setTimeout(() => { saveTokenToCloud(); }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [tokenData]);
-
-  // ========== حفظ قبل الخروج ==========
-  useEffect(() => {
-    const handleBeforeUnload = () => { saveChatToCloud(); saveTokenToCloud(); };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [messages, tokenData]);
-
+  useEffect(() => { const i = setInterval(() => { loadTokenFromCloud(); }, 10000); return () => clearInterval(i); }, []);
+  useEffect(() => { if (messages.length > 1) { const t = setTimeout(() => { saveChatToCloud(); }, 1000); return () => clearTimeout(t); } }, [messages]);
+  useEffect(() => { if (tokenData.used >= 0) { const t = setTimeout(() => { saveTokenToCloud(); }, 3000); return () => clearTimeout(t); } }, [tokenData]);
+  useEffect(() => { const h = () => { saveChatToCloud(); saveTokenToCloud(); }; window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h); }, [messages, tokenData]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // ========== دوال Supabase ==========
   const loadTokenFromCloud = async () => {
     try {
       const { data } = await supabase.from('token_usage').select('*').eq('id', 1).single();
       if (data) {
         const today = new Date().toISOString().slice(0, 10);
-        if (data.date === today) {
-          setTokenData({ used: data.total_used || 0, date: today });
-        } else {
-          // يوم جديد - نصفر
-          setTokenData({ used: 0, date: today });
-          await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() });
-        }
+        if (data.date === today) { setTokenData({ used: data.total_used || 0, date: today }); }
+        else { setTokenData({ used: 0, date: today }); await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() }); }
       }
     } catch {}
   };
 
   const saveTokenToCloud = async () => {
-    try {
-      await supabase.from('token_usage').upsert({
-        id: 1,
-        date: new Date().toISOString().slice(0, 10),
-        total_used: tokenData.used,
-        updated_at: new Date().toISOString()
-      });
-    } catch {}
+    try { await supabase.from('token_usage').upsert({ id: 1, date: new Date().toISOString().slice(0, 10), total_used: tokenData.used, updated_at: new Date().toISOString() }); } catch {}
   };
 
   const loadChatsFromCloud = async () => {
@@ -188,10 +148,7 @@ export default function App() {
       if (chats && chats.length > 0) {
         setAllChats(chats.map(c => ({ id: c.id, title: c.title || 'محادثة بدون عنوان', date: c.updated_at, messageCount: c.messages?.length || 0 })));
         const lastChat = chats[0];
-        if (lastChat.messages && lastChat.messages.length > 0) {
-          setCurrentChatId(lastChat.id);
-          setMessages(lastChat.messages.slice(-40));
-        }
+        if (lastChat.messages && lastChat.messages.length > 0) { setCurrentChatId(lastChat.id); setMessages(lastChat.messages.slice(-40)); }
       }
     } catch {}
   };
@@ -205,27 +162,12 @@ export default function App() {
     } catch {}
   };
 
-  const deleteChatFromCloud = async (chatId) => {
-    try { await supabase.from('chats').delete().eq('id', chatId.toString()); } catch {}
-  };
+  const deleteChatFromCloud = async (chatId) => { try { await supabase.from('chats').delete().eq('id', chatId.toString()); } catch {} };
 
-  // ========== دوال التوكن ==========
   const addTokens = (usage) => {
     if (!usage) return;
     const total = (usage.prompt_tokens || 0) + (usage.completion_tokens || 0);
     setTokenData(prev => ({ used: prev.used + total, date: new Date().toDateString() }));
-  };
-
-  // ========== باقي الدوال ==========
-  const trimHistory = (msgs) => {
-    let totalChars = SYSTEM_PROMPT.length;
-    const result = [];
-    for (let i = msgs.length - 1; i >= 0; i--) {
-      totalChars += msgs[i].content.length;
-      if (totalChars > 8000) break;
-      result.unshift(msgs[i]);
-    }
-    return result.slice(-40);
   };
 
   const copyMessage = (content, id) => {
@@ -236,79 +178,39 @@ export default function App() {
   };
 
   const handleFileUpload = async (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length === 0) return;
+    const files = Array.from(e.target.files); if (files.length === 0) return;
     const newFiles = [];
-    for (const file of files) {
-      const content = await readFileAsText(file);
-      newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content });
-    }
-    setAttachedFiles(prev => [...prev, ...newFiles]);
-    inputRef.current?.focus();
+    for (const file of files) { const content = await readFileAsText(file); newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content }); }
+    setAttachedFiles(prev => [...prev, ...newFiles]); inputRef.current?.focus();
   };
 
   const removeFile = (fileId) => setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
-
-  const refreshKeys = () => {
-    const freshKeys = loadKeys();
-    setKeys(freshKeys);
-    alert(`✅ ${freshKeys.length} مفاتيح متصلة`);
-  };
+  const refreshKeys = () => { const freshKeys = loadKeys(); setKeys(freshKeys); alert(`✅ ${freshKeys.length} مفاتيح متصلة`); };
 
   const clearAllStorage = () => {
     if (window.confirm("⚠️ متأكد تمسح كل المحادثات؟\nعداد التوكن مش هيتصفر!")) {
-      setAllChats([]);
-      setMessages([{ role: "assistant", content: "تمام، مسحت كل المحادثات 🖤\nعداد التوكن لسه محفوظ ⚡", id: Date.now() }]);
-      setCurrentChatId(Date.now().toString());
-      setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]);
+      setAllChats([]); setMessages([{ role: "assistant", content: "تمام، مسحت كل المحادثات 🖤\nعداد التوكن لسه محفوظ ⚡", id: Date.now() }]);
+      setCurrentChatId(Date.now().toString()); setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]);
     }
   };
 
   const resetTokenCounter = () => {
-    if (window.confirm("⚠️ تصفر عداد التوكن؟")) {
-      setTokenData({ used: 0, date: new Date().toDateString() });
-      saveTokenToCloud();
-      setShowMenu(false);
-      alert("✅ تم تصفير العداد");
-    }
+    if (window.confirm("⚠️ تصفر عداد التوكن؟")) { setTokenData({ used: 0, date: new Date().toDateString() }); saveTokenToCloud(); setShowMenu(false); alert("✅ تم تصفير العداد"); }
   };
 
-  const newChat = () => {
-    const newId = Date.now().toString();
-    setCurrentChatId(newId);
-    setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]);
-    setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]);
-  };
-
-  const openChat = async (chatId) => {
-    setCurrentChatId(chatId);
-    const { data } = await supabase.from('chats').select('*').eq('id', chatId).single();
-    if (data?.messages) setMessages(data.messages.slice(-40));
-    setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]);
-  };
+  const newChat = () => { const newId = Date.now().toString(); setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); };
+  const openChat = async (chatId) => { setCurrentChatId(chatId); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) setMessages(data.messages.slice(-40)); setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); };
 
   const clearChat = () => {
-    if (window.confirm("متأكد تمسح المحادثة دي؟")) {
-      setMessages([{ role: "assistant", content: "تم المسح 🖤", id: Date.now() }]);
-      deleteChatFromCloud(currentChatId);
-      setAllChats(prev => prev.filter(c => c.id !== currentChatId));
-      setAttachedFiles([]);
-    }
+    if (window.confirm("متأكد تمسح المحادثة دي؟")) { setMessages([{ role: "assistant", content: "تم المسح 🖤", id: Date.now() }]); deleteChatFromCloud(currentChatId); setAllChats(prev => prev.filter(c => c.id !== currentChatId)); setAttachedFiles([]); }
   };
 
-  const deleteChat = (chatId, e) => {
-    e.stopPropagation();
-    deleteChatFromCloud(chatId);
-    setAllChats(prev => prev.filter(c => c.id !== chatId));
-    if (currentChatId === chatId) newChat();
-  };
+  const deleteChat = (chatId, e) => { e.stopPropagation(); deleteChatFromCloud(chatId); setAllChats(prev => prev.filter(c => c.id !== chatId)); if (currentChatId === chatId) newChat(); };
 
   const exportChat = () => {
     const text = messages.map(m => `${m.role === "user" ? "👤" : "🖤"}:\n${m.content}`).join("\n\n---\n\n");
-    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.txt`; a.click();
-    URL.revokeObjectURL(url);
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" }); const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = `chat-${new Date().toISOString().slice(0,10)}.txt`; a.click(); URL.revokeObjectURL(url);
   };
 
   const stopStreaming = () => {
@@ -326,26 +228,24 @@ export default function App() {
     if (!picked) { setMessages(prev => [...prev, { role: "assistant", content: "خلصت كل المفاتيح النهارده 😅🖤", id: Date.now() }]); return; }
 
     let fileContent = "";
-    if (attachedFiles.length > 0) {
-      fileContent = "\n\n📎 ملفات:\n";
-      attachedFiles.forEach(f => { fileContent += `\n${f.icon} ${f.name}\n\`\`\`\n${f.content}\n\`\`\`\n`; });
-    }
+    if (attachedFiles.length > 0) { fileContent = "\n\n📎 ملفات:\n"; attachedFiles.forEach(f => { fileContent += `\n${f.icon} ${f.name}\n\`\`\`\n${f.content}\n\`\`\`\n`; }); }
 
     const userMsg = { role: "user", content: text + fileContent, id: Date.now() };
     const updated = [...messages, userMsg];
-    setMessages(updated);
-    setInput(""); setAttachedFiles([]); setLoading(true); setStreamingText("");
+    setMessages(updated); setInput(""); setAttachedFiles([]); setLoading(true); setStreamingText("");
 
     try {
-      const controller = new AbortController();
-      abortRef.current = controller;
+      const controller = new AbortController(); abortRef.current = controller;
+      
+      // بنشيل الـ id قبل ما نبعت لـ Groq
+      const cleanMessages = updated.map(m => ({ role: m.role, content: m.content }));
       
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${picked.key}` },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
-          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...trimHistory(updated)],
+          messages: [{ role: "system", content: SYSTEM_PROMPT }, ...cleanMessages.slice(-40)],
           temperature: 0.8, max_tokens: 2000, stream: true,
         }),
         signal: controller.signal,
@@ -353,17 +253,12 @@ export default function App() {
       
       if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || "API error"); }
       
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
+      const reader = response.body.getReader(); const decoder = new TextDecoder(); let fullText = "";
       while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const { done, value } = await reader.read(); if (done) break;
         const lines = decoder.decode(value).split("\n").filter(l => l.startsWith("data: "));
         for (const line of lines) {
-          const json = line.replace("data: ", "").trim();
-          if (json === "[DONE]") continue;
+          const json = line.replace("data: ", "").trim(); if (json === "[DONE]") continue;
           try { const c = JSON.parse(json).choices?.[0]?.delta?.content || ""; if (c) { fullText += c; setStreamingText(cleanResponse(fullText)); } } catch {}
         }
       }
@@ -372,20 +267,14 @@ export default function App() {
       setMessages(prev => [...prev, { role: "assistant", content: finalText, id: Date.now() }]);
       setStreamingText("");
       
-      // حساب التوكن بدقة
-      const promptChars = JSON.stringify(updated).length + SYSTEM_PROMPT.length;
+      const promptChars = JSON.stringify(cleanMessages).length + SYSTEM_PROMPT.length;
       const completionChars = finalText.length;
       addTokens({ prompt_tokens: Math.ceil(promptChars / 4), completion_tokens: Math.ceil(completionChars / 4) });
-      
-      picked.used += Math.ceil(promptChars / 4) + Math.ceil(completionChars / 4);
-      picked.last = new Date().toISOString();
+      picked.used += Math.ceil(promptChars / 4) + Math.ceil(completionChars / 4); picked.last = new Date().toISOString();
     } catch (err) {
       if (err.name === "AbortError") return;
       setMessages(prev => [...prev, { role: "assistant", content: `خطأ: ${err.message} 🖤`, id: Date.now() }]);
-    } finally {
-      setLoading(false); abortRef.current = null;
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
+    } finally { setLoading(false); abortRef.current = null; setTimeout(() => inputRef.current?.focus(), 100); }
   };
 
   const handleKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
@@ -397,27 +286,16 @@ export default function App() {
   const tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
 
   const formatDate = (dateStr) => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr); const now = new Date(); const diff = now - d;
-    if (diff < 60000) return "الآن";
-    if (diff < 3600000) return `منذ ${Math.floor(diff / 60000)} د`;
-    if (diff < 86400000) return `منذ ${Math.floor(diff / 3600000)} س`;
+    if (!dateStr) return ""; const d = new Date(dateStr); const now = new Date(); const diff = now - d;
+    if (diff < 60000) return "الآن"; if (diff < 3600000) return `منذ ${Math.floor(diff / 60000)} د`; if (diff < 86400000) return `منذ ${Math.floor(diff / 3600000)} س`;
     return d.toLocaleDateString("ar-EG");
   };
 
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
       <div className="header">
-        <div className="header-left">
-          <div className="avatar">🖤</div>
-          <div>
-            <div className="header-name">بلاك</div>
-            <div className="header-status"><span className="status-dot" />{loading ? "بيكتب..." : "متصل"}</div>
-          </div>
-        </div>
-        <div className="header-right">
-          <button onClick={() => setShowMenu(!showMenu)} className="header-btn" style={{ fontSize: "22px" }}>{showMenu ? "✕" : "☰"}</button>
-        </div>
+        <div className="header-left"><div className="avatar">🖤</div><div><div className="header-name">بلاك</div><div className="header-status"><span className="status-dot" />{loading ? "بيكتب..." : "متصل"}</div></div></div>
+        <div className="header-right"><button onClick={() => setShowMenu(!showMenu)} className="header-btn" style={{ fontSize: "22px" }}>{showMenu ? "✕" : "☰"}</button></div>
         {showMenu && (
           <>
             <div onClick={() => setShowMenu(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} />
@@ -435,89 +313,46 @@ export default function App() {
           </>
         )}
       </div>
-
-      <div className="token-bar">
-        <div className="token-info">
-          <span>⚡ {tokenData.used.toLocaleString()} / {(stats.totalKeys * DAILY_LIMIT_PER_KEY).toLocaleString()} token</span>
-          <span style={{ color: tokenColor }}>{tokenPercent}%</span>
-        </div>
-        <div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div>
-      </div>
-
+      <div className="token-bar"><div className="token-info"><span>⚡ {tokenData.used.toLocaleString()} / {(stats.totalKeys * DAILY_LIMIT_PER_KEY).toLocaleString()} token</span><span style={{ color: tokenColor }}>{tokenPercent}%</span></div><div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div></div>
       {showHistory && (
         <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><strong>📝 سجل المحادثات</strong><button onClick={() => setShowHistory(false)} className="close-btn">✕</button></div>
-          {allChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "10px" }}>مفيش محادثات</div> :
-            allChats.map(chat => (
-              <div key={chat.id} onClick={() => openChat(chat.id)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: chat.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)" }}>
-                <div style={{ flex: 1, overflow: "hidden" }}>
-                  <div style={{ fontSize: "14px", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chat.title}</div>
-                  <div style={{ fontSize: "11px", opacity: 0.5 }}>{formatDate(chat.date)} · {chat.messageCount} رسالة</div>
-                </div>
-                <button onClick={(e) => deleteChat(chat.id, e)} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5 }}>🗑️</button>
-              </div>
-            ))}
+          {allChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "10px" }}>مفيش محادثات</div> : allChats.map(chat => (
+            <div key={chat.id} onClick={() => openChat(chat.id)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: chat.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)" }}>
+              <div style={{ flex: 1, overflow: "hidden" }}><div style={{ fontSize: "14px", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{chat.title}</div><div style={{ fontSize: "11px", opacity: 0.5 }}>{formatDate(chat.date)} · {chat.messageCount} رسالة</div></div>
+              <button onClick={(e) => deleteChat(chat.id, e)} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5 }}>🗑️</button>
+            </div>
+          ))}
         </div>
       )}
-
       {showSearch && !showHistory && (
-        <div className="search-bar">
-          <span>🔍</span>
-          <input className="search-input" placeholder="دور في المحادثة..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />
-          {searchTerm && <span className="search-count">{filteredMessages.length} نتيجة</span>}
-          <button onClick={() => { setShowSearch(false); setSearchTerm(""); }} className="close-btn">✕</button>
-        </div>
+        <div className="search-bar"><span>🔍</span><input className="search-input" placeholder="دور في المحادثة..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} autoFocus />{searchTerm && <span className="search-count">{filteredMessages.length} نتيجة</span>}<button onClick={() => { setShowSearch(false); setSearchTerm(""); }} className="close-btn">✕</button></div>
       )}
-
       <div className="messages">
         {messages.length <= 1 && !loading && (
-          <div className="suggestions">
-            {["عرفني بنفسك", "اكتبلي كود Python", "قولي نكتة 😂"].map((s, i) => (
-              <button key={i} onClick={() => sendMessage(s)} className="chip">{s}</button>
-            ))}
-          </div>
+          <div className="suggestions">{["عرفني بنفسك", "اكتبلي كود Python", "قولي نكتة 😂"].map((s, i) => (<button key={i} onClick={() => sendMessage(s)} className="chip">{s}</button>))}</div>
         )}
         {filteredMessages.map(msg => (
           <div key={msg.id} className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}>
             {msg.role === "assistant" && <div className="avatar-small">🖤</div>}
-            <div className="msg-content-wrapper">
-              <div className={`bubble ${msg.role === "user" ? "bubble-user" : isDark ? "bubble-ai" : "bubble-ai-light"}`}>
-                <MessageContent content={msg.content} />
-              </div>
-              {msg.role === "assistant" && (
-                <button onClick={() => copyMessage(msg.content, msg.id)} className="copy-msg-btn">{copiedId === msg.id ? "✓ تم النسخ" : "📋 نسخ"}</button>
-              )}
-            </div>
+            <div className="msg-content-wrapper"><div className={`bubble ${msg.role === "user" ? "bubble-user" : isDark ? "bubble-ai" : "bubble-ai-light"}`}><MessageContent content={msg.content} /></div>{msg.role === "assistant" && <button onClick={() => copyMessage(msg.content, msg.id)} className="copy-msg-btn">{copiedId === msg.id ? "✓ تم النسخ" : "📋 نسخ"}</button>}</div>
             {msg.role === "user" && <div className="avatar-small avatar-user">👤</div>}
           </div>
         ))}
-        {streamingText && (
-          <div className="msg-row msg-row-ai">
-            <div className="avatar-small">🖤</div>
-            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><MessageContent content={streamingText} /></div>
-          </div>
-        )}
-        {loading && !streamingText && (
-          <div className="msg-row msg-row-ai">
-            <div className="avatar-small">🖤</div>
-            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><TypingDots /></div>
-          </div>
-        )}
+        {streamingText && (<div className="msg-row msg-row-ai"><div className="avatar-small">🖤</div><div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><MessageContent content={streamingText} /></div></div>)}
+        {loading && !streamingText && (<div className="msg-row msg-row-ai"><div className="avatar-small">🖤</div><div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}><TypingDots /></div></div>)}
         <div ref={bottomRef} />
       </div>
-
       {attachedFiles.length > 0 && (
         <div style={{ display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
           {attachedFiles.map(file => (
             <div key={file.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(108,92,231,0.15)", border: "1px solid rgba(108,92,231,0.3)", borderRadius: "10px", padding: "6px 10px", fontSize: "12px" }}>
-              <span>{file.icon}</span>
-              <span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
+              <span>{file.icon}</span><span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{file.name}</span>
               <button onClick={() => removeFile(file.id)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer", fontSize: "14px" }}>✕</button>
             </div>
           ))}
         </div>
       )}
-
       <div className="input-area">
         <button onClick={() => fileInputRef.current?.click()} className="header-btn" title="رفع ملفات" style={{ fontSize: "20px", padding: "8px" }}>📎</button>
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.pdf,image/*" />
