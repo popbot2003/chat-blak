@@ -245,6 +245,9 @@ body {
   align-items: flex-end;
   gap: 8px;
   max-width: 100%;
+  /* منع التمدد برا الشاشة */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .msg-row-user { justify-content: flex-end; }
@@ -255,6 +258,9 @@ body {
   flex-direction: column;
   gap: 4px;
   max-width: 82%;
+  /* منع الـ wrapper من يتمد برا الشاشة */
+  min-width: 0;
+  overflow: hidden;
 }
 
 .msg-row-user .msg-content-wrapper { align-items: flex-end; }
@@ -283,6 +289,10 @@ body {
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 14px;
+  /* مهم جداً — منع الـ bubble من يكبر برا الـ wrapper */
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .bubble-user {
@@ -315,27 +325,18 @@ body {
 
 .copy-msg-btn:hover { opacity: 1; }
 
-/* Code blocks داخل الـ bubble */
-.bubble pre {
-  background: rgba(0,0,0,0.35);
-  padding: 12px;
-  border-radius: 10px;
-  overflow-x: auto;
-  margin: 8px 0;
-  font-size: 13px;
-  direction: ltr;
-  text-align: left;
-  /* منع الـ pre من يكسر الـ bubble */
-  max-width: 100%;
-  white-space: pre-wrap;
-  word-break: break-all;
+/* bubble-ai اللي فيها code — نشيل الـ padding الجانبي */
+.bubble-ai:has(.code-wrapper),
+.bubble-ai-light:has(.code-wrapper) {
+  padding-left: 0;
+  padding-right: 0;
 }
 
-.light .bubble pre { background: #1e1e2e; color: #e0e0e0; }
-
-.bubble code {
-  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: 13px;
+/* النص قبل/بعد الكود يأخذ padding */
+.bubble .code-wrapper + span,
+.bubble span:first-child {
+  display: block;
+  padding: 0 4px;
 }
 
 /* ─────────────────────────────────────────
@@ -458,17 +459,25 @@ body {
    CODE BLOCK
 ───────────────────────────────────────── */
 .code-wrapper {
-  margin: 10px 0;
-  border-radius: 12px;
+  margin: 8px -16px; /* يمتد لحواف الـ bubble */
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.08);
-  /* منع الـ code block من يكسر الـ bubble */
-  max-width: 100%;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
   direction: ltr;
+  /* مهم — منع التمدد برا الـ bubble */
+  width: calc(100% + 32px);
+  max-width: calc(100% + 32px);
 }
 
+/* أول code-wrapper في الـ bubble */
+.bubble > .code-wrapper:first-child { margin-top: -12px; border-top: none; border-radius: 18px 18px 0 0; }
+/* آخر code-wrapper في الـ bubble */  
+.bubble > .code-wrapper:last-child  { margin-bottom: -12px; border-bottom: none; border-radius: 0 0 18px 18px; }
+/* لو الكود لوحده في الـ bubble */
+.bubble > .code-wrapper:only-child  { margin: -12px -16px; border-radius: 18px; border: none; }
+
 .light .code-wrapper {
-  border: 1px solid rgba(0,0,0,0.1);
+  border-color: rgba(0,0,0,0.1);
 }
 
 /* الشريط العلوي — اسم اللغة + زر النسخ */
@@ -523,25 +532,28 @@ body {
 /* الكود نفسه */
 .code-pre {
   margin: 0;
-  padding: 16px;
+  padding: 14px 16px;
   background: #13131f;
   overflow-x: auto;
+  overflow-y: hidden;
   direction: ltr;
   text-align: left;
   -webkit-overflow-scrolling: touch;
+  /* منع التمدد */
+  width: 100%;
+  max-width: 100%;
 }
 
-.light .code-pre {
-  background: #1e1e2e;
-}
+.light .code-pre { background: #1e1e2e; }
 
 .code-content {
   font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.7;
   color: #e0e0e0;
-  white-space: pre;
+  white-space: pre;        /* pre بدون wrap عشان الكود يتقرأ صح */
   display: block;
+  min-width: max-content;  /* يخلي الـ scroll يشتغل بدل ما يكسر */
 }
 
 /* scrollbar داخل الكود */
