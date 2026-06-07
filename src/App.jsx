@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import "./App.css";
 import MessageContent from "./components/MessageContent";
 import TypingDots from "./components/TypingDots";
@@ -58,6 +58,12 @@ function loadKeys() {
   return keys;
 }
 
+function saveKeysToStorage(keys) {
+  const d = { date: new Date().toDateString(), keys: {} };
+  keys.forEach(k => { d.keys[k.id] = { used: k.used, last: k.last }; });
+  localStorage.setItem("black-keys", JSON.stringify(d));
+}
+
 function pickBestKey(keys) {
   const avail = keys.filter(k => k.used < DAILY_LIMIT_PER_KEY);
   if (avail.length === 0) return null;
@@ -115,76 +121,42 @@ export default function App() {
   const [tokenData, setTokenData] = useState({ used: 0, date: new Date().toDateString() });
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const abortRef = useRef(null);
   const fileInputRef = useRef(null);
   const mountedRef = useRef(false);
+  const keysRef = useRef(keys);
 
-  // تحميل أول مرة فقط
+  useEffect(() => { keysRef.current = keys; }, [keys]);
+
   useEffect(() => {
-    if (!mountedRef.current) {
-      mountedRef.current = true;
-      loadAllData();
-    }
+    if (!mountedRef.current) { mountedRef.current = true; loadAllData(); }
   }, []);
 
-  // مزامنة مستمرة للعداد (كل 15 ثانية)
-  useEffect(() => {
-    if (!isLoaded) return;
-    const interval = setInterval(() => { loadTokenFromCloud(); }, 15000);
-    return () => clearInterval(interval);
-  }, [isLoaded]);
-
-  // حفظ المحادثة كل ما تتغير
-  useEffect(() => {
-    if (!isLoaded || messages.length <= 1) return;
-    const timer = setTimeout(() => { saveChatToCloud(); }, 2000);
-    return () => clearTimeout(timer);
-  }, [messages, isLoaded]);
-
-  // حفظ العداد كل ما يتغير
-  useEffect(() => {
-    if (!isLoaded || tokenData.used < 0) return;
-    const timer = setTimeout(() => { saveTokenToCloud(); }, 5000);
-    return () => clearTimeout(timer);
-  }, [tokenData, isLoaded]);
-
-  // حفظ قبل الخروج
-  useEffect(() => {
-    const h = () => { if (isLoaded) { saveChatToCloud(); saveTokenToCloud(); } };
-    window.addEventListener("beforeunload", h);
-    return () => window.removeEventListener("beforeunload", h);
-  }, [messages, tokenData, isLoaded]);
-
+  useEffect(() => { if (!isLoaded) return; const i = setInterval(() => { loadTokenFromCloud(); }, 15000); return () => clearInterval(i); }, [isLoaded]);
+  useEffect(() => { if (!isLoaded || messages.length <= 1) return; const t = setTimeout(() => { saveChatToCloud(); }, 2000); return () => clearTimeout(t); }, [messages, isLoaded]);
+  useEffect(() => { if (!isLoaded || tokenData.used < 0) return; const t = setTimeout(() => { saveTokenToCloud(); }, 5000); return () => clearTimeout(t); }, [tokenData, isLoaded]);
+  useEffect(() => { const h = () => { if (isLoaded) { saveChatToCloud(); saveTokenToCloud(); } }; window.addEventListener("beforeunload", h); return () => window.removeEventListener("beforeunload", h); }, [messages, tokenData, isLoaded]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  const loadAllData = async () => {
-    await loadTokenFromCloud();
-    await loadChatsFromCloud();
-    setIsLoaded(true);
-  };
+  const loadAllData = async () => { await loadTokenFromCloud(); await loadChatsFromCloud(); setIsLoaded(true); };
 
   const loadTokenFromCloud = async () => {
     try {
       const { data } = await supabase.from('token_usage').select('*').eq('id', 1).single();
       if (data) {
         const today = new Date().toISOString().slice(0, 10);
-        if (data.date === today) {
-          setTokenData({ used: data.total_used || 0, date: today });
-        } else {
-          setTokenData({ used: 0, date: today });
-          await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() });
-        }
+        if (data.date === today) { setTokenData({ used: data.total_used || 0, date: today }); }
+        else { setTokenData({ used: 0, date: today }); await supabase.from('token_usage').upsert({ id: 1, date: today, total_used: 0, updated_at: new Date().toISOString() }); }
       }
     } catch {}
   };
 
   const saveTokenToCloud = async () => {
-    try {
-      await supabase.from('token_usage').upsert({ id: 1, date: new Date().toISOString().slice(0, 10), total_used: tokenData.used, updated_at: new Date().toISOString() });
-    } catch {}
+    try { await supabase.from('token_usage').upsert({ id: 1, date: new Date().toISOString().slice(0, 10), total_used: tokenData.used, updated_at: new Date().toISOString() }); } catch {}
   };
 
   const loadChatsFromCloud = async () => {
@@ -193,10 +165,7 @@ export default function App() {
       if (chats && chats.length > 0) {
         setAllChats(chats.map(c => ({ id: c.id, title: c.title || 'محادثة بدون عنوان', date: c.updated_at, messageCount: c.messages?.length || 0 })));
         const lastChat = chats[0];
-        if (lastChat.messages && lastChat.messages.length > 0) {
-          setCurrentChatId(lastChat.id);
-          setMessages(lastChat.messages.slice(-40));
-        }
+        if (lastChat.messages && lastChat.messages.length > 0) { setCurrentChatId(lastChat.id); setMessages(lastChat.messages.slice(-40)); }
       }
     } catch {}
   };
@@ -243,7 +212,15 @@ export default function App() {
   };
 
   const resetTokenCounter = () => {
-    if (window.confirm("⚠️ تصفر عداد التوكن؟")) { setTokenData({ used: 0, date: new Date().toDateString() }); saveTokenToCloud(); setShowMenu(false); alert("✅ تم تصفير العداد"); }
+    if (window.confirm("⚠️ تصفر عداد التوكن وكل المفاتيح؟")) {
+      setTokenData({ used: 0, date: new Date().toDateString() });
+      const freshKeys = keysRef.current.map(k => ({ ...k, used: 0, last: null }));
+      setKeys(freshKeys);
+      saveKeysToStorage(freshKeys);
+      saveTokenToCloud();
+      setShowMenu(false);
+      alert("✅ تم تصفير العداد وكل المفاتيح");
+    }
   };
 
   const newChat = () => { const newId = Date.now().toString(); setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); };
@@ -273,20 +250,29 @@ export default function App() {
     setLoading(false);
   };
 
-  const sendMessage = async (overrideText) => {
-    if (loading) { stopStreaming(); return; }
+  const sendMessage = async (overrideText, forceRetry = false) => {
+    if (loading && !forceRetry) { stopStreaming(); return; }
     const text = (overrideText || input).trim();
-    if (!text && attachedFiles.length === 0) return;
+    if (!text && attachedFiles.length === 0 && !forceRetry) return;
     
-    const picked = pickBestKey(keys);
-    if (!picked) { setMessages(prev => [...prev, { role: "assistant", content: "خلصت كل المفاتيح النهارده 😅🖤", id: Date.now() }]); return; }
+    const currentKeys = forceRetry ? keysRef.current : keys;
+    const picked = pickBestKey(currentKeys);
+    
+    if (!picked) {
+      setMessages(prev => [...prev, { role: "assistant", content: "خلصت كل المفاتيح النهارده 😅🖤\nجرب تاني بعد شوية أو زود مفاتيح جديدة", id: Date.now() }]);
+      setLoading(false);
+      return;
+    }
 
     let fileContent = "";
     if (attachedFiles.length > 0) { fileContent = "\n\n📎 ملفات:\n"; attachedFiles.forEach(f => { fileContent += `\n${f.icon} ${f.name}\n\`\`\`\n${f.content}\n\`\`\`\n`; }); }
 
-    const userMsg = { role: "user", content: text + fileContent, id: Date.now() };
-    const updated = [...messages, userMsg];
-    setMessages(updated); setInput(""); setAttachedFiles([]); setLoading(true); setStreamingText("");
+    const userMsg = { role: "user", content: (overrideText || input).trim() + fileContent, id: Date.now() };
+    const updated = forceRetry ? messages : [...messages, userMsg];
+    
+    if (!forceRetry) { setMessages(updated); setInput(""); setAttachedFiles([]); }
+    setLoading(true);
+    setStreamingText("");
 
     try {
       const controller = new AbortController(); abortRef.current = controller;
@@ -304,7 +290,39 @@ export default function App() {
         signal: controller.signal,
       });
       
-      if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || "API error"); }
+      if (!response.ok) {
+        const err = await response.json();
+        
+        // ========== أهم حاجة: Rate Limit ==========
+        if (err.error?.code === "rate_limit_exceeded") {
+          // ندي المفتاح ده عقوبة - نخليه 100,000 عشان ما يستخدمش تاني النهارده
+          const updatedKeys = keysRef.current.map(k => 
+            k.id === picked.id ? { ...k, used: DAILY_LIMIT_PER_KEY, last: new Date().toISOString() } : k
+          );
+          setKeys(updatedKeys);
+          saveKeysToStorage(updatedKeys);
+          
+          // نجرب تاني بمفتاح جديد
+          if (retryCount < 3) {
+            setRetryCount(prev => prev + 1);
+            setTimeout(() => {
+              sendMessage(text || overrideText, true);
+            }, 500);
+            return;
+          } else {
+            setRetryCount(0);
+            setMessages(prev => [...prev, { role: "assistant", content: "جربت كل المفاتيح المتاحة، كلهم وصلوا للحد الأقصى النهارده 😅🖤\nاستنى شوية أو زود مفاتيح جديدة", id: Date.now() }]);
+            setLoading(false);
+            return;
+          }
+        }
+        
+        setMessages(prev => [...prev, { role: "assistant", content: `حصل خطأ: ${err.error?.message || "خطأ غير معروف"} 🖤`, id: Date.now() }]);
+        setLoading(false);
+        return;
+      }
+      
+      setRetryCount(0);
       
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let fullText = "";
       while (true) {
@@ -323,11 +341,17 @@ export default function App() {
       const promptChars = JSON.stringify(cleanMessages).length + SYSTEM_PROMPT.length;
       const completionChars = finalText.length;
       addTokens({ prompt_tokens: Math.ceil(promptChars / 4), completion_tokens: Math.ceil(completionChars / 4) });
-      picked.used += Math.ceil(promptChars / 4) + Math.ceil(completionChars / 4); picked.last = new Date().toISOString();
+      
+      const updatedKeys2 = keysRef.current.map(k => 
+        k.id === picked.id ? { ...k, used: k.used + Math.ceil(promptChars / 4) + Math.ceil(completionChars / 4), last: new Date().toISOString() } : k
+      );
+      setKeys(updatedKeys2);
+      saveKeysToStorage(updatedKeys2);
+      
     } catch (err) {
       if (err.name === "AbortError") return;
       setMessages(prev => [...prev, { role: "assistant", content: `خطأ: ${err.message} 🖤`, id: Date.now() }]);
-    } finally { setLoading(false); abortRef.current = null; setTimeout(() => inputRef.current?.focus(), 100); }
+    } finally { setLoading(false); abortRef.current = null; if (!forceRetry) setTimeout(() => inputRef.current?.focus(), 100); }
   };
 
   const handleKeyDown = (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } };
@@ -347,10 +371,7 @@ export default function App() {
   if (!isLoaded) {
     return (
       <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui" }}>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: "40px" }}>🖤</div>
-          <div style={{ fontSize: "18px", marginTop: "10px" }}>جاري التحميل...</div>
-        </div>
+        <div style={{ textAlign: "center" }}><div style={{ fontSize: "40px" }}>🖤</div><div style={{ fontSize: "18px", marginTop: "10px" }}>جاري التحميل...</div></div>
       </div>
     );
   }
@@ -377,7 +398,7 @@ export default function App() {
           </>
         )}
       </div>
-      <div className="token-bar"><div className="token-info"><span>⚡ {tokenData.used.toLocaleString()} / {(stats.totalKeys * DAILY_LIMIT_PER_KEY).toLocaleString()} token</span><span style={{ color: tokenColor }}>{tokenPercent}%</span></div><div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div></div>
+      <div className="token-bar"><div className="token-info"><span>⚡ {tokenData.used.toLocaleString()} / {(stats.totalKeys * DAILY_LIMIT_PER_KEY).toLocaleString()} token ({stats.availableKeys}/{stats.totalKeys} مفاتيح)</span><span style={{ color: tokenColor }}>{tokenPercent}%</span></div><div className="token-track"><div className="token-fill" style={{ width: `${tokenPercent}%`, background: tokenColor }} /></div></div>
       {showHistory && (
         <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px", maxHeight: "200px", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><strong>📝 سجل المحادثات</strong><button onClick={() => setShowHistory(false)} className="close-btn">✕</button></div>
