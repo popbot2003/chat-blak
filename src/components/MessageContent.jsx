@@ -3,6 +3,20 @@ import React from "react";
 export default function MessageContent({ content }) {
   if (!content) return null;
 
+  if (typeof content !== "string") {
+    if (Array.isArray(content)) {
+      return content.map((item, i) => (
+        <MessageContent key={i} content={typeof item === "string" ? item : JSON.stringify(item)} />
+      ));
+    }
+    if (typeof content === "object") {
+      return <MessageContent content={JSON.stringify(content)} />;
+    }
+    return <span>{String(content)}</span>;
+  }
+
+  const cleaned = content.replace(/\{"id":\s*"[^"]*",\s*"role":\s*"[^"]*"\}/g, "");
+
   const parseContent = (text) => {
     const parts = [];
     const codeBlockRegex = /```(\w*)\n?([\s\S]*?)```/g;
@@ -10,24 +24,15 @@ export default function MessageContent({ content }) {
     let match;
 
     while ((match = codeBlockRegex.exec(text)) !== null) {
-      // النص قبل الكود
       if (match.index > lastIndex) {
-        const before = text.slice(lastIndex, match.index);
-        parts.push({ type: "text", content: formatText(before) });
+        parts.push({ type: "text", content: formatText(text.slice(lastIndex, match.index)) });
       }
-
-      // الكود
-      const language = match[1] || "";
-      const code = match[2].trim();
-      parts.push({ type: "code", language, code });
-
+      parts.push({ type: "code", language: match[1] || "", code: match[2].trim() });
       lastIndex = match.index + match[0].length;
     }
 
-    // النص المتبقي
     if (lastIndex < text.length) {
-      const remaining = text.slice(lastIndex);
-      parts.push({ type: "text", content: formatText(remaining) });
+      parts.push({ type: "text", content: formatText(text.slice(lastIndex)) });
     }
 
     return parts;
@@ -41,22 +46,6 @@ export default function MessageContent({ content }) {
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\n/g, "<br/>");
   };
-
-  // لو المحتوى مش string (حالة نادرة)
-  if (typeof content !== "string") {
-    if (Array.isArray(content)) {
-      return content.map((item, i) => (
-        <MessageContent key={i} content={typeof item === "string" ? item : JSON.stringify(item)} />
-      ));
-    }
-    if (typeof content === "object") {
-      return <MessageContent content={JSON.stringify(content)} />;
-    }
-    return <span>{String(content)}</span>;
-  }
-
-  // لو المحتوى فيه "id" أو "role" اعرضه كنص عادي
-  const cleaned = content.replace(/\{"id":\s*"[^"]*",\s*"role":\s*"[^"]*"\}/g, "");
 
   const parsed = parseContent(cleaned);
 
@@ -75,9 +64,7 @@ export default function MessageContent({ content }) {
             </pre>
           );
         }
-        return (
-          <span key={index} dangerouslySetInnerHTML={{ __html: part.content }} />
-        );
+        return <span key={index} dangerouslySetInnerHTML={{ __html: part.content }} />;
       })}
     </>
   );
