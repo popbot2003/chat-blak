@@ -1,4 +1,5 @@
-export async function safeAsync(asyncFn, fallback = null) {
+async function safeAsync(asyncFn, fallback) {
+  if (fallback === undefined) fallback = null;
   try {
     return await asyncFn();
   } catch (error) {
@@ -7,18 +8,28 @@ export async function safeAsync(asyncFn, fallback = null) {
   }
 }
 
-export function safeJsonParse(str, fallback = null) {
+function safeJsonParse(str, fallback) {
+  if (fallback === undefined) fallback = null;
   try {
     return JSON.parse(str);
-  } catch {
+  } catch (error) {
     return fallback;
   }
 }
 
-export function safeGet(obj, path, fallback = null) {
+function safeGet(obj, path, fallback) {
+  if (fallback === undefined) fallback = null;
   try {
-    return path.split('.').reduce((current, key) => current?.[key], obj) ?? fallback;
-  } catch {
+    var keys = path.split('.');
+    var result = obj;
+    for (var i = 0; i < keys.length; i++) {
+      if (result === null || result === undefined) return fallback;
+      result = result[keys[i]];
+    }
+    return result !== undefined ? result : fallback;
+  } catch (error) {
     return fallback;
   }
 }
+
+export { safeAsync, safeJsonParse, safeGet };
