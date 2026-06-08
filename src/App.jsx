@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -7,11 +8,30 @@ import Admin from "./pages/Admin";
 
 export default function App() {
   const [user, setUser] = useState(function() {
-    const saved = localStorage.getItem("black-user");
-    return saved ? JSON.parse(saved) : null;
+    try {
+      const saved = localStorage.getItem("black-user");
+      return saved ? JSON.parse(saved) : null;
+    } catch (error) {
+      console.error("❌ خطأ في تحميل المستخدم:", error);
+      localStorage.removeItem("black-user");
+      return null;
+    }
   });
+  
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+
+  // دالة تسجيل الخروج الآمنة
+  function handleLogout() {
+    try {
+      localStorage.removeItem("black-user");
+    } catch (error) {
+      console.error("❌ خطأ في تسجيل الخروج:", error);
+    }
+    setUser(null);
+    setShowRegister(false);
+    setShowForgotPassword(false);
+  }
 
   // لو مش مسجل
   if (!user) {
@@ -43,26 +63,18 @@ export default function App() {
   }
 
   // Admin
-  if (user.role === "admin") {
+  if (user && user.role === "admin") {
     return (
-      <Admin 
-        user={user} 
-        onLogout={function() { 
-          localStorage.removeItem("black-user"); 
-          setUser(null); 
-        }} 
-      />
+      <ErrorBoundary>
+        <Admin user={user} onLogout={handleLogout} />
+      </ErrorBoundary>
     );
   }
 
-  // User
+  // User عادي
   return (
-    <Chat 
-      user={user} 
-      onLogout={function() { 
-        localStorage.removeItem("black-user"); 
-        setUser(null); 
-      }} 
-    />
+    <ErrorBoundary>
+      <Chat user={user} onLogout={handleLogout} />
+    </ErrorBoundary>
   );
 }
