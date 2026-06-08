@@ -293,6 +293,12 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
+  function getModelEmoji() {
+    if (userSettings.selectedModel === 'llama-3.1-8b-instant') return '🟢';
+    if (userSettings.selectedModel === 'deepseek-r1-distill-llama-70b') return '🔵';
+    return '🟣';
+  }
+
   async function newChat() { await saveChatToSupabase(); const newId = Date.now().toString(); currentChatIdRef.current = newId; setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
   async function openChat(chatId) { await saveChatToSupabase(); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) { currentChatIdRef.current = chatId; setCurrentChatId(chatId); setMessages(data.messages.slice(-40)); } setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); }
   function copyMessage(content, id) { navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }); }
@@ -329,7 +335,7 @@ export default function Chat({ user, onLogout }) {
       <div className="header">
         <div className="header-left"><div className="avatar">🖤</div><div><div className="header-name">بلاك</div><div className="header-status"><span className="status-dot" />{loading ? "بيكتب..." : "متصل"}</div></div></div>
         <div className="header-right">
-          <span style={{ fontSize: "10px", opacity: 0.5, marginRight: "8px" }}>{userSettings.selectedModel === 'llama-3.1-8b-instant' ? '🟢' : '🟣'} RPM:{userSettings.rateLimitRPM}</span>
+          <span style={{ fontSize: "10px", opacity: 0.5, marginRight: "8px" }}>{getModelEmoji()} RPM:{userSettings.rateLimitRPM}</span>
           <button onClick={newChat} className="header-btn" title="محادثة جديدة" style={{ fontSize: "20px" }}>➕</button>
           <button onClick={function() { setShowMenu(!showMenu); }} className="header-btn" style={{ fontSize: "22px" }}>{showMenu ? "✕" : "☰"}</button>
         </div>
@@ -338,13 +344,19 @@ export default function Chat({ user, onLogout }) {
             <div onClick={function() { setShowMenu(false); }} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} />
             <div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
               <div style={{ padding: "8px 16px", fontSize: "12px", opacity: 0.5 }}>⚙️ إعداداتك</div>
-              <div style={{ padding: "4px 16px", fontSize: "11px", opacity: 0.4 }}>🎯 نموذج: {userSettings.selectedModel === 'llama-3.1-8b-instant' ? '🟢 سريع' : '🟣 ذكي'}<br/>⏱️ تبريد: {userSettings.cooldownSeconds}ث<br/>📊 RPM: {userSettings.rateLimitRPM}<br/>💰 يومي: {userSettings.dailyLimit.toLocaleString()}</div>
+              <div style={{ padding: "4px 16px", fontSize: "11px", opacity: 0.4 }}>
+                🎯 نموذج: {userSettings.selectedModel === 'llama-3.1-8b-instant' ? '🟢 سريع' : userSettings.selectedModel === 'deepseek-r1-distill-llama-70b' ? '🔵 مبرمج' : '🟣 ذكي'}<br/>
+                ⏱️ تبريد: {userSettings.cooldownSeconds}ث<br/>
+                📊 RPM: {userSettings.rateLimitRPM}<br/>
+                💰 يومي: {userSettings.dailyLimit.toLocaleString()}
+              </div>
               <hr style={{ borderColor: "rgba(255,255,255,0.1)", margin: "8px 0" }} />
               <button onClick={function() { setShowModelMenu(!showModelMenu); }} className="menu-item">🎯 تغيير النموذج ▸</button>
               {showModelMenu && (
                 <div style={{ paddingRight: "12px", borderLeft: "2px solid rgba(108,92,231,0.3)", marginRight: "8px" }}>
                   <button onClick={function() { changeModel('llama-3.1-8b-instant'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟢 سريع (8b)</button>
                   <button onClick={function() { changeModel('llama-3.3-70b-versatile'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟣 ذكي (70b)</button>
+                  <button onClick={function() { changeModel('deepseek-r1-distill-llama-70b'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🔵 مبرمج (DeepSeek)</button>
                 </div>
               )}
               <button onClick={function() { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
@@ -392,3 +404,4 @@ export default function Chat({ user, onLogout }) {
     </div>
   );
 }
+
