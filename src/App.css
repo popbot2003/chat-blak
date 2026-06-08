@@ -1,9 +1,8 @@
-/* ═══════════════════════════════════════════
-   RESET & BASE
-═══════════════════════════════════════════ */
-*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-html { height: 100%; overscroll-behavior: none; }
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
 
 body {
   font-family: system-ui, -apple-system, sans-serif;
@@ -12,232 +11,263 @@ body {
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  min-height: 100dvh;
-  /* body اتجاه محايد */
-  direction: ltr;
+  direction: rtl;
   overflow: hidden;
 }
 
-/* ═══════════════════════════════════════════
-   CONTAINER
-═══════════════════════════════════════════ */
 .container {
   width: 100%;
-  max-width: 850px;
-  height: 95vh;
-  height: 95dvh;
+  max-width: 900px;
+  height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
-  border-radius: 20px;
+  border-radius: 0;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   position: relative;
-  /* RTL هنا بس */
-  direction: rtl;
-  text-align: right;
 }
 
-.container.dark  { background: #0f0f1a; color: #e0e0e0; }
+.container.dark { background: #0f0f1a; color: #e0e0e0; }
 .container.light { background: #f5f5f5; color: #1a1a1a; }
 
-/* ═══════════════════════════════════════════
-   HEADER
-═══════════════════════════════════════════ */
+/* ========== الهيدر ========== */
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 14px;
+  padding: 10px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
+  position: sticky;
+  top: 0;
   z-index: 100;
   background: #0f0f1a;
   min-height: 56px;
-  /* منع الـ header من يتقلص */
-  width: 100%;
 }
+
 .light .header { background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.1); }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 10px;
-  /* الاسم على اليمين */
-  flex-direction: row-reverse;
-  min-width: 0;
   flex: 1;
+  min-width: 0;
 }
 
 .avatar {
-  width: 38px; height: 38px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 19px; flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 
-.header-name   { font-size: 16px; font-weight: 700; line-height: 1.2; white-space: nowrap; }
-.header-status { font-size: 11px; display: flex; align-items: center; gap: 5px; opacity: 0.7; margin-top: 1px; flex-direction: row-reverse; }
-.status-dot    { width: 7px; height: 7px; border-radius: 50%; background: #4ade80; flex-shrink: 0; }
+.header-name {
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-status {
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  opacity: 0.7;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4ade80;
+  display: inline-block;
+  flex-shrink: 0;
+}
 
 .header-right {
   display: flex;
-  align-items: center;
   gap: 2px;
   flex-shrink: 0;
-  /* الأزرار على اليسار */
-  flex-direction: row-reverse;
 }
 
 .header-btn {
-  background: transparent; border: none; color: inherit;
-  font-size: 17px; padding: 7px 9px;
-  border-radius: 10px; cursor: pointer;
-  transition: background 0.2s; line-height: 1;
-  flex-shrink: 0;
-}
-.header-btn:hover { background: rgba(255,255,255,0.1); }
-.light .header-btn:hover { background: rgba(0,0,0,0.06); }
-
-/* ═══════════════════════════════════════════
-   MENU
-═══════════════════════════════════════════ */
-.menu-item {
-  display: flex; align-items: center; gap: 10px;
-  background: transparent; border: none; color: inherit;
-  padding: 11px 14px; border-radius: 12px;
-  font-size: 14px; cursor: pointer;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
   transition: background 0.2s;
-  text-align: right; width: 100%; font-family: inherit;
-  direction: rtl;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
 }
+
+.header-btn:hover { background: rgba(255,255,255,0.1); }
+.light .header-btn:hover { background: rgba(0,0,0,0.05); }
+
+/* ========== القائمة المنسدلة ========== */
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-align: right;
+  width: 100%;
+  font-family: inherit;
+}
+
 .menu-item:hover { background: rgba(108,92,231,0.15); }
 .light .menu-item:hover { background: rgba(108,92,231,0.1); }
 
-/* ═══════════════════════════════════════════
-   TOKEN BAR
-═══════════════════════════════════════════ */
+/* ========== شريط التوكن ========== */
 .token-bar {
-  padding: 6px 14px; flex-shrink: 0;
+  padding: 6px 16px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 56px;
+  z-index: 99;
   background: #0f0f1a;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
-.light .token-bar { background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.06); }
+
+.light .token-bar { background: #f5f5f5; }
 
 .token-info {
-  display: flex; justify-content: space-between;
-  font-size: 11px; margin-bottom: 4px; opacity: 0.75;
-  direction: rtl;
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  margin-bottom: 3px;
+  opacity: 0.8;
 }
 
 .token-track {
-  width: 100%; height: 3px;
+  width: 100%;
+  height: 3px;
   background: rgba(255,255,255,0.1);
-  border-radius: 2px; overflow: hidden;
-  direction: ltr;
+  border-radius: 2px;
+  overflow: hidden;
 }
-.light .token-track { background: rgba(0,0,0,0.1); }
-.token-fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
 
-/* ═══════════════════════════════════════════
-   SEARCH BAR
-═══════════════════════════════════════════ */
-.search-bar {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0; background: #0f0f1a;
-  direction: rtl;
+.light .token-track { background: rgba(0,0,0,0.1); }
+
+.token-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
 }
+
+/* ========== شريط البحث/السجل ========== */
+.search-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  flex-shrink: 0;
+  position: sticky;
+  top: 86px;
+  z-index: 98;
+  background: #0f0f1a;
+}
+
 .light .search-bar { background: #f5f5f5; border-bottom: 1px solid rgba(0,0,0,0.1); }
 
 .search-input {
-  flex: 1; background: transparent; border: none;
-  outline: none; color: inherit;
-  font-size: 14px; font-family: inherit;
-  text-align: right; direction: rtl;
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: inherit;
+  font-size: 14px;
 }
-.search-count { font-size: 12px; opacity: 0.6; white-space: nowrap; }
-.close-btn { background: transparent; border: none; color: inherit; font-size: 18px; cursor: pointer; padding: 4px; }
 
-/* ═══════════════════════════════════════════
-   MESSAGES
-═══════════════════════════════════════════ */
+.search-count { font-size: 11px; opacity: 0.6; white-space: nowrap; }
+
+.close-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* ========== الرسائل ========== */
 .messages {
   flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
-  padding: 12px 10px;
+  padding: 12px 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-  /* RTL للـ messages نفسها */
-  direction: rtl;
 }
+
 .messages::-webkit-scrollbar { width: 4px; }
 .messages::-webkit-scrollbar-track { background: transparent; }
-.messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 4px; }
-.light .messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); }
+.messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+.light .messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
 
-/* ═══════════════════════════════════════════
-   MESSAGE ROWS
-═══════════════════════════════════════════ */
 .msg-row {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  /* row اتجاه محايد */
-  direction: ltr;
+  gap: 6px;
+  max-width: 100%;
 }
-.msg-row-user { justify-content: flex-end; }
-.msg-row-ai   { justify-content: flex-start; }
 
-/* ═══════════════════════════════════════════
-   MSG CONTENT WRAPPER
-═══════════════════════════════════════════ */
+.msg-row-user { justify-content: flex-end; }
+.msg-row-ai { justify-content: flex-start; }
+
 .msg-content-wrapper {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-width: 80%;
-  min-width: 0;
+  gap: 2px;
+  max-width: 90%;
 }
-.msg-row-user .msg-content-wrapper { align-items: flex-end; }
-.msg-row-ai   .msg-content-wrapper { align-items: flex-start; }
 
-/* ═══════════════════════════════════════════
-   AVATARS
-═══════════════════════════════════════════ */
+.msg-row-user .msg-content-wrapper { align-items: flex-end; }
+.msg-row-ai .msg-content-wrapper { align-items: flex-start; }
+
 .avatar-small {
-  width: 28px; height: 28px; min-width: 28px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
   background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  align-self: flex-end;
 }
+
 .avatar-user { background: linear-gradient(135deg, #4ade80, #22c55e); }
 
-/* ═══════════════════════════════════════════
-   BUBBLE
-═══════════════════════════════════════════ */
 .bubble {
-  padding: 10px 13px;
-  border-radius: 18px;
-  line-height: 1.65;
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 1.5;
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 14px;
-  width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  /* النص RTL داخل الفقاعة */
-  direction: rtl;
-  text-align: right;
 }
 
 .bubble-user {
@@ -245,292 +275,235 @@ body {
   color: #fff;
   border-bottom-left-radius: 4px;
 }
+
 .bubble-ai {
-  background: rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.06);
   border-bottom-right-radius: 4px;
 }
+
 .bubble-ai-light {
   background: #fff;
   border-bottom-right-radius: 4px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 
 .copy-msg-btn {
-  background: transparent; border: none; color: inherit;
-  font-size: 11px; opacity: 0.4; cursor: pointer;
-  padding: 2px 6px; transition: opacity 0.2s;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-size: 10px;
+  opacity: 0.4;
+  cursor: pointer;
+  padding: 2px 4px;
+  transition: opacity 0.2s;
 }
+
 .copy-msg-btn:hover { opacity: 1; }
 
-/* ═══════════════════════════════════════════
-   CODE BLOCK — عزل كامل عن الـ RTL
-═══════════════════════════════════════════ */
-.code-wrapper {
-  /* عزل تام عن الـ RTL */
-  direction: ltr !important;
-  text-align: left !important;
-  unicode-bidi: isolate;
-
-  border-radius: 10px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.1);
-  /* يمتد لحواف الـ bubble */
-  margin: 8px -13px;
-  width: calc(100% + 26px);
-  /* منع أي تأثير RTL من الـ parent */
-  display: block;
-}
-
-/* أول عنصر */
-.bubble > .code-wrapper:first-child {
-  margin-top: -10px;
-  border-top-left-radius: 18px;
-  border-top-right-radius: 18px;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-/* آخر عنصر */
-.bubble > .code-wrapper:last-child {
-  margin-bottom: -10px;
-  border-top-left-radius: 0;
-  border-top-right-radius: 0;
-  border-bottom-left-radius: 18px;
-  border-bottom-right-radius: 18px;
-}
-/* لوحده */
-.bubble > .code-wrapper:only-child {
-  margin: -10px -13px;
-  border-radius: 18px;
-}
-
-.light .code-wrapper { border-color: rgba(0,0,0,0.1); }
-
-/* الشريط العلوي */
-.code-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-direction: row;
-  padding: 7px 12px;
-  background: rgba(0,0,0,0.4);
-  border-bottom: 1px solid rgba(255,255,255,0.07);
-  direction: ltr;
-}
-.light .code-header { background: #161625; }
-
-.code-lang {
-  font-size: 11px;
-  font-family: 'Fira Code', 'Consolas', monospace;
-  color: #a29bfe;
-  letter-spacing: 0.5px;
-  direction: ltr;
-}
-
-.code-copy-btn {
-  background: rgba(255,255,255,0.09);
-  border: 1px solid rgba(255,255,255,0.13);
-  color: #ccc; font-size: 11px;
-  padding: 3px 10px; border-radius: 6px;
-  cursor: pointer; transition: all 0.2s;
-  font-family: inherit; white-space: nowrap;
-  direction: rtl;
-}
-.code-copy-btn:hover { background: rgba(108,92,231,0.3); border-color: #6c5ce7; color: #fff; }
-.code-copy-btn:active { transform: scale(0.95); }
-
-/* منطقة الكود */
-.code-pre {
-  margin: 0;
-  padding: 14px 14px;
-  background: #0d0d1a;
+/* ========== كود بلوك ========== */
+.bubble pre {
+  background: rgba(0,0,0,0.3);
+  padding: 10px;
+  border-radius: 8px;
   overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  /* LTR صريح */
-  direction: ltr !important;
-  text-align: left !important;
-}
-.light .code-pre { background: #1a1a2e; }
-
-.code-content {
-  font-family: 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #e2e2e2;
-  /* pre بدون wrap — الـ scroll الأفقي يتكفل */
-  white-space: pre;
-  display: block;
-  direction: ltr !important;
-  text-align: left !important;
-  unicode-bidi: plaintext;
+  margin: 6px 0;
+  font-size: 12px;
+  direction: ltr;
+  text-align: left;
 }
 
-.code-pre::-webkit-scrollbar { height: 4px; }
-.code-pre::-webkit-scrollbar-track { background: transparent; }
-.code-pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
+.light .bubble pre { background: #1e1e2e; color: #e0e0e0; }
 
-/* ═══════════════════════════════════════════
-   SUGGESTIONS / CHIPS
-═══════════════════════════════════════════ */
+.bubble code {
+  font-family: 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12px;
+}
+
+/* ========== الاقتراحات ========== */
 .suggestions {
-  display: flex; flex-wrap: wrap; gap: 8px;
-  justify-content: center; padding: 14px 0 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  padding: 16px 0;
 }
 
 .chip {
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.11);
-  color: inherit; padding: 8px 14px;
-  border-radius: 20px; font-size: 13px;
-  cursor: pointer; transition: all 0.2s;
-  font-family: inherit; white-space: nowrap;
-  direction: rtl;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: inherit;
+  padding: 8px 14px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
 }
-.light .chip { background: #fff; border: 1px solid #ddd; color: #333; }
-.chip:hover { background: rgba(108,92,231,0.2); border-color: #6c5ce7; transform: translateY(-1px); }
 
-/* ═══════════════════════════════════════════
-   TYPING DOTS
-═══════════════════════════════════════════ */
-.typing-dots { display: flex; gap: 4px; padding: 2px; align-items: center; direction: ltr; }
+.light .chip { background: #fff; border: 1px solid #ddd; color: #333; }
+.chip:hover { background: rgba(108,92,231,0.2); border-color: #6c5ce7; }
+
+/* ========== تايبينج دوتس ========== */
+.typing-dots {
+  display: flex;
+  gap: 3px;
+  padding: 3px 0;
+}
+
 .typing-dots span {
-  width: 7px; height: 7px; border-radius: 50%;
-  background: #a29bfe; display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #a29bfe;
   animation: bounce 1.4s infinite ease-in-out both;
 }
+
 .typing-dots span:nth-child(1) { animation-delay: -0.32s; }
 .typing-dots span:nth-child(2) { animation-delay: -0.16s; }
 
 @keyframes bounce {
   0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
-  40%           { transform: scale(1); opacity: 1; }
+  40% { transform: scale(1); opacity: 1; }
 }
 
-/* ═══════════════════════════════════════════
-   INPUT AREA
-═══════════════════════════════════════════ */
+/* ========== منطقة الكتابة ========== */
 .input-area {
-  display: flex; align-items: flex-end; gap: 8px;
-  padding: 10px 12px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
   border-top: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0; background: #0f0f1a;
-  padding-bottom: max(10px, env(safe-area-inset-bottom));
-  /* الـ input area بـ LTR عشان الأزرار تكون صح */
-  direction: ltr;
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 100;
+  background: #0f0f1a;
+  min-height: 60px;
 }
+
 .light .input-area { background: #f5f5f5; border-top: 1px solid rgba(0,0,0,0.1); }
 
 .textarea {
-  flex: 1; min-width: 0;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 16px; padding: 11px 14px;
+  flex: 1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 10px 14px;
   color: inherit;
-  font-size: 16px;
-  resize: none; outline: none;
-  max-height: 120px; min-height: 44px;
-  font-family: inherit; line-height: 1.5;
-  transition: border-color 0.2s;
-  /* النص RTL في الـ textarea */
-  direction: rtl;
-  text-align: right;
+  font-size: 14px;
+  resize: none;
+  outline: none;
+  max-height: 100px;
+  font-family: inherit;
 }
+
 .light .textarea { background: #fff; border: 1px solid #ddd; }
-.textarea:focus  { border-color: #6c5ce7; }
-.textarea::placeholder { opacity: 0.45; direction: rtl; text-align: right; }
+.textarea:focus { border-color: #6c5ce7; }
 
 .send-btn {
   background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
-  border: none; color: #fff;
-  width: 44px; height: 44px; min-width: 44px;
-  border-radius: 50%; font-size: 20px;
-  cursor: pointer; flex-shrink: 0;
+  border: none;
+  color: #fff;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  font-size: 18px;
+  cursor: pointer;
+  flex-shrink: 0;
   transition: transform 0.2s, opacity 0.2s;
-  display: flex; align-items: center; justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
-.send-btn:hover  { transform: scale(1.05); }
+
+.send-btn:hover { transform: scale(1.05); }
 .send-btn:active { transform: scale(0.95); }
 
-/* ═══════════════════════════════════════════
-   RESPONSIVE — TABLET ≤ 1024px
-═══════════════════════════════════════════ */
-@media (max-width: 1024px) {
+/* ========== ديسكتوب ========== */
+@media (min-width: 769px) {
   .container {
-    max-width: 100%;
-    height: 100vh; height: 100dvh;
-    border-radius: 0; box-shadow: none;
+    height: 95vh;
+    border-radius: 20px;
+    margin: 0 10px;
   }
-  .msg-content-wrapper { max-width: 82%; }
+  
+  .header { padding: 12px 20px; min-height: 60px; }
+  .avatar { width: 42px; height: 42px; font-size: 20px; }
+  .header-name { font-size: 18px; }
+  .header-status { font-size: 12px; }
+  .token-bar { padding: 8px 20px; top: 60px; }
+  .search-bar { padding: 10px 20px; top: 92px; }
+  .messages { padding: 16px 20px; gap: 16px; }
+  .bubble { padding: 12px 16px; font-size: 14px; }
+  .input-area { padding: 12px 20px; }
+  .msg-content-wrapper { max-width: 85%; }
 }
 
-/* ═══════════════════════════════════════════
-   RESPONSIVE — MOBILE ≤ 768px
-═══════════════════════════════════════════ */
-@media (max-width: 768px) {
-  body { background: #0f0f1a; }
-  .container { height: 100vh; height: 100dvh; border-radius: 0; box-shadow: none; }
+/* ========== تابلت ========== */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .container { max-width: 100%; border-radius: 0; }
+  .msg-content-wrapper { max-width: 88%; }
+}
 
-  .header      { padding: 8px 12px; min-height: 50px; }
-  .avatar      { width: 34px; height: 34px; font-size: 17px; }
+/* ========== موبايل ========== */
+@media (max-width: 767px) {
+  .container {
+    height: 100dvh;
+    max-width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .header { padding: 8px 12px; min-height: 50px; }
+  .avatar { width: 34px; height: 34px; font-size: 16px; }
   .header-name { font-size: 15px; }
-  .header-btn  { font-size: 16px; padding: 6px 8px; }
+  .header-status { font-size: 10px; }
+  .header-btn { font-size: 16px; padding: 6px; min-width: 32px; min-height: 32px; }
 
-  .token-bar  { padding: 5px 12px; }
-  .search-bar { padding: 7px 12px; }
-  .messages   { padding: 10px 8px; gap: 10px; }
+  .token-bar { padding: 5px 12px; top: 50px; }
+  .token-info { font-size: 10px; }
 
-  .bubble     { font-size: 14px; padding: 9px 12px; }
-  .code-wrapper           { margin: 7px -12px; width: calc(100% + 24px); }
-  .bubble > .code-wrapper:first-child { margin-top: -9px; }
-  .bubble > .code-wrapper:last-child  { margin-bottom: -9px; }
-  .bubble > .code-wrapper:only-child  { margin: -9px -12px; }
+  .search-bar { padding: 6px 12px; top: 72px; }
 
-  .msg-content-wrapper { max-width: 84%; }
-  .avatar-small { width: 26px; height: 26px; min-width: 26px; font-size: 13px; }
+  .messages { padding: 10px 12px; gap: 10px; }
 
-  .suggestions { padding: 10px 0 4px; gap: 6px; }
-  .chip        { font-size: 12px; padding: 7px 11px; }
+  .bubble { padding: 8px 12px; font-size: 13px; }
 
-  .input-area  { padding: 8px 10px; gap: 7px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
-  .send-btn    { width: 42px; height: 42px; min-width: 42px; font-size: 18px; }
+  .msg-content-wrapper { max-width: 95%; }
 
-  .code-pre    { padding: 12px; }
-  .code-content { font-size: 12.5px; }
+  .avatar-small { width: 26px; height: 26px; font-size: 12px; }
+
+  .suggestions { padding: 10px 0; gap: 5px; }
+  .chip { font-size: 12px; padding: 7px 12px; }
+
+  .input-area { padding: 8px 12px; gap: 6px; min-height: 54px; }
+  .textarea { font-size: 16px; padding: 8px 12px; }
+  .send-btn { width: 36px; height: 36px; font-size: 16px; }
 }
 
-/* ═══════════════════════════════════════════
-   RESPONSIVE — SMALL ≤ 400px
-═══════════════════════════════════════════ */
+/* ========== موبايل صغير ========== */
 @media (max-width: 400px) {
-  .header      { padding: 6px 10px; min-height: 46px; }
-  .avatar      { width: 30px; height: 30px; font-size: 15px; }
+  .header { padding: 6px 10px; min-height: 46px; }
+  .avatar { width: 30px; height: 30px; font-size: 14px; }
   .header-name { font-size: 14px; }
-  .header-btn  { font-size: 14px; padding: 5px 7px; }
+  .header-btn { font-size: 14px; padding: 5px; min-width: 28px; min-height: 28px; }
 
-  .messages    { padding: 8px 7px; gap: 9px; }
-  .bubble      { font-size: 13px; padding: 8px 11px; }
-  .code-wrapper           { margin: 7px -11px; width: calc(100% + 22px); }
-  .bubble > .code-wrapper:first-child { margin-top: -8px; }
-  .bubble > .code-wrapper:last-child  { margin-bottom: -8px; }
-  .bubble > .code-wrapper:only-child  { margin: -8px -11px; }
+  .token-bar { padding: 4px 10px; top: 46px; }
+  .search-bar { top: 64px; padding: 5px 10px; }
 
-  .msg-content-wrapper { max-width: 87%; }
-  .avatar-small { width: 24px; height: 24px; min-width: 24px; font-size: 12px; }
+  .messages { padding: 8px 10px; gap: 8px; }
 
-  .chip        { font-size: 11px; padding: 6px 10px; }
-  .input-area  { padding: 7px 8px; gap: 6px; }
-  .send-btn    { width: 40px; height: 40px; min-width: 40px; font-size: 16px; }
-  .code-content { font-size: 12px; }
-}
+  .bubble { padding: 7px 10px; font-size: 12px; }
 
-/* ═══════════════════════════════════════════
-   LANDSCAPE
-═══════════════════════════════════════════ */
-@media (max-width: 768px) and (orientation: landscape) {
-  .header        { padding: 5px 12px; min-height: 42px; }
-  .avatar        { width: 28px; height: 28px; font-size: 14px; }
-  .header-status { display: none; }
-  .token-bar     { padding: 3px 12px; }
-  .messages      { padding: 5px 8px; gap: 7px; }
-  .input-area    { padding: 5px 10px; }
+  .msg-content-wrapper { max-width: 98%; }
+
+  .avatar-small { width: 24px; height: 24px; font-size: 11px; }
+
+  .chip { font-size: 11px; padding: 6px 10px; }
+
+  .input-area { padding: 6px 10px; gap: 5px; min-height: 48px; }
+  .textarea { font-size: 15px; padding: 7px 10px; }
+  .send-btn { width: 32px; height: 32px; font-size: 14px; }
+
+  .menu-item { padding: 8px 12px; font-size: 12px; }
 }
