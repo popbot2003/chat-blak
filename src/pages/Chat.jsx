@@ -111,7 +111,7 @@ export default function Chat({ user, onLogout }) {
 
   async function loadUserSettings() {
     try {
-      const { data } = await supabase.from('users').select('rate_limit_rpm, rate_limit_tpm, daily_limit, cooldown_seconds, smart_mode, selected_model').eq('id', user.id).single();
+      const { data } = await supabase.from('profiles').select('rate_limit_rpm, rate_limit_tpm, daily_limit, cooldown_seconds, smart_mode, selected_model').eq('id', user.id).single();
       if (data) {
         setUserSettings({
           rateLimitRPM: data.rate_limit_rpm || DEFAULT_SETTINGS.rateLimitRPM,
@@ -268,7 +268,7 @@ export default function Chat({ user, onLogout }) {
   async function changeModel(modelName) {
     const newSettings = { ...userSettings, selectedModel: modelName };
     setUserSettings(newSettings);
-    await supabase.from('users').update({ selected_model: modelName }).eq('id', user.id);
+    await supabase.from('profiles').update({ selected_model: modelName }).eq('id', user.id);
     alert("✅ تم تغيير النموذج");
   }
 
@@ -298,7 +298,7 @@ export default function Chat({ user, onLogout }) {
     const title = currentMessages.find(function(m) { return m.role === "user"; })?.content?.slice(0, 50) || "محادثة";
     const chatId = currentChatIdRef.current;
     try {
-      const { error } = await supabase.from('chats').upsert({ id: chatId, user_id: user.id, user_email: user.email, title: title, messages: currentMessages.slice(-40), updated_at: new Date().toISOString() });
+      const { error } = await supabase.from('chats').upsert({ id: chatId, user_id: user.id, title: title, messages: currentMessages.slice(-40), updated_at: new Date().toISOString() });
       if (error) console.error("❌ saveChat:", error);
     } catch (err) { console.error("❌ saveChat:", err); }
   }
@@ -420,4 +420,3 @@ export default function Chat({ user, onLogout }) {
     </div>
   );
 }
-
