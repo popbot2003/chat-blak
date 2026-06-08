@@ -4,7 +4,6 @@ import MessageContent from "../components/MessageContent";
 import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
 import { SYSTEM_PROMPT, DEFAULT_SETTINGS } from '../config/constants';
-import { searchWeb, shouldSearch } from '../utils/webSearch';
 
 const CODE_SYSTEM_PROMPT = `أنت بلاك، مساعد برمجة متخصص وخبير.
 عند كتابة أي كود:
@@ -196,15 +195,6 @@ export default function Chat({ user, onLogout }) {
       processingRef.current = false; processQueue(); return;
     }
 
-    // ✅ البحث على الإنترنت لو السؤال محتاج
-    let enhancedText = text;
-    if (shouldSearch(text) && userSettingsRef.current.selectedModel !== 'code-mode') {
-      const searchResults = await searchWeb(text);
-      if (searchResults) {
-        enhancedText = `سؤال المستخدم: ${text}\n\n[نتائج البحث من الإنترنت - استخدمها في إجابتك]:\n${searchResults}\n\nبناءً على نتائج البحث دي والمعلومات اللي عندك، جاوب على سؤال المستخدم بالعامية المصرية.`;
-      }
-    }
-
     const userMsg = { role: "user", content: text, id: Date.now() };
     const updated = isRetry ? messagesRef.current : [...messagesRef.current, userMsg];
     if (!isRetry) { setMessages(updated); setInput(""); setAttachedFiles([]); }
@@ -215,15 +205,13 @@ export default function Chat({ user, onLogout }) {
     requestCountRef.current.tokens += 500;
     try {
       const clean = updated.map(function(m) { return { role: m.role, content: m.content }; });
-      // ✅ نستخدم enhancedText في آخر رسالة
-      const messagesToSend = [...clean.slice(-39), { role: "user", content: enhancedText }];
       
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + selectedKey.key },
         body: JSON.stringify({
           model: getActiveModel(),
-          messages: [{ role: "system", content: getActiveSystemPrompt() }, ...messagesToSend],
+          messages: [{ role: "system", content: getActiveSystemPrompt() }, ...clean.slice(-40)],
           temperature: userSettingsRef.current.selectedModel === 'code-mode' ? 0.3 : 0.8,
           max_tokens: 2000,
           stream: false
@@ -449,4 +437,4 @@ export default function Chat({ user, onLogout }) {
       </div>
     </div>
   );
-      }
+    }
