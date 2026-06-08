@@ -5,8 +5,6 @@ import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
 import { SYSTEM_PROMPT, DEFAULT_SETTINGS } from '../config/constants';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
-
 function cleanResponse(text) {
   if (!text) return "";
   return text.replace(/[ \t]+/g, ' ').trim();
@@ -61,6 +59,7 @@ export default function Chat({ user, onLogout }) {
   const messagesRef = useRef(messages);
   const currentChatIdRef = useRef(currentChatId);
 
+  useEffect(function() { keysRef.current = keys; }, [keys]);
   useEffect(function() { messagesRef.current = messages; }, [messages]);
   useEffect(function() { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   
@@ -111,7 +110,13 @@ export default function Chat({ user, onLogout }) {
       const savedKeys = [];
       if (data && data.length > 0) {
         data.forEach(function(key) {
-          savedKeys.push({ id: 'uk-' + key.id, key: key.key_value, used: key.used_today || 0, dailyLimit: key.daily_limit || 5000 });
+          savedKeys.push({ 
+            id: 'uk-' + key.id, 
+            key: key.key_value, 
+            used: key.used_today || 0, 
+            dailyLimit: key.daily_limit || 5000,
+            keyType: key.key_type || 'groq'
+          });
         });
       }
       setKeys(savedKeys);
@@ -137,32 +142,51 @@ export default function Chat({ user, onLogout }) {
     setLoading(true); setStreamingText("");
 
     try {
+      let reply = "";
+      let tokens = 0;
+
       // ✅ Gemini API
-      const history = updated.slice(0, -1).map(function(m) {
-        return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] };
-      });
+      if (selectedKey.keyType === 'gemini') {
+        const history = updated.slice(0, -1).map(function(m) {
+          return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] };
+        });
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${selectedKey.key}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
+              contents: [...history, { role: "user", parts: [{ text: text }] }],
+              generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
+            }),
+          }
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || "خطأ في Gemini");
+        reply = cleanResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "");
+        tokens = Math.ceil((text.length + reply.length) / 4);
+      }
+      // ✅ Groq API
+      else {
+        const clean = updated.map(function(m) { return { role: m.role, content: m.content }; });
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + selectedKey.key },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-            contents: [...history, { role: "user", parts: [{ text: text }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
+            model: "llama-3.3-70b-versatile",
+            messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean.slice(-40)],
+            temperature: 0.7, max_tokens: 2000, stream: false
           }),
-        }
-      );
-
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.error?.message || "خطأ في Gemini");
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error?.message || "خطأ في Groq");
+        reply = cleanResponse(data.choices?.[0]?.message?.content || "");
+        tokens = data.usage?.total_tokens || 500;
       }
 
-      const reply = cleanResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "");
-      
+      // عرض الرد حرف حرف
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       let i = 0;
       function type() {
@@ -176,7 +200,6 @@ export default function Chat({ user, onLogout }) {
       }
       type();
 
-      const tokens = Math.ceil((text.length + reply.length) / 4);
       const newUsed = selectedKey.used + tokens;
       const uk = keysRef.current.map(function(k) { return k.id === selectedKey.id ? { ...k, used: newUsed } : k; });
       setKeys(uk);
