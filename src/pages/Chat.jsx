@@ -145,14 +145,13 @@ export default function Chat({ user, onLogout }) {
       let reply = "";
       let tokens = 0;
 
-      // ✅ Gemini API
       if (selectedKey.keyType === 'gemini') {
         const history = updated.slice(0, -1).map(function(m) {
           return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] };
         });
 
         const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${selectedKey.key}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${selectedKey.key}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -167,9 +166,7 @@ export default function Chat({ user, onLogout }) {
         if (!res.ok) throw new Error(data.error?.message || "خطأ في Gemini");
         reply = cleanResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "");
         tokens = Math.ceil((text.length + reply.length) / 4);
-      }
-      // ✅ Groq API
-      else {
+      } else {
         const clean = updated.map(function(m) { return { role: m.role, content: m.content }; });
         const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
@@ -186,7 +183,6 @@ export default function Chat({ user, onLogout }) {
         tokens = data.usage?.total_tokens || 500;
       }
 
-      // عرض الرد حرف حرف
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       let i = 0;
       function type() {
@@ -336,4 +332,4 @@ export default function Chat({ user, onLogout }) {
       </div>
     </div>
   );
-    }
+}
