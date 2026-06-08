@@ -683,6 +683,35 @@ html, body {
 .admin-badge-purple { background: rgba(108,92,231,0.2); color: #a29bfe; }
 .admin-badge-yellow { background: rgba(251,191,36,0.2); color: #fbbf24; }
 
+/* ========== بطاقات محادثات Admin ========== */
+.admin-user-chat-card {
+  margin-bottom: 24px;
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 14px;
+  background: rgba(255,255,255,0.02);
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.admin-user-chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-user-chat-header h3 {
+  margin: 0;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
 @media (max-width: 767px) {
   .admin-page { padding: 8px; }
   .admin-header { padding: 12px; }
@@ -692,9 +721,15 @@ html, body {
   .admin-table th, .admin-table td { padding: 6px 4px; }
   .admin-btn { padding: 5px 8px; font-size: 10px; }
   .admin-modal-content { padding: 16px; }
+  
+  .admin-user-chat-card { padding: 10px; }
+  .admin-user-chat-card .admin-table { min-width: 350px; font-size: 11px; }
+  .admin-user-chat-card .admin-table th,
+  .admin-user-chat-card .admin-table td { padding: 5px 3px; font-size: 10px; }
 }
 
 @media (max-width: 400px) {
   .admin-tab { padding: 6px 4px; font-size: 10px; }
   .admin-table { min-width: 400px; font-size: 10px; }
+  .admin-user-chat-card .admin-table { min-width: 300px; font-size: 10px; }
 }
