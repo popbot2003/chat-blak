@@ -277,10 +277,26 @@ export default function Chat({ user, onLogout }) {
       if (typeof keyId === 'string' && keyId.startsWith('uk-')) {
         await supabase.from('user_keys').update({ used_today: newUsed }).eq('id', parseInt(keyId.replace('uk-', '')));
       }
+      
       const today = new Date().toISOString().slice(0, 10);
-      const { data: existing } = await supabase.from('user_usage').select('*').eq('user_id', user.id).eq('date', today).single();
-      if (existing) { await supabase.from('user_usage').update({ tokens_used: newUsed, updated_at: new Date().toISOString() }).eq('id', existing.id); }
-      else { await supabase.from('user_usage').insert({ user_id: user.id, tokens_used: newUsed, date: today }); }
+      
+      const { data: existing } = await supabase
+        .from('user_usage')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('date', today)
+        .limit(1);
+      
+      if (existing && existing.length > 0) {
+        await supabase
+          .from('user_usage')
+          .update({ tokens_used: newUsed })
+          .eq('id', existing[0].id);
+      } else {
+        await supabase
+          .from('user_usage')
+          .insert({ user_id: user.id, tokens_used: newUsed, date: today });
+      }
     } catch (err) { console.error("❌ saveKeyUsage:", err); }
   }
 
