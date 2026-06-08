@@ -24,6 +24,13 @@ html, body {
   padding: 0;
 }
 
+/* عندما تكون صفحة Admin، #root يسمح بالسكرول */
+#root:has(.admin-page) {
+  align-items: flex-start;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .container {
   width: 100%;
   height: 100%;
@@ -31,6 +38,15 @@ html, body {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+/* عندما تكون صفحة Admin داخل container */
+.container:has(.admin-page) {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  height: auto;
+  min-height: 100%;
 }
 
 .container.dark { background: #0f0f1a; color: #e0e0e0; }
@@ -542,11 +558,9 @@ html, body {
    صفحة Admin
    ================================================ */
 .admin-page {
-  /* ✅ إصلاح: استبدال min-height: 100vh بـ height: 100% مع overflow-y: auto
-     لضمان ظهور الجزء العلوي والسماح بالسكرول */
   width: 100%;
-  height: 100%;
-  min-height: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   overflow-y: auto;
   overflow-x: hidden;
   background: #0f0f1a;
@@ -554,12 +568,15 @@ html, body {
   font-family: inherit;
   padding: 12px;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 
-/* ✅ إصلاح إضافي: عندما تكون صفحة Admin داخل #root أو .container
-   نضمن أن الـ container نفسه يسمح بالسكرول */
 .container:has(.admin-page) {
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  height: auto;
+  min-height: 100%;
 }
 
 .admin-header {
