@@ -13,16 +13,13 @@ export default function Admin({ user, onLogout }) {
   const [viewingUserName, setViewingUserName] = useState("");
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
-  const [newKeyType, setNewKeyType] = useState("groq");
   const [newKeyLimit, setNewKeyLimit] = useState(5000);
   const [allChats, setAllChats] = useState([]);
-
   const [editRateLimitRPM, setEditRateLimitRPM] = useState(5);
   const [editRateLimitTPM, setEditRateLimitTPM] = useState(2000);
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
   const [editCooldown, setEditCooldown] = useState(3);
   const [editSmartMode, setEditSmartMode] = useState(true);
-  const [editModel, setEditModel] = useState('llama-3.1-8b-instant');
 
   useEffect(function() { loadUsers(); loadAllKeys(); loadAllChats(); }, []);
 
@@ -35,39 +32,13 @@ export default function Admin({ user, onLogout }) {
   function getUserById(userId) { return users.find(function(u) { return u.id === userId; }); }
   function formatDate(date) { if (!date) return ""; return new Date(date).toLocaleDateString("ar-EG"); }
 
-  function viewUserChats(userId, userName) {
-    const chats = getUserChats(userId);
-    setViewingChats(chats);
-    setViewingUserName(userName);
-    setShowChatViewer(true);
-  }
-
-  function viewChatContent(chat) {
-    const messages = chat.messages || [];
-    const content = messages.map(function(m) {
-      return (m.role === "user" ? "👤" : "🖤") + ": " + (m.content || "").slice(0, 100);
-    }).join("\n\n");
-    alert("📝 " + chat.title + "\n\n" + content);
-  }
+  function viewUserChats(userId, userName) { setViewingChats(getUserChats(userId)); setViewingUserName(userName); setShowChatViewer(true); }
+  function viewChatContent(chat) { const messages = chat.messages || []; const content = messages.map(function(m) { return (m.role === "user" ? "👤" : "🖤") + ": " + (m.content || "").slice(0, 100); }).join("\n\n"); alert("📝 " + chat.title + "\n\n" + content); }
 
   async function addKeyToUser() {
     if (!selectedUser || !newKeyValue.trim()) { alert("❌ اختر مستخدم وأدخل المفتاح"); return; }
-    await supabase.from('user_keys').insert({ 
-      user_id: selectedUser.id, 
-      key_value: newKeyValue.trim(), 
-      key_name: newKeyName || 'مفتاح API', 
-      key_type: newKeyType,
-      daily_limit: newKeyLimit, 
-      used_today: 0, 
-      is_active: true 
-    });
-    alert("✅ تم إضافة المفتاح"); 
-    setShowAddKeyModal(false); 
-    setNewKeyName(""); 
-    setNewKeyValue(""); 
-    setNewKeyType("groq"); 
-    setNewKeyLimit(5000); 
-    loadAllKeys();
+    await supabase.from('user_keys').insert({ user_id: selectedUser.id, key_value: newKeyValue.trim(), key_name: newKeyName || 'مفتاح API', daily_limit: newKeyLimit, used_today: 0, is_active: true });
+    alert("✅ تم إضافة المفتاح"); setShowAddKeyModal(false); setNewKeyName(""); setNewKeyValue(""); setNewKeyLimit(5000); loadAllKeys();
   }
 
   async function deleteKey(keyId) { if (!window.confirm("متأكد؟")) return; await supabase.from('user_keys').delete().eq('id', keyId); loadAllKeys(); }
@@ -82,44 +53,30 @@ export default function Admin({ user, onLogout }) {
     setEditDailyLimit(userData.daily_limit || 5000);
     setEditCooldown(userData.cooldown_seconds || 3);
     setEditSmartMode(userData.smart_mode !== false);
-    setEditModel(userData.selected_model || 'llama-3.1-8b-instant');
     setShowEditUserModal(true);
   }
 
   async function saveUserSettings() {
     if (!selectedUser) return;
-    await supabase.from('profiles').update({ rate_limit_rpm: editRateLimitRPM, rate_limit_tpm: editRateLimitTPM, daily_limit: editDailyLimit, cooldown_seconds: editCooldown, smart_mode: editSmartMode, selected_model: editModel }).eq('id', selectedUser.id);
+    await supabase.from('profiles').update({ rate_limit_rpm: editRateLimitRPM, rate_limit_tpm: editRateLimitTPM, daily_limit: editDailyLimit, cooldown_seconds: editCooldown, smart_mode: editSmartMode }).eq('id', selectedUser.id);
     alert("✅ تم حفظ الإعدادات"); setShowEditUserModal(false); loadUsers();
   }
 
   return (
     <div className="admin-page">
       <div className="admin-header">
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <span style={{ fontSize: "30px" }}>🖤</span>
-          <div>
-            <h1 style={{ fontSize: "24px", margin: 0 }}>لوحة التحكم</h1>
-            <p style={{ opacity: 0.6, margin: "4px 0 0 0", fontSize: "14px" }}>👑 {user.name}</p>
-          </div>
-        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}><span style={{ fontSize: "30px" }}>🖤</span><div><h1 style={{ fontSize: "24px", margin: 0 }}>لوحة التحكم</h1><p style={{ opacity: 0.6, margin: "4px 0 0 0", fontSize: "14px" }}>👑 {user.name}</p></div></div>
         <button onClick={onLogout} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", padding: "10px 20px", borderRadius: "10px", fontSize: "14px" }}>تسجيل خروج</button>
       </div>
-
       <div className="admin-tabs">
-        {[{ id: "users", label: "👥 المستخدمين" }, { id: "keys", label: "🔑 المفاتيح" }, { id: "chats", label: "💬 المحادثات" }].map(function(tab) {
-          return (
-            <button key={tab.id} onClick={function() { setActiveTab(tab.id); }} className={"admin-tab" + (activeTab === tab.id ? " active" : "")}>
-              {tab.label}
-            </button>
-          );
-        })}
+        {[{ id: "users", label: "👥 المستخدمين" }, { id: "keys", label: "🔑 المفاتيح" }, { id: "chats", label: "💬 المحادثات" }].map(function(tab) { return <button key={tab.id} onClick={function() { setActiveTab(tab.id); }} className={"admin-tab" + (activeTab === tab.id ? " active" : "")}>{tab.label}</button>; })}
       </div>
 
       {activeTab === "users" && (
         <div className="admin-table-wrapper">
           <h2 style={{ marginBottom: "20px" }}>👥 قائمة المستخدمين</h2>
           <table className="admin-table">
-            <thead><tr><th>المستخدم</th><th>النموذج</th><th>محادثات</th><th>مفاتيح</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>المستخدم</th><th>محادثات</th><th>مفاتيح</th><th>الحالة</th><th>إجراءات</th></tr></thead>
             <tbody>
               {users.map(function(u) {
                 const chatCount = getUserChats(u.id).length;
@@ -127,7 +84,6 @@ export default function Admin({ user, onLogout }) {
                 return (
                   <tr key={u.id}>
                     <td><strong>{u.name}</strong><br/><span style={{ fontSize: "11px", opacity: 0.5 }}>{u.email}</span></td>
-                    <td>{u.selected_model === 'llama-3.3-70b-versatile' ? '🟣 ذكي' : '🟢 سريع'}</td>
                     <td><button onClick={function() { viewUserChats(u.id, u.name); }} className="admin-btn admin-badge-yellow">💬 {chatCount}</button></td>
                     <td><span className="admin-badge admin-badge-purple">🔑 {keyCount}</span></td>
                     <td><span className={"admin-badge " + (u.is_blocked ? "admin-badge-red" : "admin-badge-green")}>{u.is_blocked ? "محظور" : "نشط"}</span></td>
@@ -146,12 +102,9 @@ export default function Admin({ user, onLogout }) {
 
       {activeTab === "keys" && (
         <div className="admin-table-wrapper">
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
-            <h2 style={{ margin: 0 }}>🔑 مفاتيح API</h2>
-            <button onClick={function() { setSelectedUser(null); setShowAddKeyModal(true); }} style={{ padding: "10px 20px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>➕ إضافة</button>
-          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}><h2 style={{ margin: 0 }}>🔑 مفاتيح API</h2><button onClick={function() { setSelectedUser(null); setShowAddKeyModal(true); }} style={{ padding: "10px 20px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>➕ إضافة</button></div>
           <table className="admin-table">
-            <thead><tr><th>المستخدم</th><th>النوع</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>المستخدم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>إجراءات</th></tr></thead>
             <tbody>
               {userKeys.map(function(key) {
                 const keyUser = getUserById(key.user_id);
@@ -159,15 +112,11 @@ export default function Admin({ user, onLogout }) {
                 return (
                   <tr key={key.id}>
                     <td>{keyUser?.name || "غير معروف"}</td>
-                    <td><span className={"admin-badge " + (key.key_type === 'gemini' ? "admin-badge-yellow" : "admin-badge-purple")}>{key.key_type === 'gemini' ? '🟡 Gemini' : '🔵 Groq'}</span></td>
                     <td style={{ fontSize: "12px" }}>{key.key_name}<br/><span style={{ fontFamily: "monospace", opacity: 0.5 }}>{key.key_value.slice(0, 20)}...</span></td>
                     <td><div>{key.used_today.toLocaleString()}</div><div style={{ width: "80px", height: "3px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", marginTop: "4px" }}><div style={{ width: pct + "%", height: "100%", background: pct < 50 ? "#4ade80" : "#f87171", borderRadius: "2px" }} /></div></td>
                     <td>{key.daily_limit.toLocaleString()}</td>
                     <td><button onClick={function() { toggleKeyStatus(key.id, key.is_active); }} className={"admin-badge " + (key.is_active ? "admin-badge-green" : "admin-badge-red")}>{key.is_active ? "نشط" : "معطل"}</button></td>
-                    <td style={{ display: "flex", gap: "6px" }}>
-                      <button onClick={function() { resetKeyUsage(key.id); }} className="admin-btn" style={{ background: "rgba(251,191,36,0.2)", color: "#fbbf24" }}>🔄</button>
-                      <button onClick={function() { deleteKey(key.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171" }}>🗑️</button>
-                    </td>
+                    <td style={{ display: "flex", gap: "6px" }}><button onClick={function() { resetKeyUsage(key.id); }} className="admin-btn" style={{ background: "rgba(251,191,36,0.2)", color: "#fbbf24" }}>🔄</button><button onClick={function() { deleteKey(key.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171" }}>🗑️</button></td>
                   </tr>
                 );
               })}
@@ -179,9 +128,7 @@ export default function Admin({ user, onLogout }) {
       {activeTab === "chats" && (
         <div className="admin-table-wrapper">
           <h2 style={{ marginBottom: "20px" }}>💬 كل المحادثات</h2>
-          {allChats.length === 0 ? (
-            <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات حالياً</div>
-          ) : (
+          {allChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات</div> : (
             <table className="admin-table">
               <thead><tr><th>المستخدم</th><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
               <tbody>
@@ -193,10 +140,7 @@ export default function Admin({ user, onLogout }) {
                       <td style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.title}</td>
                       <td>{chat.messages?.length || 0} رسالة</td>
                       <td style={{ fontSize: "13px", opacity: 0.6 }}>{formatDate(chat.updated_at)}</td>
-                      <td style={{ display: "flex", gap: "6px" }}>
-                        <button onClick={function() { viewChatContent(chat); }} className="admin-btn" style={{ background: "rgba(108,92,231,0.2)", color: "#a29bfe" }}>👁️</button>
-                        <button onClick={function() { deleteChat(chat.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171" }}>🗑️</button>
-                      </td>
+                      <td style={{ display: "flex", gap: "6px" }}><button onClick={function() { viewChatContent(chat); }} className="admin-btn" style={{ background: "rgba(108,92,231,0.2)", color: "#a29bfe" }}>👁️</button><button onClick={function() { deleteChat(chat.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171" }}>🗑️</button></td>
                     </tr>
                   );
                 })}
@@ -207,72 +151,34 @@ export default function Admin({ user, onLogout }) {
       )}
 
       {showChatViewer && (
-        <div className="admin-modal">
-          <div className="admin-modal-content">
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
-              <h3>💬 محادثات {viewingUserName}</h3>
-              <button onClick={function() { setShowChatViewer(false); }} className="close-btn">✕</button>
-            </div>
-            {viewingChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات</div> : viewingChats.map(function(chat) { return (
-              <div key={chat.id} style={{ padding: "12px", marginBottom: "8px", background: "rgba(255,255,255,0.03)", borderRadius: "10px", cursor: "pointer" }} onClick={function() { viewChatContent(chat); }}>
-                <div style={{ fontWeight: 500, marginBottom: "4px" }}>{chat.title}</div>
-                <div style={{ fontSize: "12px", opacity: 0.5 }}>{formatDate(chat.updated_at)} · {chat.messages?.length || 0} رسالة</div>
-              </div>
-            ); })}
-          </div>
-        </div>
+        <div className="admin-modal"><div className="admin-modal-content">
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}><h3>💬 محادثات {viewingUserName}</h3><button onClick={function() { setShowChatViewer(false); }} className="close-btn">✕</button></div>
+          {viewingChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات</div> : viewingChats.map(function(chat) { return <div key={chat.id} style={{ padding: "12px", marginBottom: "8px", background: "rgba(255,255,255,0.03)", borderRadius: "10px", cursor: "pointer" }} onClick={function() { viewChatContent(chat); }}><div style={{ fontWeight: 500, marginBottom: "4px" }}>{chat.title}</div><div style={{ fontSize: "12px", opacity: 0.5 }}>{formatDate(chat.updated_at)} · {chat.messages?.length || 0} رسالة</div></div>; })}
+        </div></div>
       )}
 
       {showAddKeyModal && (
-        <div className="admin-modal">
-          <div className="admin-modal-content">
-            <h3 style={{ marginBottom: "20px" }}>➕ إضافة مفتاح API</h3>
-            <select className="admin-select" value={selectedUser?.id || ""} onChange={function(e) { setSelectedUser(users.find(function(u) { return u.id === e.target.value; })); }}>
-              <option value="">اختر مستخدم...</option>
-              {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name} ({u.email})</option>; })}
-            </select>
-            
-            {/* ✅ اختيار نوع المفتاح */}
-            <label style={{ fontSize: "14px", opacity: 0.7, display: "block", marginBottom: "8px" }}>نوع المفتاح</label>
-            <select className="admin-select" value={newKeyType} onChange={function(e) { setNewKeyType(e.target.value); }}>
-              <option value="groq">🔵 Groq</option>
-              <option value="gemini">🟡 Gemini</option>
-            </select>
-
-            <input className="admin-input" type="text" placeholder="اسم المفتاح" value={newKeyName} onChange={function(e) { setNewKeyName(e.target.value); }} />
-            <input className="admin-input" type="text" placeholder={newKeyType === 'gemini' ? 'AIzaSy... (Gemini API Key)' : 'gsk_xxxxxxxxxxxx (Groq API Key)'} value={newKeyValue} onChange={function(e) { setNewKeyValue(e.target.value); }} style={{ fontFamily: "monospace" }} />
-            <input className="admin-input" type="number" placeholder="الحد اليومي" value={newKeyLimit} onChange={function(e) { setNewKeyLimit(parseInt(e.target.value) || 0); }} />
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={addKeyToUser} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}>✅ إضافة</button>
-              <button onClick={function() { setShowAddKeyModal(false); }} className="admin-btn" style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "#e0e0e0", border: "1px solid rgba(255,255,255,0.1)", padding: "12px", borderRadius: "10px", fontSize: "14px" }}>إلغاء</button>
-            </div>
-          </div>
-        </div>
+        <div className="admin-modal"><div className="admin-modal-content">
+          <h3 style={{ marginBottom: "20px" }}>➕ إضافة مفتاح API</h3>
+          <select className="admin-select" value={selectedUser?.id || ""} onChange={function(e) { setSelectedUser(users.find(function(u) { return u.id === e.target.value; })); }}><option value="">اختر مستخدم...</option>{users.map(function(u) { return <option key={u.id} value={u.id}>{u.name} ({u.email})</option>; })}</select>
+          <input className="admin-input" type="text" placeholder="اسم المفتاح" value={newKeyName} onChange={function(e) { setNewKeyName(e.target.value); }} />
+          <input className="admin-input" type="text" placeholder="gsk_xxxxxxxxxxxx" value={newKeyValue} onChange={function(e) { setNewKeyValue(e.target.value); }} style={{ fontFamily: "monospace" }} />
+          <input className="admin-input" type="number" placeholder="الحد اليومي" value={newKeyLimit} onChange={function(e) { setNewKeyLimit(parseInt(e.target.value) || 0); }} />
+          <div style={{ display: "flex", gap: "10px" }}><button onClick={addKeyToUser} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}>✅ إضافة</button><button onClick={function() { setShowAddKeyModal(false); }} className="admin-btn" style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "#e0e0e0", border: "1px solid rgba(255,255,255,0.1)", padding: "12px", borderRadius: "10px", fontSize: "14px" }}>إلغاء</button></div>
+        </div></div>
       )}
 
       {showEditUserModal && selectedUser && (
-        <div className="admin-modal">
-          <div className="admin-modal-content">
-            <h3 style={{ marginBottom: "20px" }}>⚙️ إعدادات {selectedUser.name}</h3>
-            <select className="admin-select" value={editModel} onChange={function(e) { setEditModel(e.target.value); }}>
-              <option value="llama-3.1-8b-instant">🟢 سريع</option>
-              <option value="llama-3.3-70b-versatile">🟣 ذكي</option>
-            </select>
-            <input className="admin-input" type="number" value={editRateLimitRPM} onChange={function(e) { setEditRateLimitRPM(parseInt(e.target.value) || 1); }} placeholder="RPM" />
-            <input className="admin-input" type="number" value={editRateLimitTPM} onChange={function(e) { setEditRateLimitTPM(parseInt(e.target.value) || 100); }} placeholder="TPM" />
-            <input className="admin-input" type="number" value={editDailyLimit} onChange={function(e) { setEditDailyLimit(parseInt(e.target.value) || 1000); }} placeholder="حد يومي" />
-            <input className="admin-input" type="number" value={editCooldown} onChange={function(e) { setEditCooldown(parseInt(e.target.value) || 1); }} placeholder="تبريد (ثواني)" />
-            <label style={{ fontSize: "14px", opacity: 0.7, display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", cursor: "pointer" }}>
-              <input type="checkbox" checked={editSmartMode} onChange={function(e) { setEditSmartMode(e.target.checked); }} style={{ width: "20px", height: "20px", cursor: "pointer" }} />
-              🧠 توزيع ذكي
-            </label>
-            <div style={{ display: "flex", gap: "10px" }}>
-              <button onClick={saveUserSettings} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}>💾 حفظ</button>
-              <button onClick={function() { setShowEditUserModal(false); }} className="admin-btn" style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "#e0e0e0", border: "1px solid rgba(255,255,255,0.1)", padding: "12px", borderRadius: "10px", fontSize: "14px" }}>إلغاء</button>
-            </div>
-          </div>
-        </div>
+        <div className="admin-modal"><div className="admin-modal-content">
+          <h3 style={{ marginBottom: "20px" }}>⚙️ إعدادات {selectedUser.name}</h3>
+          <input className="admin-input" type="number" value={editRateLimitRPM} onChange={function(e) { setEditRateLimitRPM(parseInt(e.target.value) || 1); }} placeholder="RPM" />
+          <input className="admin-input" type="number" value={editRateLimitTPM} onChange={function(e) { setEditRateLimitTPM(parseInt(e.target.value) || 100); }} placeholder="TPM" />
+          <input className="admin-input" type="number" value={editDailyLimit} onChange={function(e) { setEditDailyLimit(parseInt(e.target.value) || 1000); }} placeholder="حد يومي" />
+          <input className="admin-input" type="number" value={editCooldown} onChange={function(e) { setEditCooldown(parseInt(e.target.value) || 1); }} placeholder="تبريد (ثواني)" />
+          <label style={{ fontSize: "14px", opacity: 0.7, display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px", cursor: "pointer" }}><input type="checkbox" checked={editSmartMode} onChange={function(e) { setEditSmartMode(e.target.checked); }} style={{ width: "20px", height: "20px", cursor: "pointer" }} />🧠 توزيع ذكي</label>
+          <div style={{ display: "flex", gap: "10px" }}><button onClick={saveUserSettings} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}>💾 حفظ</button><button onClick={function() { setShowEditUserModal(false); }} className="admin-btn" style={{ flex: 1, background: "rgba(255,255,255,0.05)", color: "#e0e0e0", border: "1px solid rgba(255,255,255,0.1)", padding: "12px", borderRadius: "10px", fontSize: "14px" }}>إلغاء</button></div>
+        </div></div>
       )}
     </div>
   );
-                                                                    }
+}
