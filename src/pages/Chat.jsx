@@ -3,41 +3,7 @@ import "../App.css";
 import MessageContent from "../components/MessageContent";
 import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
-
-const SYSTEM_PROMPT = `اسمك بلاك 🖤
-
-## هويتك:
-- مصري أصيل.
-- تتكلم بالعامية المصرية فقط.
-- ممنوع الفصحى إلا في تعليقات الكود أو الشروحات التعليمية عند الحاجة.
-- لا تقول أبداً أنك AI أو برنامج أو نموذج.
-
-## من أنت:
-أنت شخصية ذكية وصريحة.
-بتساعد، بتشرح، بتناقش، وبتقول رأيك بوضوح.
-هدفك إن صاحبك يفهم ويتطور مش مجرد ياخد إجابة وخلاص.
-
-## شخصيتك:
-- 🖤 صاحب: صريح وبدون مجاملة فارغة.
-- 💻 مبرمج قوي: بتحل المشاكل التقنية باحتراف.
-- 📚 مدرب: بتعلم التفكير قبل الحل.
-- 💪 أخ: بتصحح الغلط باحترام.
-- 😈 منافس: بتحفز صاحبك يتطور ويتحدى نفسه.
-- ❤️ قريب من صاحبه وبيهتم بكلامه ومشاعره.
-- 🧠 مستشار: بتساعد في اتخاذ القرارات وتحليل الخيارات.
-- 😂 مرح: عندك حس فكاهي خفيف في الوقت المناسب.
-
-## أسلوبك:
-- مباشر وواضح.
-- مختصر إلا لو المستخدم طلب تفاصيل.
-- خفيف الدم من غير مبالغة.
-
-## قواعد البرمجة:
-- عند طلب كود، اكتبه داخل code block.
-- فكر في الكود خطوة بخطوة قبل ما تكتبه.
-- الكود لازم يكون كامل وقابل للتشغيل فوراً.
-
-أنت بلاك 🖤`;
+import { SYSTEM_PROMPT, DEFAULT_SETTINGS } from '../config/constants';
 
 function cleanResponse(text) {
   if (!text) return "";
@@ -85,14 +51,7 @@ export default function Chat({ user, onLogout }) {
   const [theme, setTheme] = useState("dark");
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [userSettings, setUserSettings] = useState({
-    rateLimitRPM: 5,
-    rateLimitTPM: 2000,
-    dailyLimit: 5000,
-    cooldownSeconds: 3,
-    smartMode: true,
-    selectedModel: 'llama-3.1-8b-instant'
-  });
+  const [userSettings, setUserSettings] = useState(DEFAULT_SETTINGS);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -121,18 +80,14 @@ export default function Chat({ user, onLogout }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
-  // ✅ حفظ المحادثة كل ما تتغير + حفظ تلقائي كل 10 ثواني
   useEffect(function() {
     if (!isLoaded || messages.length <= 1) return;
-    
     const timer = setTimeout(function() {
       saveChatToSupabase();
     }, 3000);
-    
     return function() { clearTimeout(timer); };
   }, [messages, isLoaded]);
 
-  // ✅ حفظ قبل الخروج من الصفحة
   useEffect(function() {
     function handleBeforeUnload() {
       saveChatToSupabase();
@@ -149,28 +104,36 @@ export default function Chat({ user, onLogout }) {
   }
 
   async function loadUserSettings() {
-    const { data } = await supabase.from('users').select('rate_limit_rpm, rate_limit_tpm, daily_limit, cooldown_seconds, smart_mode, selected_model').eq('id', user.id).single();
-    if (data) {
-      setUserSettings({
-        rateLimitRPM: data.rate_limit_rpm || 5,
-        rateLimitTPM: data.rate_limit_tpm || 2000,
-        dailyLimit: data.daily_limit || 5000,
-        cooldownSeconds: data.cooldown_seconds || 3,
-        smartMode: data.smart_mode !== false,
-        selectedModel: data.selected_model || 'llama-3.1-8b-instant'
-      });
+    try {
+      const { data } = await supabase.from('users').select('rate_limit_rpm, rate_limit_tpm, daily_limit, cooldown_seconds, smart_mode, selected_model').eq('id', user.id).single();
+      if (data) {
+        setUserSettings({
+          rateLimitRPM: data.rate_limit_rpm || DEFAULT_SETTINGS.rateLimitRPM,
+          rateLimitTPM: data.rate_limit_tpm || DEFAULT_SETTINGS.rateLimitTPM,
+          dailyLimit: data.daily_limit || DEFAULT_SETTINGS.dailyLimit,
+          cooldownSeconds: data.cooldown_seconds || DEFAULT_SETTINGS.cooldownSeconds,
+          smartMode: data.smart_mode !== false,
+          selectedModel: data.selected_model || DEFAULT_SETTINGS.selectedModel
+        });
+      }
+    } catch (err) {
+      console.error("❌ loadUserSettings:", err);
     }
   }
 
   async function loadUserKeys() {
-    const { data } = await supabase.from('user_keys').select('*').eq('user_id', user.id).eq('is_active', true);
-    const savedKeys = [];
-    if (data && data.length > 0) {
-      data.forEach(function(key) {
-        savedKeys.push({ id: 'uk-' + key.id, key: key.key_value, used: key.used_today || 0, dailyLimit: key.daily_limit || userSettings.dailyLimit });
-      });
+    try {
+      const { data } = await supabase.from('user_keys').select('*').eq('user_id', user.id).eq('is_active', true);
+      const savedKeys = [];
+      if (data && data.length > 0) {
+        data.forEach(function(key) {
+          savedKeys.push({ id: 'uk-' + key.id, key: key.key_value, used: key.used_today || 0, dailyLimit: key.daily_limit || userSettings.dailyLimit });
+        });
+      }
+      setKeys(savedKeys);
+    } catch (err) {
+      console.error("❌ loadUserKeys:", err);
     }
-    setKeys(savedKeys);
   }
 
   function pickBestKey() {
@@ -290,104 +253,50 @@ export default function Chat({ user, onLogout }) {
     const newSettings = { ...userSettings, selectedModel: modelName };
     setUserSettings(newSettings);
     await supabase.from('users').update({ selected_model: modelName }).eq('id', user.id);
-    alert("✅ تم تغيير النموذج إلى: " + (modelName === 'llama-3.1-8b-instant' ? '🟢 سريع' : '🟣 ذكي'));
+    alert("✅ تم تغيير النموذج");
   }
 
   async function saveKeyUsage(keyId, newUsed) {
-    if (typeof keyId === 'string' && keyId.startsWith('uk-')) {
-      await supabase.from('user_keys').update({ used_today: newUsed }).eq('id', parseInt(keyId.replace('uk-', '')));
-    }
-    const today = new Date().toISOString().slice(0, 10);
-    const { data: existing } = await supabase.from('user_usage').select('*').eq('user_id', user.id).eq('date', today).single();
-    if (existing) { await supabase.from('user_usage').update({ tokens_used: newUsed, updated_at: new Date().toISOString() }).eq('id', existing.id); }
-    else { await supabase.from('user_usage').insert({ user_id: user.id, tokens_used: newUsed, date: today }); }
-  }
-
-  // ✅ دالة حفظ المحادثة في Supabase (محسنة)
-  async function saveChatToSupabase() {
-    const currentMessages = messagesRef.current;
-    if (!currentMessages || currentMessages.length <= 1) return;
-    
-    const firstUserMessage = currentMessages.find(function(m) { return m.role === "user"; });
-    const title = firstUserMessage ? firstUserMessage.content.slice(0, 50) : "محادثة بدون عنوان";
-    const chatId = currentChatIdRef.current;
-    
     try {
-      const { error } = await supabase.from('chats').upsert({ 
-        id: chatId, 
-        user_id: user.id, 
-        user_email: user.email, 
-        title: title, 
-        messages: currentMessages.slice(-40), 
-        updated_at: new Date().toISOString() 
-      });
-      
-      if (error) {
-        console.error("❌ خطأ في حفظ المحادثة:", error);
+      if (typeof keyId === 'string' && keyId.startsWith('uk-')) {
+        await supabase.from('user_keys').update({ used_today: newUsed }).eq('id', parseInt(keyId.replace('uk-', '')));
       }
+      const today = new Date().toISOString().slice(0, 10);
+      const { data: existing } = await supabase.from('user_usage').select('*').eq('user_id', user.id).eq('date', today).single();
+      if (existing) { await supabase.from('user_usage').update({ tokens_used: newUsed, updated_at: new Date().toISOString() }).eq('id', existing.id); }
+      else { await supabase.from('user_usage').insert({ user_id: user.id, tokens_used: newUsed, date: today }); }
     } catch (err) {
-      console.error("❌ خطأ في حفظ المحادثة:", err);
+      console.error("❌ saveKeyUsage:", err);
     }
   }
 
   async function loadChatsFromSupabase() {
     try {
-      const { data: chats, error } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(20);
-      
-      if (error) {
-        console.error("❌ خطأ في تحميل المحادثات:", error);
-        return;
-      }
-      
-      if (chats && chats.length > 0) {
-        setAllChats(chats.map(function(c) { 
-          return { id: c.id, title: c.title || "محادثة", date: c.updated_at, messageCount: c.messages?.length || 0 }; 
-        }));
-      }
+      const { data: chats, error } = await supabase.from('chats').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(20);
+      if (error) { console.error("❌ loadChats:", error); return; }
+      if (chats && chats.length > 0) { setAllChats(chats.map(function(c) { return { id: c.id, title: c.title || "محادثة", date: c.updated_at, messageCount: c.messages?.length || 0 }; })); }
     } catch (err) {
-      console.error("❌ خطأ في تحميل المحادثات:", err);
+      console.error("❌ loadChats:", err);
     }
   }
 
-  async function newChat() { 
-    await saveChatToSupabase();
-    const newId = Date.now().toString();
-    currentChatIdRef.current = newId;
-    setCurrentChatId(newId); 
-    setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); 
-    setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); 
+  async function saveChatToSupabase() {
+    const currentMessages = messagesRef.current;
+    if (!currentMessages || currentMessages.length <= 1) return;
+    const title = currentMessages.find(function(m) { return m.role === "user"; })?.content?.slice(0, 50) || "محادثة";
+    const chatId = currentChatIdRef.current;
+    try {
+      const { error } = await supabase.from('chats').upsert({ id: chatId, user_id: user.id, user_email: user.email, title: title, messages: currentMessages.slice(-40), updated_at: new Date().toISOString() });
+      if (error) console.error("❌ saveChat:", error);
+    } catch (err) {
+      console.error("❌ saveChat:", err);
+    }
   }
 
-  async function openChat(chatId) { 
-    await saveChatToSupabase();
-    const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); 
-    if (data?.messages) { 
-      currentChatIdRef.current = chatId;
-      setCurrentChatId(chatId); 
-      setMessages(data.messages.slice(-40)); 
-    } 
-    setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); 
-  }
-
-  function copyMessage(content, id) { 
-    navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { 
-      const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); 
-      document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); 
-    }); 
-  }
-
-  async function handleFileUpload(e) { 
-    const files = Array.from(e.target.files); if (files.length === 0) return; 
-    const newFiles = []; 
-    for (const file of files) { newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content: await readFileAsText(file) }); } 
-    setAttachedFiles(function(prev) { return [...prev, ...newFiles]; }); inputRef.current?.focus(); 
-  }
-
+  async function newChat() { await saveChatToSupabase(); const newId = Date.now().toString(); currentChatIdRef.current = newId; setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
+  async function openChat(chatId) { await saveChatToSupabase(); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) { currentChatIdRef.current = chatId; setCurrentChatId(chatId); setMessages(data.messages.slice(-40)); } setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); }
+  function copyMessage(content, id) { navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }); }
+  async function handleFileUpload(e) { const files = Array.from(e.target.files); if (files.length === 0) return; const newFiles = []; for (const file of files) { newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content: await readFileAsText(file) }); } setAttachedFiles(function(prev) { return [...prev, ...newFiles]; }); inputRef.current?.focus(); }
   function removeFile(fileId) { setAttachedFiles(function(prev) { return prev.filter(function(f) { return f.id !== fileId; }); }); }
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
