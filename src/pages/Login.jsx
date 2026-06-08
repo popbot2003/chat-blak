@@ -22,7 +22,7 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
 
     try {
       var result = await supabase
-        .from('users')
+        .from('profiles')
         .select('*')
         .eq('email', email)
         .eq('password', password)
@@ -33,7 +33,7 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
       if (result.data.is_blocked) throw new Error("هذا الحساب محظور");
 
       await supabase
-        .from('users')
+        .from('profiles')
         .update({ last_seen: new Date().toISOString() })
         .eq('id', result.data.id);
 
