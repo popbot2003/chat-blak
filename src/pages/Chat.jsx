@@ -5,6 +5,7 @@ import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
 import { SYSTEM_PROMPT, DEFAULT_SETTINGS } from '../config/constants';
 
+// ========== بحث على الإنترنت ==========
 async function searchDuckDuckGo(query) {
   try {
     const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`);
@@ -22,8 +23,7 @@ async function searchDuckDuckGo(query) {
 }
 
 function shouldSearch(text) {
-  const triggers = ["؟", "ايه", "مين", "ازاي", "ليه", "فين", "امتى", "متي", "يعني", "اخر", "جديد", "سعر", "غزوة", "تاريخ", "حدث", "خبر", "معلومة", "عدد", "كم", "تعريف", "معنى", "ما هو", "ما هي", "من هو", "ماذا", "اين", "كيف"];
-  return triggers.some(function(t) { return text.includes(t); });
+  return true; // ✅ بحث دايمًا
 }
 
 function cleanResponse(text) {
@@ -35,15 +35,31 @@ async function readFileAsText(file) {
   return new Promise(function(resolve) {
     const reader = new FileReader();
     reader.onload = function() { resolve(reader.result); };
-    if (file.type.startsWith("image/")) { resolve("🖼️ " + file.name); return; }
+    reader.onerror = function() { resolve("❌ خطأ في قراءة الملف"); };
+    if (file.type.startsWith("image/")) { 
+      reader.readAsDataURL();
+      resolve("🖼️ صورة: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)\n[المستخدم رفع صورة - اسأله عنها]"); 
+      return; 
+    }
+    if (file.type === "application/pdf") {
+      reader.readAsArrayBuffer();
+      resolve("📄 ملف PDF: " + file.name + " (" + (file.size / 1024).toFixed(1) + " KB)\n[المستخدم رفع PDF - محتوى الملف مش مقروء بالكامل]");
+      return;
+    }
     reader.readAsText();
   });
 }
 
 function getFileIcon(file) {
   if (file.type.startsWith("image/")) return "🖼️";
-  if (file.type.includes("javascript")) return "💛";
-  if (file.type.includes("python")) return "🐍";
+  if (file.type === "application/pdf") return "📄";
+  if (file.type.includes("javascript") || file.name.endsWith(".js") || file.name.endsWith(".jsx")) return "💛";
+  if (file.type.includes("python") || file.name.endsWith(".py")) return "🐍";
+  if (file.type.includes("html") || file.name.endsWith(".html")) return "🌐";
+  if (file.type.includes("css") || file.name.endsWith(".css")) return "🎨";
+  if (file.name.endsWith(".json")) return "📋";
+  if (file.name.endsWith(".csv")) return "📊";
+  if (file.name.endsWith(".md")) return "📝";
   return "📎";
 }
 
@@ -63,7 +79,7 @@ export default function Chat({ user, onLogout }) {
   const [currentChatId, setCurrentChatId] = useState(Date.now().toString());
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [messages, setMessages] = useState([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: Date.now() }]);
+  const [messages, setMessages] = useState([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎", id: Date.now() }]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
@@ -142,6 +158,7 @@ export default function Chat({ user, onLogout }) {
     setLoading(true); setStreamingText("");
 
     try {
+      // ✅ بحث + تحسين السؤال
       let enhancedText = text;
       if (shouldSearch(text)) {
         const searchResults = await searchDuckDuckGo(text);
@@ -155,7 +172,7 @@ export default function Chat({ user, onLogout }) {
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
           messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean.slice(-39), { role: "user", content: enhancedText }],
-          temperature: 0.5, max_tokens: 2000, stream: false
+          temperature: 0.3, max_tokens: 2000, stream: false
         }),
       });
 
@@ -194,8 +211,18 @@ export default function Chat({ user, onLogout }) {
   async function sendMessage(overrideText, isRetry) {
     if (loading && !isRetry) return;
     const text = (overrideText || input).trim();
-    if (!text && !isRetry) return;
-    executeRequest(text, isRetry);
+    if (!text && attachedFiles.length === 0 && !isRetry) return;
+    
+    // ✅ رفع ملفات - إضافة محتوى الملفات للرسالة
+    let finalText = text;
+    if (attachedFiles.length > 0) {
+      const filesContent = attachedFiles.map(function(f) {
+        return "\n\n📎 **" + f.name + "** (" + (f.size / 1024).toFixed(1) + " KB)\n```\n" + f.content + "\n```";
+      }).join("\n");
+      finalText = (text || "الملفات المرفقة:") + filesContent;
+    }
+    
+    executeRequest(finalText, isRetry);
   }
 
   async function saveKeyUsage(keyId, newUsed) {
@@ -227,8 +254,44 @@ export default function Chat({ user, onLogout }) {
   async function newChat() { await saveChatToSupabase(); const id = Date.now().toString(); currentChatIdRef.current = id; setCurrentChatId(id); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
   async function openChat(chatId) { await saveChatToSupabase(); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) { currentChatIdRef.current = chatId; setCurrentChatId(chatId); setMessages(data.messages.slice(-40)); } setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); }
   function copyMessage(content, id) { navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }); }
-  async function handleFileUpload(e) { const files = Array.from(e.target.files); if (files.length === 0) return; const nf = []; for (const f of files) { nf.push({ id: Date.now() + Math.random(), name: f.name, type: f.type, size: f.size, icon: getFileIcon(f), content: await readFileAsText(f) }); } setAttachedFiles(function(p) { return [...p, ...nf]; }); inputRef.current?.focus(); }
-  function removeFile(fid) { setAttachedFiles(function(p) { return p.filter(function(f) { return f.id !== fid; }); }); }
+  
+  // ✅ رفع ملفات - محسن
+  async function handleFileUpload(e) {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    setLoading(true);
+    const newFiles = [];
+    
+    for (const file of files) {
+      try {
+        const content = await readFileAsText(file);
+        newFiles.push({ 
+          id: Date.now() + Math.random(), 
+          name: file.name, 
+          type: file.type, 
+          size: file.size, 
+          icon: getFileIcon(file), 
+          content: content 
+        });
+      } catch (err) {
+        newFiles.push({ 
+          id: Date.now() + Math.random(), 
+          name: file.name, 
+          type: file.type, 
+          size: file.size, 
+          icon: "❌", 
+          content: "خطأ في قراءة الملف" 
+        });
+      }
+    }
+    
+    setAttachedFiles(function(prev) { return [...prev, ...newFiles]; });
+    setLoading(false);
+    inputRef.current?.focus();
+  }
+  
+  function removeFile(fileId) { setAttachedFiles(function(prev) { return prev.filter(function(f) { return f.id !== fileId; }); }); }
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
   const totalLimit = keys.reduce(function(s, k) { return s + k.dailyLimit; }, 0);
@@ -266,10 +329,10 @@ export default function Chat({ user, onLogout }) {
       </div>
       {attachedFiles.length > 0 && (<div style={{ display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap" }}>{attachedFiles.map(function(f) { return <div key={f.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(108,92,231,0.15)", borderRadius: "10px", padding: "6px 10px", fontSize: "12px" }}><span>{f.icon}</span><span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span><button onClick={function() { removeFile(f.id); }} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>✕</button></div>; })}</div>)}
       <div className="input-area">
-        <button onClick={function() { fileInputRef.current?.click(); }} className="header-btn" style={{ fontSize: "20px" }}>📎</button>
-        <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.pdf,image/*" />
-        <textarea ref={inputRef} value={input} onChange={function(e) { setInput(e.target.value); }} onKeyDown={handleKeyDown} placeholder={loading ? "بلاك بيكتب..." : "اكتب لبلاك..."} rows={1} className="textarea" disabled={loading && !streamingText} />
-        <button onClick={function() { sendMessage(); }} className="send-btn" style={{ opacity: !input.trim() || loading ? 0.4 : 1, background: loading ? "#f87171" : "" }}>{loading ? "⏳" : "↑"}</button>
+        <button onClick={function() { fileInputRef.current?.click(); }} className="header-btn" title="رفع ملفات" style={{ fontSize: "20px", padding: "8px" }}>📎</button>
+        <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.env,.gitignore,.pdf,image/*" />
+        <textarea ref={inputRef} value={input} onChange={function(e) { setInput(e.target.value); }} onKeyDown={handleKeyDown} placeholder={loading ? "بلاك بيكتب..." : attachedFiles.length > 0 ? "اكتب سؤالك عن الملفات..." : "اكتب لبلاك..."} rows={1} className="textarea" disabled={loading && !streamingText} />
+        <button onClick={function() { sendMessage(); }} className="send-btn" style={{ opacity: (!input.trim() && attachedFiles.length === 0) || loading ? 0.4 : 1, background: loading ? "#f87171" : "" }}>{loading ? "⏳" : "↑"}</button>
       </div>
     </div>
   );
