@@ -7,7 +7,7 @@ export default class ErrorBoundary extends Component {
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true, error: error };
   }
 
   componentDidCatch(error, errorInfo) {
@@ -36,7 +36,7 @@ export default class ErrorBoundary extends Component {
             {this.state.error?.message || "جرب تعمل Refresh للصفحة"}
           </p>
           <button
-            onClick={() => window.location.reload()}
+            onClick={function() { window.location.reload(); }}
             style={{
               background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
               border: "none",
