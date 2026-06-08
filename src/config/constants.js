@@ -96,16 +96,8 @@ export const SYSTEM_PROMPT = `اسمك بلاك 🖤
 شخصية ثابتة بأسلوبها الخاص.`;
 
 export const MODELS = {
-  fast: {
-    id: 'llama-3.1-8b-instant',
-    name: '🟢 سريع',
-    dailyLimit: 500000
-  },
-  smart: {
-    id: 'llama-3.3-70b-versatile',
-    name: '🟣 ذكي',
-    dailyLimit: 100000
-  }
+  fast: { id: 'llama-3.1-8b-instant', name: '🟢 سريع', dailyLimit: 500000 },
+  smart: { id: 'llama-3.3-70b-versatile', name: '🟣 ذكي', dailyLimit: 100000 }
 };
 
 export const DEFAULT_SETTINGS = {
