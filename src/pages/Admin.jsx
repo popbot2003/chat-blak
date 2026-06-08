@@ -25,7 +25,7 @@ export default function Admin({ user, onLogout }) {
 
   async function loadUsers() { const { data } = await supabase.from('profiles').select('*').order('created_at', { ascending: false }); if (data) setUsers(data); }
   async function loadAllKeys() { const { data } = await supabase.from('user_keys').select('*').order('created_at', { ascending: false }); if (data) setUserKeys(data); }
-  async function loadAllChats() { const { data } = await supabase.from('chats').select('*').order('updated_at', { ascending: false }).limit(100); if (data) setAllChats(data); }
+  async function loadAllChats() { const { data } = await supabase.from('chats').select('*').order('updated_at', { ascending: false }).limit(200); if (data) setAllChats(data); }
 
   function getUserKeys(userId) { return userKeys.filter(function(key) { return key.user_id === userId; }); }
   function getUserChats(userId) { return allChats.filter(function(chat) { return chat.user_id === userId; }); }
@@ -127,25 +127,43 @@ export default function Admin({ user, onLogout }) {
 
       {activeTab === "chats" && (
         <div className="admin-table-wrapper">
-          <h2 style={{ marginBottom: "20px" }}>💬 كل المحادثات</h2>
-          {allChats.length === 0 ? <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات</div> : (
-            <table className="admin-table">
-              <thead><tr><th>المستخدم</th><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
-              <tbody>
-                {allChats.map(function(chat) {
-                  const chatUser = getUserById(chat.user_id);
-                  return (
-                    <tr key={chat.id}>
-                      <td>{chatUser?.name || "غير معروف"}</td>
-                      <td style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.title}</td>
-                      <td>{chat.messages?.length || 0} رسالة</td>
-                      <td style={{ fontSize: "13px", opacity: 0.6 }}>{formatDate(chat.updated_at)}</td>
-                      <td style={{ display: "flex", gap: "6px" }}><button onClick={function() { viewChatContent(chat); }} className="admin-btn" style={{ background: "rgba(108,92,231,0.2)", color: "#a29bfe" }}>👁️</button><button onClick={function() { deleteChat(chat.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171" }}>🗑️</button></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <h2 style={{ marginBottom: "20px" }}>💬 محادثات المستخدمين</h2>
+          {users.length === 0 ? (
+            <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش مستخدمين</div>
+          ) : (
+            users.map(function(u) {
+              const userChatsList = getUserChats(u.id);
+              if (userChatsList.length === 0) return null;
+              return (
+                <div key={u.id} style={{ marginBottom: "24px", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "12px", padding: "14px", background: "rgba(255,255,255,0.02)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                    <h3 style={{ margin: 0, fontSize: "15px" }}>👤 {u.name || "مستخدم"} <span style={{ fontSize: "11px", opacity: 0.5 }}>({u.email})</span></h3>
+                    <span className="admin-badge admin-badge-yellow">💬 {userChatsList.length} محادثة</span>
+                  </div>
+                  <table className="admin-table">
+                    <thead><tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
+                    <tbody>
+                      {userChatsList.map(function(chat) {
+                        return (
+                          <tr key={chat.id}>
+                            <td style={{ maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.title}</td>
+                            <td>{chat.messages?.length || 0} رسالة</td>
+                            <td style={{ fontSize: "12px", opacity: 0.6 }}>{formatDate(chat.updated_at)}</td>
+                            <td style={{ display: "flex", gap: "6px" }}>
+                              <button onClick={function() { viewChatContent(chat); }} className="admin-btn" style={{ background: "rgba(108,92,231,0.2)", color: "#a29bfe" }}>👁️</button>
+                              <button onClick={function() { deleteChat(chat.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171" }}>🗑️</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })
+          )}
+          {users.every(function(u) { return getUserChats(u.id).length === 0; }) && (
+            <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات لأي مستخدم</div>
           )}
         </div>
       )}
