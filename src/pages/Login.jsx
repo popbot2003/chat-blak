@@ -1,39 +1,49 @@
 import { useState } from "react";
 import { supabase } from '../lib/supabase';
+import { validateEmail, validatePassword } from '../utils/validators';
 
-export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPassword }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+export default function Login({ onLogin, onRegister, onForgot }) {
+  var [email, setEmail] = useState("");
+  var [password, setPassword] = useState("");
+  var [error, setError] = useState("");
+  var [loading, setLoading] = useState(false);
 
   async function handleLogin(e) {
     e.preventDefault();
-    setLoading(true);
     setError("");
+    
+    var emailCheck = validateEmail(email);
+    if (!emailCheck.valid) { setError("❌ " + emailCheck.error); return; }
+    
+    var passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) { setError("❌ " + passwordCheck.error); return; }
+    
+    setLoading(true);
 
-    const { data, error: loginError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single();
+    try {
+      var result = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
 
-    if (loginError || !data) {
-      setError("❌ البريد الإلكتروني أو كلمة المرور غير صحيحة");
+      if (result.error) throw new Error("البريد أو كلمة المرور غير صحيحة");
+      if (!result.data) throw new Error("المستخدم غير موجود");
+      if (result.data.is_blocked) throw new Error("هذا الحساب محظور");
+
+      await supabase
+        .from('users')
+        .update({ last_seen: new Date().toISOString() })
+        .eq('id', result.data.id);
+
+      localStorage.setItem("black-user", JSON.stringify(result.data));
+      onLogin(result.data);
+    } catch (err) {
+      setError("❌ " + err.message);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    if (data.is_blocked) {
-      setError("🚫 هذا الحساب محظور");
-      setLoading(false);
-      return;
-    }
-
-    await supabase.from('users').update({ last_seen: new Date().toISOString() }).eq('id', data.id);
-    localStorage.setItem("black-user", JSON.stringify(data));
-    onLogin(data);
   }
 
   return (
@@ -55,8 +65,8 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
           </button>
         </form>
 
-        <button onClick={onSwitchToForgotPassword} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "13px", marginBottom: "10px", display: "block", width: "100%" }}>نسيت كلمة المرور؟</button>
-        <button onClick={onSwitchToRegister} style={{ background: "transparent", border: "none", color: "#a29bfe", cursor: "pointer", fontSize: "14px" }}>ليس لديك حساب؟ إنشاء حساب جديد</button>
+        <button onClick={onForgot} style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: "13px", marginBottom: "10px", display: "block", width: "100%" }}>نسيت كلمة المرور؟</button>
+        <button onClick={onRegister} style={{ background: "transparent", border: "none", color: "#a29bfe", cursor: "pointer", fontSize: "14px" }}>ليس لديك حساب؟ إنشاء حساب جديد</button>
       </div>
     </div>
   );
