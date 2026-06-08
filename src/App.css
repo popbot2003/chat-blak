@@ -9,7 +9,9 @@ html, body {
   height: 100%;
   overflow: hidden;
   background: #0f0f1a;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
@@ -260,7 +262,7 @@ html, body {
 .bubble {
   padding: 10px 14px;
   border-radius: 16px;
-  line-height: 1.5;
+  line-height: 1.6;
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 14px;
@@ -317,7 +319,7 @@ html, body {
   font-size: 11px;
 }
 
-.code-lang { opacity: 0.6; font-family: monospace; }
+.code-lang { opacity: 0.6; font-family: 'Fira Code', monospace; }
 
 .code-copy-btn {
   background: rgba(255,255,255,0.1);
@@ -532,14 +534,14 @@ html, body {
 }
 
 /* ================================================
-   صفحة Admin - تجاوب كامل مع كل الأجهزة
+   صفحة Admin
    ================================================ */
 .admin-page {
   min-height: 100vh;
   min-height: 100dvh;
   background: #0f0f1a;
   color: #e0e0e0;
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: inherit;
   padding: 12px;
   overflow-x: hidden;
   width: 100%;
@@ -695,4 +697,4 @@ html, body {
 @media (max-width: 400px) {
   .admin-tab { padding: 6px 4px; font-size: 10px; }
   .admin-table { min-width: 400px; font-size: 10px; }
-  }
+}
