@@ -220,6 +220,7 @@ body {
   flex-direction: column;
   gap: 12px;
   -webkit-overflow-scrolling: touch;
+  min-height: 0;
 }
 
 .messages::-webkit-scrollbar { width: 4px; }
@@ -232,6 +233,7 @@ body {
   align-items: flex-end;
   gap: 6px;
   max-width: 100%;
+  min-width: 0;
 }
 
 .msg-row-user { justify-content: flex-end; }
@@ -242,6 +244,8 @@ body {
   flex-direction: column;
   gap: 2px;
   max-width: 90%;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .msg-row-user .msg-content-wrapper { align-items: flex-end; }
@@ -268,6 +272,9 @@ body {
   word-break: break-word;
   overflow-wrap: anywhere;
   font-size: 14px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .bubble-user {
@@ -331,12 +338,15 @@ body {
   border-radius: 6px;
   font-size: 11px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .code-pre {
   background: rgba(0,0,0,0.4);
   padding: 10px;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 400px;
   direction: ltr;
   text-align: left;
   margin: 0;
@@ -358,6 +368,8 @@ body {
   padding: 10px;
   border-radius: 8px;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 400px;
   margin: 6px 0;
   font-size: 12px;
   direction: ltr;
@@ -366,10 +378,13 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+.light .bubble pre { background: #1e1e2e; color: #e0e0e0; }
+
 .bubble code {
   font-family: 'Fira Code', 'Cascadia Code', monospace;
   font-size: 12px;
-                   }
+  white-space: pre;
+}
 
 /* ========== الاقتراحات ========== */
 .suggestions {
@@ -531,6 +546,9 @@ body {
   .input-area { padding: 8px 12px; gap: 6px; min-height: 54px; }
   .textarea { font-size: 16px; padding: 8px 12px; }
   .send-btn { width: 36px; height: 36px; font-size: 16px; }
+
+  .code-pre { max-height: 300px; font-size: 11px; }
+  .code-content { font-size: 11px; }
 }
 
 /* ========== موبايل صغير ========== */
@@ -558,4 +576,8 @@ body {
   .send-btn { width: 32px; height: 32px; font-size: 14px; }
 
   .menu-item { padding: 8px 12px; font-size: 12px; }
+
+  .code-pre { max-height: 250px; font-size: 10px; }
+  .code-content { font-size: 10px; }
 }
+
