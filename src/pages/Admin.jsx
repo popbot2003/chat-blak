@@ -50,6 +50,13 @@ export default function Admin({ user, onLogout }) {
   async function toggleKeyStatus(keyId, status) { await supabase.from('user_keys').update({ is_active: !status }).eq('id', keyId); loadAllKeys(); }
   async function resetKeyUsage(keyId) { await supabase.from('user_keys').update({ used_today: 0 }).eq('id', keyId); loadAllKeys(); }
   async function deleteChat(chatId) { if (!window.confirm("حذف المحادثة؟")) return; await supabase.from('chats').delete().eq('id', chatId); loadAllChats(); }
+  async function deleteAllUserChats(userId, userName) {
+    if (!window.confirm("حذف كل محادثات " + userName + "؟ هيتحذف كل حاجة!")) return;
+    await supabase.from('chats').delete().eq('user_id', userId);
+    setSelectedChatUser(null);
+    loadAllChats();
+    alert("✅ تم حذف كل المحادثات");
+  }
 
   function openEditUser(userData) {
     setSelectedUser(userData);
@@ -150,6 +157,11 @@ export default function Admin({ user, onLogout }) {
                       >
                         {u.is_blocked ? "فك" : "حظر"}
                       </button>
+                      <button
+                        onClick={function () { deleteAllUserChats(u.id, u.name); }}
+                        className="admin-btn admin-btn-red"
+                        title="حذف كل المحادثات"
+                      >🗑️ محادثات</button>
                     </td>
                   </tr>
                 );
@@ -292,6 +304,10 @@ export default function Admin({ user, onLogout }) {
                         👤 {chatUser?.name || "مستخدم"}
                         <span className="chat-user-email">({chatUser?.email})</span>
                         <span className="admin-badge admin-badge-yellow">💬 {userChatsList.length}</span>
+                        <button
+                          onClick={function () { deleteAllUserChats(selectedChatUser, chatUser?.name || "المستخدم"); }}
+                          className="admin-btn admin-btn-red"
+                        >🗑️ حذف الكل</button>
                       </h3>
                       {userChatsList.length === 0 ? (
                         <div className="admin-empty">📭 مفيش محادثات</div>
@@ -400,4 +416,3 @@ export default function Admin({ user, onLogout }) {
     </div>
   );
 }
-
