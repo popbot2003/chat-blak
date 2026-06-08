@@ -13,6 +13,7 @@ export default function Admin({ user, onLogout }) {
   const [viewingUserName, setViewingUserName] = useState("");
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyValue, setNewKeyValue] = useState("");
+  const [newKeyType, setNewKeyType] = useState("groq");
   const [newKeyLimit, setNewKeyLimit] = useState(5000);
   const [allChats, setAllChats] = useState([]);
 
@@ -51,8 +52,22 @@ export default function Admin({ user, onLogout }) {
 
   async function addKeyToUser() {
     if (!selectedUser || !newKeyValue.trim()) { alert("❌ اختر مستخدم وأدخل المفتاح"); return; }
-    await supabase.from('user_keys').insert({ user_id: selectedUser.id, key_value: newKeyValue.trim(), key_name: newKeyName || 'مفتاح API', daily_limit: newKeyLimit, used_today: 0, is_active: true });
-    alert("✅ تم إضافة المفتاح"); setShowAddKeyModal(false); loadAllKeys();
+    await supabase.from('user_keys').insert({ 
+      user_id: selectedUser.id, 
+      key_value: newKeyValue.trim(), 
+      key_name: newKeyName || 'مفتاح API', 
+      key_type: newKeyType,
+      daily_limit: newKeyLimit, 
+      used_today: 0, 
+      is_active: true 
+    });
+    alert("✅ تم إضافة المفتاح"); 
+    setShowAddKeyModal(false); 
+    setNewKeyName(""); 
+    setNewKeyValue(""); 
+    setNewKeyType("groq"); 
+    setNewKeyLimit(5000); 
+    loadAllKeys();
   }
 
   async function deleteKey(keyId) { if (!window.confirm("متأكد؟")) return; await supabase.from('user_keys').delete().eq('id', keyId); loadAllKeys(); }
@@ -136,7 +151,7 @@ export default function Admin({ user, onLogout }) {
             <button onClick={function() { setSelectedUser(null); setShowAddKeyModal(true); }} style={{ padding: "10px 20px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>➕ إضافة</button>
           </div>
           <table className="admin-table">
-            <thead><tr><th>المستخدم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>إجراءات</th></tr></thead>
+            <thead><tr><th>المستخدم</th><th>النوع</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>إجراءات</th></tr></thead>
             <tbody>
               {userKeys.map(function(key) {
                 const keyUser = getUserById(key.user_id);
@@ -144,6 +159,7 @@ export default function Admin({ user, onLogout }) {
                 return (
                   <tr key={key.id}>
                     <td>{keyUser?.name || "غير معروف"}</td>
+                    <td><span className={"admin-badge " + (key.key_type === 'gemini' ? "admin-badge-yellow" : "admin-badge-purple")}>{key.key_type === 'gemini' ? '🟡 Gemini' : '🔵 Groq'}</span></td>
                     <td style={{ fontSize: "12px" }}>{key.key_name}<br/><span style={{ fontFamily: "monospace", opacity: 0.5 }}>{key.key_value.slice(0, 20)}...</span></td>
                     <td><div>{key.used_today.toLocaleString()}</div><div style={{ width: "80px", height: "3px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", marginTop: "4px" }}><div style={{ width: pct + "%", height: "100%", background: pct < 50 ? "#4ade80" : "#f87171", borderRadius: "2px" }} /></div></td>
                     <td>{key.daily_limit.toLocaleString()}</td>
@@ -215,8 +231,16 @@ export default function Admin({ user, onLogout }) {
               <option value="">اختر مستخدم...</option>
               {users.map(function(u) { return <option key={u.id} value={u.id}>{u.name} ({u.email})</option>; })}
             </select>
+            
+            {/* ✅ اختيار نوع المفتاح */}
+            <label style={{ fontSize: "14px", opacity: 0.7, display: "block", marginBottom: "8px" }}>نوع المفتاح</label>
+            <select className="admin-select" value={newKeyType} onChange={function(e) { setNewKeyType(e.target.value); }}>
+              <option value="groq">🔵 Groq</option>
+              <option value="gemini">🟡 Gemini</option>
+            </select>
+
             <input className="admin-input" type="text" placeholder="اسم المفتاح" value={newKeyName} onChange={function(e) { setNewKeyName(e.target.value); }} />
-            <input className="admin-input" type="text" placeholder="gsk_xxxxxxxxxxxx" value={newKeyValue} onChange={function(e) { setNewKeyValue(e.target.value); }} style={{ fontFamily: "monospace" }} />
+            <input className="admin-input" type="text" placeholder={newKeyType === 'gemini' ? 'AIzaSy... (Gemini API Key)' : 'gsk_xxxxxxxxxxxx (Groq API Key)'} value={newKeyValue} onChange={function(e) { setNewKeyValue(e.target.value); }} style={{ fontFamily: "monospace" }} />
             <input className="admin-input" type="number" placeholder="الحد اليومي" value={newKeyLimit} onChange={function(e) { setNewKeyLimit(parseInt(e.target.value) || 0); }} />
             <div style={{ display: "flex", gap: "10px" }}>
               <button onClick={addKeyToUser} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontSize: "14px", fontWeight: "bold" }}>✅ إضافة</button>
@@ -251,4 +275,4 @@ export default function Admin({ user, onLogout }) {
       )}
     </div>
   );
-}
+                                                                    }
