@@ -756,3 +756,250 @@ html, body {
   .admin-user-chat-card .admin-table { min-width: 300px; font-size: 10px; }
 }
 
+/* ================================================
+   Admin — مكونات إضافية (بديل الـ inline styles)
+   ================================================ */
+
+/* الهيدر الداخلي */
+.admin-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-header-icon {
+  font-size: 30px;
+}
+
+.admin-header-title {
+  font-size: 24px;
+  margin: 0;
+}
+
+.admin-header-sub {
+  opacity: 0.6;
+  margin: 4px 0 0 0;
+  font-size: 14px;
+}
+
+.admin-logout-btn {
+  background: rgba(248,113,113,0.2);
+  color: #f87171;
+  border: 1px solid rgba(248,113,113,0.3);
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+/* قسم المفاتيح — رأس */
+.admin-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.admin-section-head h2 { margin: 0; }
+
+.admin-add-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+/* شريط تقدم الاستهلاك */
+.key-usage-bar {
+  width: 80px;
+  height: 3px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  margin-top: 4px;
+}
+
+.key-usage-fill {
+  height: 100%;
+  border-radius: 2px;
+}
+
+.key-usage-fill.low  { background: #4ade80; }
+.key-usage-fill.high { background: #f87171; }
+
+/* خلية مفتاح مونو */
+.key-mono {
+  font-family: monospace;
+  opacity: 0.5;
+  font-size: 12px;
+}
+
+/* إجراءات الجدول */
+.admin-td-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.admin-td-actions-tight {
+  display: flex;
+  gap: 4px;
+}
+
+/* فلاتر المحادثات */
+.chat-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.chat-filter-btn {
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.6);
+  transition: all 0.2s;
+}
+
+.chat-filter-btn.active {
+  background: rgba(108,92,231,0.3);
+  color: #a29bfe;
+  border-color: rgba(108,92,231,0.5);
+}
+
+/* عنوان مستخدم المحادثات */
+.chat-user-title {
+  margin-bottom: 12px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.chat-user-email {
+  font-size: 11px;
+  opacity: 0.5;
+}
+
+/* خلية عنوان المحادثة */
+.chat-title-cell {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* تاريخ */
+.date-cell {
+  font-size: 12px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+/* فارغ */
+.admin-empty {
+  text-align: center;
+  opacity: 0.6;
+  padding: 40px;
+}
+
+/* Overflow wrapper للجداول */
+.admin-overflow-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* المودال — زر أساسي */
+.admin-modal-save-btn {
+  flex: 1;
+  padding: 12px;
+  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  font-family: inherit;
+}
+
+.admin-modal-cancel-btn {
+  flex: 1;
+  padding: 12px;
+  background: rgba(255,255,255,0.05);
+  color: #e0e0e0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  font-family: inherit;
+}
+
+.admin-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* المودال — رأس */
+.admin-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+/* checkbox السمارت مود */
+.admin-smart-label {
+  font-size: 14px;
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+
+.admin-smart-label input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* بطاقة محادثة في المودال */
+.admin-chat-card {
+  padding: 12px;
+  margin-bottom: 8px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.admin-chat-card-title {
+  font-weight: 500;
+  margin-bottom: 4px;
+}
+
+.admin-chat-card-sub {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+/* أزرار الـ actions الملونة */
+.admin-btn-purple { background: rgba(108,92,231,0.2); color: #a29bfe; }
+.admin-btn-yellow { background: rgba(251,191,36,0.2);  color: #fbbf24; }
+.admin-btn-red    { background: rgba(248,113,113,0.2); color: #f87171; }
+.admin-btn-green  { background: rgba(74,222,128,0.2);  color: #4ade80; }
+.admin-btn-icon   { font-size: 10px; }
+
