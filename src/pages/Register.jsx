@@ -17,11 +17,11 @@ export default function Register({ onRegister, onSwitchToLogin }) {
     if (password !== confirmPassword) { setError("❌ كلمة المرور غير متطابقة"); setLoading(false); return; }
     if (password.length < 6) { setError("❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل"); setLoading(false); return; }
 
-    const { data: existingUser } = await supabase.from('users').select('*').eq('email', email).single();
+    const { data: existingUser } = await supabase.from('profiles').select('*').eq('email', email).single();
     if (existingUser) { setError("❌ هذا البريد الإلكتروني مستخدم بالفعل"); setLoading(false); return; }
 
     const newUser = { id: 'user-' + Date.now(), email, password, name: name || 'مستخدم', role: 'user', is_blocked: false, created_at: new Date().toISOString(), last_seen: new Date().toISOString() };
-    const { error: insertError } = await supabase.from('users').insert(newUser);
+    const { error: insertError } = await supabase.from('profiles').insert(newUser);
     if (insertError) { setError("❌ حدث خطأ أثناء إنشاء الحساب"); setLoading(false); return; }
 
     localStorage.setItem("black-user", JSON.stringify(newUser));
