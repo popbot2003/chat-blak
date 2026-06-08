@@ -628,29 +628,29 @@ html, body {
   width: 100%;
   border-collapse: collapse;
   min-width: 600px;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .admin-table th {
-  padding: 10px 8px;
+  padding: 12px 10px;
   text-align: right;
   border-bottom: 1px solid rgba(255,255,255,0.1);
-  font-size: 12px;
+  font-size: 14px;
   white-space: nowrap;
 }
 
 .admin-table td {
-  padding: 8px;
+  padding: 10px;
   border-bottom: 1px solid rgba(255,255,255,0.05);
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .admin-btn {
-  padding: 6px 10px;
+  padding: 7px 12px;
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 13px;
   font-family: inherit;
   white-space: nowrap;
 }
@@ -738,22 +738,24 @@ html, body {
   .admin-page { padding: 8px; }
   .admin-header { padding: 12px; top: 0; }
   .admin-tabs { padding: 4px; gap: 4px; top: 64px; }
-  .admin-tab { padding: 8px 6px; font-size: 11px; min-width: 60px; }
-  .admin-table { min-width: 500px; font-size: 11px; }
-  .admin-table th, .admin-table td { padding: 6px 4px; }
-  .admin-btn { padding: 5px 8px; font-size: 10px; }
+  .admin-tab { padding: 8px 6px; font-size: 13px; min-width: 70px; }
+  .admin-table { min-width: 500px; font-size: 13px; }
+  .admin-table th { padding: 10px 6px; font-size: 13px; }
+  .admin-table td { padding: 8px 6px; font-size: 13px; }
+  .admin-btn { padding: 6px 10px; font-size: 12px; }
   .admin-modal-content { padding: 16px; }
   
   .admin-user-chat-card { padding: 10px; }
-  .admin-user-chat-card .admin-table { min-width: 350px; font-size: 11px; }
+  .admin-user-chat-card .admin-table { min-width: 350px; font-size: 13px; }
   .admin-user-chat-card .admin-table th,
-  .admin-user-chat-card .admin-table td { padding: 5px 3px; font-size: 10px; }
+  .admin-user-chat-card .admin-table td { padding: 7px 4px; font-size: 13px; }
 }
 
 @media (max-width: 400px) {
-  .admin-tab { padding: 6px 4px; font-size: 10px; }
-  .admin-table { min-width: 400px; font-size: 10px; }
-  .admin-user-chat-card .admin-table { min-width: 300px; font-size: 10px; }
+  .admin-tab { padding: 6px 4px; font-size: 12px; }
+  .admin-table { min-width: 400px; font-size: 12px; }
+  .admin-table th, .admin-table td { font-size: 12px; }
+  .admin-user-chat-card .admin-table { min-width: 300px; font-size: 12px; }
 }
 
 /* ================================================
