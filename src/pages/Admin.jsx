@@ -20,6 +20,7 @@ export default function Admin({ user, onLogout }) {
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
   const [editCooldown, setEditCooldown] = useState(3);
   const [editSmartMode, setEditSmartMode] = useState(true);
+  const [selectedChatUser, setSelectedChatUser] = useState(null);
 
   useEffect(function() { loadUsers(); loadAllKeys(); loadAllChats(); }, []);
 
@@ -128,26 +129,67 @@ export default function Admin({ user, onLogout }) {
       {activeTab === "chats" && (
         <div className="admin-table-wrapper">
           <h2 style={{ marginBottom: "20px" }}>💬 محادثات المستخدمين</h2>
+          
           {users.length === 0 ? (
             <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش مستخدمين</div>
           ) : (
-            users.map(function(u) {
-              const userChatsList = getUserChats(u.id);
-              if (userChatsList.length === 0) return null;
-              return (
-                <div key={u.id} className="admin-user-chat-card">
-                  <div className="admin-user-chat-header">
-                    <h3>👤 {u.name || "مستخدم"} <span style={{ fontSize: "11px", opacity: 0.5 }}>({u.email})</span></h3>
-                    <span className="admin-badge admin-badge-yellow">💬 {userChatsList.length} محادثة</span>
-                  </div>
-                  <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <div style={{ display: "flex", gap: "16px", flexDirection: "column" }}>
+              {/* قائمة المستخدمين */}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                <button 
+                  onClick={function() { setSelectedChatUser(null); }}
+                  className="admin-btn"
+                  style={{ 
+                    background: !selectedChatUser ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.05)", 
+                    color: !selectedChatUser ? "#a29bfe" : "rgba(255,255,255,0.6)",
+                    border: !selectedChatUser ? "1px solid rgba(108,92,231,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                    padding: "8px 16px",
+                    borderRadius: "20px",
+                    fontSize: "13px"
+                  }}
+                >
+                  📋 الكل ({allChats.length})
+                </button>
+                {users.map(function(u) {
+                  const count = getUserChats(u.id).length;
+                  if (count === 0) return null;
+                  const isActive = selectedChatUser === u.id;
+                  return (
+                    <button
+                      key={u.id}
+                      onClick={function() { setSelectedChatUser(u.id); }}
+                      className="admin-btn"
+                      style={{
+                        background: isActive ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.05)",
+                        color: isActive ? "#a29bfe" : "rgba(255,255,255,0.6)",
+                        border: isActive ? "1px solid rgba(108,92,231,0.5)" : "1px solid rgba(255,255,255,0.1)",
+                        padding: "8px 16px",
+                        borderRadius: "20px",
+                        fontSize: "13px"
+                      }}
+                    >
+                      👤 {u.name} ({count})
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* المحادثات */}
+              {!selectedChatUser ? (
+                // عرض كل المحادثات
+                allChats.length === 0 ? (
+                  <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات</div>
+                ) : (
+                  <div style={{ overflowX: "auto" }}>
                     <table className="admin-table" style={{ minWidth: "400px" }}>
-                      <thead><tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
+                      <thead><tr><th>المستخدم</th><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
                       <tbody>
-                        {userChatsList.map(function(chat) {
+                        {allChats.map(function(chat) {
+                          const chatUser = getUserById(chat.user_id);
                           return (
                             <tr key={chat.id}>
-                              <td style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.title}</td>
+                              <td>{chatUser?.name || "غير معروف"}</td>
+                              <td style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.title}</td>
                               <td>{chat.messages?.length || 0}</td>
                               <td style={{ fontSize: "12px", opacity: 0.6, whiteSpace: "nowrap" }}>{formatDate(chat.updated_at)}</td>
                               <td style={{ display: "flex", gap: "4px" }}>
@@ -160,12 +202,48 @@ export default function Admin({ user, onLogout }) {
                       </tbody>
                     </table>
                   </div>
-                </div>
-              );
-            })
-          )}
-          {users.every(function(u) { return getUserChats(u.id).length === 0; }) && (
-            <div style={{ textAlign: "center", opacity: 0.6, padding: "40px" }}>📭 مفيش محادثات لأي مستخدم</div>
+                )
+              ) : (
+                // عرض محادثات مستخدم واحد
+                (function() {
+                  const userChatsList = getUserChats(selectedChatUser);
+                  const chatUser = getUserById(selectedChatUser);
+                  return (
+                    <div>
+                      <h3 style={{ marginBottom: "12px", fontSize: "15px" }}>
+                        👤 {chatUser?.name || "مستخدم"} 
+                        <span style={{ fontSize: "11px", opacity: 0.5, marginRight: "8px" }}>({chatUser?.email})</span>
+                        <span className="admin-badge admin-badge-yellow" style={{ marginRight: "8px" }}>💬 {userChatsList.length}</span>
+                      </h3>
+                      {userChatsList.length === 0 ? (
+                        <div style={{ textAlign: "center", opacity: 0.6, padding: "20px" }}>📭 مفيش محادثات</div>
+                      ) : (
+                        <div style={{ overflowX: "auto" }}>
+                          <table className="admin-table" style={{ minWidth: "400px" }}>
+                            <thead><tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
+                            <tbody>
+                              {userChatsList.map(function(chat) {
+                                return (
+                                  <tr key={chat.id}>
+                                    <td style={{ maxWidth: "150px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{chat.title}</td>
+                                    <td>{chat.messages?.length || 0}</td>
+                                    <td style={{ fontSize: "12px", opacity: 0.6, whiteSpace: "nowrap" }}>{formatDate(chat.updated_at)}</td>
+                                    <td style={{ display: "flex", gap: "4px" }}>
+                                      <button onClick={function() { viewChatContent(chat); }} className="admin-btn" style={{ background: "rgba(108,92,231,0.2)", color: "#a29bfe", fontSize: "10px" }}>👁️</button>
+                                      <button onClick={function() { deleteChat(chat.id); }} className="admin-btn" style={{ background: "rgba(248,113,113,0.2)", color: "#f87171", fontSize: "10px" }}>🗑️</button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
           )}
         </div>
       )}
