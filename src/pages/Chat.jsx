@@ -104,11 +104,42 @@ export default function Chat({ user, onLogout }) {
   const userSettingsRef = useRef(userSettings);
   const queueRef = useRef([]);
   const processingRef = useRef(false);
+  const messagesRef = useRef(messages);
+  const currentChatIdRef = useRef(currentChatId);
 
   useEffect(function() { keysRef.current = keys; }, [keys]);
   useEffect(function() { userSettingsRef.current = userSettings; }, [userSettings]);
-  useEffect(function() { loadAllData(); inputRef.current?.focus(); }, []);
-  useEffect(function() { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingText]);
+  useEffect(function() { messagesRef.current = messages; }, [messages]);
+  useEffect(function() { currentChatIdRef.current = currentChatId; }, [currentChatId]);
+  
+  useEffect(function() {
+    loadAllData();
+    inputRef.current?.focus();
+  }, []);
+
+  useEffect(function() {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, streamingText]);
+
+  // ✅ حفظ المحادثة كل ما تتغير + حفظ تلقائي كل 10 ثواني
+  useEffect(function() {
+    if (!isLoaded || messages.length <= 1) return;
+    
+    const timer = setTimeout(function() {
+      saveChatToSupabase();
+    }, 3000);
+    
+    return function() { clearTimeout(timer); };
+  }, [messages, isLoaded]);
+
+  // ✅ حفظ قبل الخروج من الصفحة
+  useEffect(function() {
+    function handleBeforeUnload() {
+      saveChatToSupabase();
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
+  }, [isLoaded]);
 
   async function loadAllData() {
     await loadUserSettings();
@@ -191,7 +222,7 @@ export default function Chat({ user, onLogout }) {
       processingRef.current = false; processQueue(); return;
     }
     const userMsg = { role: "user", content: text, id: Date.now() };
-    const updated = isRetry ? messages : [...messages, userMsg];
+    const updated = isRetry ? messagesRef.current : [...messagesRef.current, userMsg];
     if (!isRetry) { setMessages(updated); setInput(""); setAttachedFiles([]); }
     setLoading(true); setStreamingText("");
     const now = Date.now();
@@ -226,7 +257,15 @@ export default function Chat({ user, onLogout }) {
       let i = 0;
       function type() {
         if (i <= reply.length) { setStreamingText(reply.slice(0, i)); i++; typingTimerRef.current = setTimeout(type, 15); }
-        else { setStreamingText(""); setMessages(function(p) { return [...p, { role: "assistant", content: reply, id: Date.now() }]; }); setLoading(false); setTimeout(function() { inputRef.current?.focus(); }, 100); processingRef.current = false; processQueue(); }
+        else { 
+          setStreamingText(""); 
+          const finalMessages = [...messagesRef.current, { role: "assistant", content: reply, id: Date.now() }];
+          setMessages(finalMessages); 
+          setLoading(false); 
+          setTimeout(function() { inputRef.current?.focus(); }, 100); 
+          processingRef.current = false; 
+          processQueue();
+        }
       }
       type();
       const newUsed = selectedKey.used + realTokens;
@@ -264,21 +303,91 @@ export default function Chat({ user, onLogout }) {
     else { await supabase.from('user_usage').insert({ user_id: user.id, tokens_used: newUsed, date: today }); }
   }
 
-  async function loadChatsFromSupabase() {
-    const { data: chats } = await supabase.from('chats').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(20);
-    if (chats && chats.length > 0) { setAllChats(chats.map(function(c) { return { id: c.id, title: c.title || "محادثة", date: c.updated_at, messageCount: c.messages?.length || 0 }; })); }
-  }
-
+  // ✅ دالة حفظ المحادثة في Supabase (محسنة)
   async function saveChatToSupabase() {
-    if (messages.length <= 1) return;
-    const title = messages.find(function(m) { return m.role === "user"; })?.content?.slice(0, 50) || "محادثة";
-    await supabase.from('chats').upsert({ id: currentChatId, user_id: user.id, user_email: user.email, title: title, messages: messages.slice(-40), updated_at: new Date().toISOString() });
+    const currentMessages = messagesRef.current;
+    if (!currentMessages || currentMessages.length <= 1) return;
+    
+    const firstUserMessage = currentMessages.find(function(m) { return m.role === "user"; });
+    const title = firstUserMessage ? firstUserMessage.content.slice(0, 50) : "محادثة بدون عنوان";
+    const chatId = currentChatIdRef.current;
+    
+    try {
+      const { error } = await supabase.from('chats').upsert({ 
+        id: chatId, 
+        user_id: user.id, 
+        user_email: user.email, 
+        title: title, 
+        messages: currentMessages.slice(-40), 
+        updated_at: new Date().toISOString() 
+      });
+      
+      if (error) {
+        console.error("❌ خطأ في حفظ المحادثة:", error);
+      }
+    } catch (err) {
+      console.error("❌ خطأ في حفظ المحادثة:", err);
+    }
   }
 
-  async function newChat() { if (messages.length > 1) await saveChatToSupabase(); setCurrentChatId(Date.now().toString()); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
-  async function openChat(chatId) { if (messages.length > 1) await saveChatToSupabase(); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) { setCurrentChatId(chatId); setMessages(data.messages.slice(-40)); } setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); }
-  function copyMessage(content, id) { navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }); }
-  async function handleFileUpload(e) { const files = Array.from(e.target.files); if (files.length === 0) return; const newFiles = []; for (const file of files) { newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content: await readFileAsText(file) }); } setAttachedFiles(function(prev) { return [...prev, ...newFiles]; }); inputRef.current?.focus(); }
+  async function loadChatsFromSupabase() {
+    try {
+      const { data: chats, error } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(20);
+      
+      if (error) {
+        console.error("❌ خطأ في تحميل المحادثات:", error);
+        return;
+      }
+      
+      if (chats && chats.length > 0) {
+        setAllChats(chats.map(function(c) { 
+          return { id: c.id, title: c.title || "محادثة", date: c.updated_at, messageCount: c.messages?.length || 0 }; 
+        }));
+      }
+    } catch (err) {
+      console.error("❌ خطأ في تحميل المحادثات:", err);
+    }
+  }
+
+  async function newChat() { 
+    await saveChatToSupabase();
+    const newId = Date.now().toString();
+    currentChatIdRef.current = newId;
+    setCurrentChatId(newId); 
+    setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); 
+    setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); 
+  }
+
+  async function openChat(chatId) { 
+    await saveChatToSupabase();
+    const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); 
+    if (data?.messages) { 
+      currentChatIdRef.current = chatId;
+      setCurrentChatId(chatId); 
+      setMessages(data.messages.slice(-40)); 
+    } 
+    setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); 
+  }
+
+  function copyMessage(content, id) { 
+    navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { 
+      const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); 
+      document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); 
+    }); 
+  }
+
+  async function handleFileUpload(e) { 
+    const files = Array.from(e.target.files); if (files.length === 0) return; 
+    const newFiles = []; 
+    for (const file of files) { newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content: await readFileAsText(file) }); } 
+    setAttachedFiles(function(prev) { return [...prev, ...newFiles]; }); inputRef.current?.focus(); 
+  }
+
   function removeFile(fileId) { setAttachedFiles(function(prev) { return prev.filter(function(f) { return f.id !== fileId; }); }); }
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
@@ -325,8 +434,8 @@ export default function Chat({ user, onLogout }) {
               <button onClick={function() { setShowModelMenu(!showModelMenu); }} className="menu-item">🎯 تغيير النموذج ▸</button>
               {showModelMenu && (
                 <div style={{ paddingRight: "12px", borderLeft: "2px solid rgba(108,92,231,0.3)", marginRight: "8px" }}>
-                  <button onClick={function() { changeModel('llama-3.1-8b-instant'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟢 سريع (8b) - أسرع، استهلاك أقل</button>
-                  <button onClick={function() { changeModel('llama-3.3-70b-versatile'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟣 ذكي (70b) - أذكى، أفضل للبرمجة</button>
+                  <button onClick={function() { changeModel('llama-3.1-8b-instant'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟢 سريع (8b)</button>
+                  <button onClick={function() { changeModel('llama-3.3-70b-versatile'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟣 ذكي (70b)</button>
                 </div>
               )}
               <button onClick={function() { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
