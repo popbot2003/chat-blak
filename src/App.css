@@ -4,28 +4,29 @@
   box-sizing: border-box;
 }
 
-body {
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #0f0f1a;
   font-family: system-ui, -apple-system, sans-serif;
-  background: #1a1a2e;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  direction: rtl;
-  overflow: hidden;
 }
 
 .container {
   width: 100%;
-  max-width: 900px;
-  height: 100vh;
-  height: 100dvh;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  border-radius: 0;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   position: relative;
+  overflow: hidden;
 }
 
 .container.dark { background: #0f0f1a; color: #e0e0e0; }
@@ -36,12 +37,9 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 16px;
+  padding: 12px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
-  position: sticky;
-  top: 0;
-  z-index: 100;
   background: #0f0f1a;
   min-height: 56px;
 }
@@ -143,9 +141,6 @@ body {
 .token-bar {
   padding: 6px 16px;
   flex-shrink: 0;
-  position: sticky;
-  top: 56px;
-  z-index: 99;
   background: #0f0f1a;
 }
 
@@ -183,9 +178,6 @@ body {
   padding: 8px 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
-  position: sticky;
-  top: 86px;
-  z-index: 98;
   background: #0f0f1a;
 }
 
@@ -325,10 +317,7 @@ body {
   font-size: 11px;
 }
 
-.code-lang {
-  opacity: 0.6;
-  font-family: monospace;
-}
+.code-lang { opacity: 0.6; font-family: monospace; }
 
 .code-copy-btn {
   background: rgba(255,255,255,0.1);
@@ -441,9 +430,6 @@ body {
   padding: 10px 16px;
   border-top: 1px solid rgba(255,255,255,0.08);
   flex-shrink: 0;
-  position: sticky;
-  bottom: 0;
-  z-index: 100;
   background: #0f0f1a;
   min-height: 60px;
 }
@@ -457,7 +443,7 @@ body {
   border-radius: 14px;
   padding: 10px 14px;
   color: inherit;
-  font-size: 14px;
+  font-size: 16px;
   resize: none;
   outline: none;
   max-height: 100px;
@@ -487,97 +473,226 @@ body {
 .send-btn:active { transform: scale(0.95); }
 
 /* ========== ديسكتوب ========== */
-@media (min-width: 769px) {
+@media (min-width: 768px) {
   .container {
+    max-width: 900px;
     height: 95vh;
     border-radius: 20px;
-    margin: 0 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }
-  
-  .header { padding: 12px 20px; min-height: 60px; }
+  .header { padding: 14px 20px; min-height: 60px; }
   .avatar { width: 42px; height: 42px; font-size: 20px; }
   .header-name { font-size: 18px; }
   .header-status { font-size: 12px; }
-  .token-bar { padding: 8px 20px; top: 60px; }
-  .search-bar { padding: 10px 20px; top: 92px; }
+  .token-bar { padding: 8px 20px; }
+  .search-bar { padding: 10px 20px; }
   .messages { padding: 16px 20px; gap: 16px; }
   .bubble { padding: 12px 16px; font-size: 14px; }
-  .input-area { padding: 12px 20px; }
+  .input-area { padding: 14px 20px; }
   .msg-content-wrapper { max-width: 85%; }
-}
-
-/* ========== تابلت ========== */
-@media (min-width: 768px) and (max-width: 1024px) {
-  .container { max-width: 100%; border-radius: 0; }
-  .msg-content-wrapper { max-width: 88%; }
 }
 
 /* ========== موبايل ========== */
 @media (max-width: 767px) {
-  .container {
-    height: 100dvh;
-    max-width: 100%;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .header { padding: 8px 12px; min-height: 50px; }
-  .avatar { width: 34px; height: 34px; font-size: 16px; }
+  .header { padding: 10px 14px; min-height: 52px; }
+  .avatar { width: 36px; height: 36px; font-size: 17px; }
   .header-name { font-size: 15px; }
-  .header-status { font-size: 10px; }
-  .header-btn { font-size: 16px; padding: 6px; min-width: 32px; min-height: 32px; }
-
-  .token-bar { padding: 5px 12px; top: 50px; }
+  .header-btn { font-size: 17px; padding: 7px; min-width: 34px; min-height: 34px; }
+  .token-bar { padding: 5px 14px; }
   .token-info { font-size: 10px; }
-
-  .search-bar { padding: 6px 12px; top: 72px; }
-
-  .messages { padding: 10px 12px; gap: 10px; }
-
-  .bubble { padding: 8px 12px; font-size: 13px; }
-
-  .msg-content-wrapper { max-width: 95%; }
-
-  .avatar-small { width: 26px; height: 26px; font-size: 12px; }
-
-  .suggestions { padding: 10px 0; gap: 5px; }
+  .search-bar { padding: 7px 14px; }
+  .messages { padding: 10px 14px; gap: 10px; }
+  .bubble { padding: 9px 13px; font-size: 13px; }
+  .msg-content-wrapper { max-width: 92%; }
+  .avatar-small { width: 27px; height: 27px; font-size: 13px; }
+  .suggestions { padding: 12px 0; gap: 5px; }
   .chip { font-size: 12px; padding: 7px 12px; }
-
-  .input-area { padding: 8px 12px; gap: 6px; min-height: 54px; }
-  .textarea { font-size: 16px; padding: 8px 12px; }
-  .send-btn { width: 36px; height: 36px; font-size: 16px; }
-
-  .code-pre { max-height: 300px; font-size: 11px; }
-  .code-content { font-size: 11px; }
+  .input-area { padding: 8px 14px; gap: 7px; min-height: 56px; }
+  .textarea { font-size: 16px; padding: 9px 13px; }
+  .send-btn { width: 38px; height: 38px; font-size: 17px; }
 }
 
 /* ========== موبايل صغير ========== */
 @media (max-width: 400px) {
-  .header { padding: 6px 10px; min-height: 46px; }
-  .avatar { width: 30px; height: 30px; font-size: 14px; }
+  .header { padding: 8px 10px; min-height: 48px; }
+  .avatar { width: 32px; height: 32px; font-size: 15px; }
   .header-name { font-size: 14px; }
-  .header-btn { font-size: 14px; padding: 5px; min-width: 28px; min-height: 28px; }
-
-  .token-bar { padding: 4px 10px; top: 46px; }
-  .search-bar { top: 64px; padding: 5px 10px; }
-
+  .header-btn { font-size: 15px; padding: 6px; min-width: 30px; min-height: 30px; }
+  .token-bar { padding: 4px 10px; }
+  .search-bar { padding: 5px 10px; }
   .messages { padding: 8px 10px; gap: 8px; }
-
   .bubble { padding: 7px 10px; font-size: 12px; }
-
-  .msg-content-wrapper { max-width: 98%; }
-
-  .avatar-small { width: 24px; height: 24px; font-size: 11px; }
-
+  .msg-content-wrapper { max-width: 96%; }
+  .avatar-small { width: 24px; height: 24px; font-size: 12px; }
   .chip { font-size: 11px; padding: 6px 10px; }
-
-  .input-area { padding: 6px 10px; gap: 5px; min-height: 48px; }
+  .input-area { padding: 6px 10px; gap: 5px; min-height: 50px; }
   .textarea { font-size: 15px; padding: 7px 10px; }
-  .send-btn { width: 32px; height: 32px; font-size: 14px; }
-
+  .send-btn { width: 34px; height: 34px; font-size: 15px; }
   .menu-item { padding: 8px 12px; font-size: 12px; }
-
-  .code-pre { max-height: 250px; font-size: 10px; }
-  .code-content { font-size: 10px; }
 }
 
+/* ================================================
+   صفحة Admin - تجاوب كامل مع كل الأجهزة
+   ================================================ */
+.admin-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #0f0f1a;
+  color: #e0e0e0;
+  font-family: system-ui, -apple-system, sans-serif;
+  padding: 12px;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100%;
+}
+
+.admin-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #1a1a2e;
+  border-radius: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+  background: #1a1a2e;
+  padding: 6px;
+  border-radius: 12px;
+  flex-wrap: wrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.admin-tab {
+  flex: 1;
+  min-width: 80px;
+  padding: 10px 8px;
+  background: transparent;
+  color: rgba(255,255,255,0.6);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.admin-tab.active {
+  background: rgba(108,92,231,0.2);
+  color: #a29bfe;
+  font-weight: bold;
+}
+
+.admin-table-wrapper {
+  background: #1a1a2e;
+  border-radius: 16px;
+  padding: 12px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px;
+  font-size: 13px;
+}
+
+.admin-table th {
+  padding: 10px 8px;
+  text-align: right;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.admin-table td {
+  padding: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 12px;
+}
+
+.admin-btn {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.admin-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.admin-modal-content {
+  background: #1a1a2e;
+  padding: 20px;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 450px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.admin-input,
+.admin-select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  color: #e0e0e0;
+  border: 1px solid rgba(255,255,255,0.1);
+  font-size: 14px;
+  outline: none;
+  font-family: inherit;
+}
+
+.admin-badge {
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.admin-badge-green { background: rgba(74,222,128,0.1); color: #4ade80; }
+.admin-badge-red { background: rgba(248,113,113,0.1); color: #f87171; }
+.admin-badge-purple { background: rgba(108,92,231,0.2); color: #a29bfe; }
+.admin-badge-yellow { background: rgba(251,191,36,0.2); color: #fbbf24; }
+
+@media (max-width: 767px) {
+  .admin-page { padding: 8px; }
+  .admin-header { padding: 12px; }
+  .admin-tabs { padding: 4px; gap: 4px; }
+  .admin-tab { padding: 8px 6px; font-size: 11px; min-width: 60px; }
+  .admin-table { min-width: 500px; font-size: 11px; }
+  .admin-table th, .admin-table td { padding: 6px 4px; }
+  .admin-btn { padding: 5px 8px; font-size: 10px; }
+  .admin-modal-content { padding: 16px; }
+}
+
+@media (max-width: 400px) {
+  .admin-tab { padding: 6px 4px; font-size: 10px; }
+  .admin-table { min-width: 400px; font-size: 10px; }
+  }
