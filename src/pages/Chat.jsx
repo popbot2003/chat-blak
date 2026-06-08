@@ -5,6 +5,30 @@ import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
 import { SYSTEM_PROMPT, DEFAULT_SETTINGS } from '../config/constants';
 
+// ========== بحث على الإنترنت ==========
+async function searchDuckDuckGo(query) {
+  try {
+    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`);
+    const data = await res.json();
+    const results = [];
+    if (data.Abstract) results.push(data.Abstract);
+    if (data.Answer) results.unshift(data.Answer);
+    if (data.RelatedTopics) {
+      data.RelatedTopics.slice(0, 3).forEach(function(t) {
+        if (t.Text) results.push(t.Text);
+      });
+    }
+    return results.length > 0 ? results.join("\n") : null;
+  } catch (err) {
+    return null;
+  }
+}
+
+function shouldSearch(text) {
+  const triggers = ["؟", "ايه", "مين", "ازاي", "ليه", "فين", "امتى", "متي", "يعني", "اخر", "جديد", "سعر", "غزوة", "تاريخ", "حدث", "خبر", "معلومة", "عدد", "كم", "تعريف", "معنى", "ما هو", "ما هي", "من هو", "ماذا", "اين", "كيف"];
+  return triggers.some(function(t) { return text.includes(t); });
+}
+
 function cleanResponse(text) {
   if (!text) return "";
   return text.replace(/[ \t]+/g, ' ').trim();
@@ -28,36 +52,36 @@ function getFileIcon(file) {
 
 function formatDate(dateString) {
   if (!dateString) return "";
-  const date = new Date(dateString);
-  const now = new Date();
-  const diff = now - date;
+  var date = new Date(dateString);
+  var now = new Date();
+  var diff = now - date;
   if (diff < 60000) return "الآن";
   if (diff < 3600000) return "منذ " + Math.floor(diff / 60000) + " د";
   return date.toLocaleDateString("ar-EG");
 }
 
 export default function Chat({ user, onLogout }) {
-  const [keys, setKeys] = useState([]);
-  const [allChats, setAllChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(Date.now().toString());
-  const [showHistory, setShowHistory] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [messages, setMessages] = useState([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: Date.now() }]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [copiedId, setCopiedId] = useState(null);
-  const [theme, setTheme] = useState("dark");
-  const [attachedFiles, setAttachedFiles] = useState([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [userSettings, setUserSettings] = useState(DEFAULT_SETTINGS);
-  const bottomRef = useRef(null);
-  const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const keysRef = useRef(keys);
-  const typingTimerRef = useRef(null);
-  const messagesRef = useRef(messages);
-  const currentChatIdRef = useRef(currentChatId);
+  var [keys, setKeys] = useState([]);
+  var [allChats, setAllChats] = useState([]);
+  var [currentChatId, setCurrentChatId] = useState(Date.now().toString());
+  var [showHistory, setShowHistory] = useState(false);
+  var [showMenu, setShowMenu] = useState(false);
+  var [messages, setMessages] = useState([{ role: "assistant", content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا.", id: Date.now() }]);
+  var [input, setInput] = useState("");
+  var [loading, setLoading] = useState(false);
+  var [streamingText, setStreamingText] = useState("");
+  var [copiedId, setCopiedId] = useState(null);
+  var [theme, setTheme] = useState("dark");
+  var [attachedFiles, setAttachedFiles] = useState([]);
+  var [isLoaded, setIsLoaded] = useState(false);
+  var [userSettings, setUserSettings] = useState(DEFAULT_SETTINGS);
+  var bottomRef = useRef(null);
+  var inputRef = useRef(null);
+  var fileInputRef = useRef(null);
+  var keysRef = useRef(keys);
+  var typingTimerRef = useRef(null);
+  var messagesRef = useRef(messages);
+  var currentChatIdRef = useRef(currentChatId);
 
   useEffect(function() { keysRef.current = keys; }, [keys]);
   useEffect(function() { messagesRef.current = messages; }, [messages]);
@@ -74,7 +98,7 @@ export default function Chat({ user, onLogout }) {
 
   useEffect(function() {
     if (!isLoaded || messages.length <= 1) return;
-    const timer = setTimeout(function() { saveChatToSupabase(); }, 3000);
+    var timer = setTimeout(function() { saveChatToSupabase(); }, 3000);
     return function() { clearTimeout(timer); };
   }, [messages, isLoaded]);
 
@@ -93,7 +117,7 @@ export default function Chat({ user, onLogout }) {
 
   async function loadUserSettings() {
     try {
-      const { data } = await supabase.from('profiles').select('cooldown_seconds, daily_limit').eq('id', user.id).single();
+      var { data } = await supabase.from('profiles').select('cooldown_seconds, daily_limit').eq('id', user.id).single();
       if (data) {
         setUserSettings({
           ...DEFAULT_SETTINGS,
@@ -106,8 +130,8 @@ export default function Chat({ user, onLogout }) {
 
   async function loadUserKeys() {
     try {
-      const { data } = await supabase.from('user_keys').select('*').eq('user_id', user.id).eq('is_active', true);
-      const savedKeys = [];
+      var { data } = await supabase.from('user_keys').select('*').eq('user_id', user.id).eq('is_active', true);
+      var savedKeys = [];
       if (data && data.length > 0) {
         data.forEach(function(key) {
           savedKeys.push({ 
@@ -124,80 +148,78 @@ export default function Chat({ user, onLogout }) {
   }
 
   function pickBestKey() {
-    const available = keysRef.current.filter(function(k) { return k.used < k.dailyLimit; });
+    var available = keysRef.current.filter(function(k) { return k.used < k.dailyLimit; });
     if (available.length === 0) return null;
     return available[Math.floor(Math.random() * available.length)];
   }
 
-  async function callGemini(key, text, history, model) {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
-          contents: [...history, { role: "user", parts: [{ text: text }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
-        }),
-      }
-    );
-    const data = await res.json();
-    return { ok: res.ok, data: data };
-  }
-
   async function executeRequest(text, isRetry) {
-    const selectedKey = pickBestKey();
+    var selectedKey = pickBestKey();
     if (!selectedKey) {
       setMessages(function(p) { return [...p, { role: "assistant", content: "🚫 خلصت كل المفاتيح النهارده 😅🖤", id: Date.now() }]; });
       return;
     }
 
-    const userMsg = { role: "user", content: text, id: Date.now() };
-    const updated = isRetry ? messagesRef.current : [...messagesRef.current, userMsg];
+    var userMsg = { role: "user", content: text, id: Date.now() };
+    var updated = isRetry ? messagesRef.current : [...messagesRef.current, userMsg];
     if (!isRetry) { setMessages(updated); setInput(""); setAttachedFiles([]); }
     setLoading(true); setStreamingText("");
 
     try {
-      let reply = "";
-      let tokens = 0;
-
-      if (selectedKey.keyType === 'gemini') {
-        const history = updated.slice(0, -1).map(function(m) {
-          return { role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] };
-        });
-
-        // ✅ نحاول Gemini 1.5 Flash الأول (الأكثر توافقاً مع المجاني)
-        let result = await callGemini(selectedKey.key, text, history, 'gemini-1.5-flash');
-        
-        // ✅ لو فشل، نجرب Gemini 2.0 Flash
-        if (!result.ok) {
-          result = await callGemini(selectedKey.key, text, history, 'gemini-2.0-flash');
+      var reply = "";
+      var tokens = 0;
+      
+      // ✅ تحسين السؤال بالبحث على الإنترنت
+      var enhancedText = text;
+      if (shouldSearch(text)) {
+        var searchResults = await searchDuckDuckGo(text);
+        if (searchResults) {
+          enhancedText = text + "\n\n[نتائج البحث من الإنترنت للمساعدة في الإجابة]:\n" + searchResults + "\n\nاستخدم نتائج البحث دي عشان تقدم إجابة دقيقة. لو النتائج مش كافية، قول بصراحة.";
         }
-        
-        if (!result.ok) throw new Error(result.data.error?.message || "خطأ في Gemini");
-        
-        reply = cleanResponse(result.data.candidates?.[0]?.content?.parts?.[0]?.text || "");
-        tokens = Math.ceil((text.length + reply.length) / 4);
-      } else {
-        const clean = updated.map(function(m) { return { role: m.role, content: m.content }; });
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + selectedKey.key },
-          body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
-            messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean.slice(-40)],
-            temperature: 0.7, max_tokens: 2000, stream: false
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error?.message || "خطأ في Groq");
-        reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-        tokens = data.usage?.total_tokens || 500;
       }
 
+      // ✅ Groq API - أفضل نموذج
+      var clean = updated.map(function(m) { return { role: m.role, content: m.content }; });
+      var res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + selectedKey.key },
+        body: JSON.stringify({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            ...clean.slice(-39),
+            { role: "user", content: enhancedText }
+          ],
+          temperature: 0.5,
+          max_tokens: 2000,
+          stream: false
+        }),
+      });
+      
+      var data = await res.json();
+      
+      if (!res.ok) {
+        if (data.error && data.error.code === "rate_limit_exceeded") {
+          var uk = keysRef.current.map(function(k) { return k.id === selectedKey.id ? { ...k, used: k.dailyLimit } : k; });
+          setKeys(uk);
+          await saveKeyUsage(selectedKey.id, selectedKey.dailyLimit);
+          if (isRetry !== true) {
+            setTimeout(function() { executeRequest(text, true); }, 1000);
+            return;
+          }
+          setMessages(function(p) { return [...p, { role: "assistant", content: "كل المفاتيح خلصت النهارده 😅🖤", id: Date.now() }]; });
+          setLoading(false);
+          return;
+        }
+        throw new Error(data.error?.message || "خطأ في Groq");
+      }
+      
+      reply = cleanResponse(data.choices?.[0]?.message?.content || "");
+      tokens = data.usage?.total_tokens || 500;
+
+      // عرض الرد حرف حرف
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
-      let i = 0;
+      var i = 0;
       function type() {
         if (i <= reply.length) { setStreamingText(reply.slice(0, i)); i++; typingTimerRef.current = setTimeout(type, 15); }
         else {
@@ -209,8 +231,8 @@ export default function Chat({ user, onLogout }) {
       }
       type();
 
-      const newUsed = selectedKey.used + tokens;
-      const uk = keysRef.current.map(function(k) { return k.id === selectedKey.id ? { ...k, used: newUsed } : k; });
+      var newUsed = selectedKey.used + tokens;
+      var uk = keysRef.current.map(function(k) { return k.id === selectedKey.id ? { ...k, used: newUsed } : k; });
       setKeys(uk);
       await saveKeyUsage(selectedKey.id, newUsed);
 
@@ -222,7 +244,7 @@ export default function Chat({ user, onLogout }) {
 
   async function sendMessage(overrideText, isRetry) {
     if (loading && !isRetry) return;
-    const text = (overrideText || input).trim();
+    var text = (overrideText || input).trim();
     if (!text && !isRetry) return;
     executeRequest(text, isRetry);
   }
@@ -232,8 +254,8 @@ export default function Chat({ user, onLogout }) {
       if (typeof keyId === 'string' && keyId.startsWith('uk-')) {
         await supabase.from('user_keys').update({ used_today: newUsed }).eq('id', parseInt(keyId.replace('uk-', '')));
       }
-      const today = new Date().toISOString().slice(0, 10);
-      const { data: existing } = await supabase.from('user_usage').select('id').eq('user_id', user.id).eq('date', today).limit(1);
+      var today = new Date().toISOString().slice(0, 10);
+      var { data: existing } = await supabase.from('user_usage').select('id').eq('user_id', user.id).eq('date', today).limit(1);
       if (existing && existing.length > 0) {
         await supabase.from('user_usage').update({ tokens_used: newUsed }).eq('id', existing[0].id);
       } else {
@@ -244,33 +266,33 @@ export default function Chat({ user, onLogout }) {
 
   async function loadChatsFromSupabase() {
     try {
-      const { data: chats } = await supabase.from('chats').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(20);
+      var { data: chats } = await supabase.from('chats').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(20);
       if (chats && chats.length > 0) { setAllChats(chats.map(function(c) { return { id: c.id, title: c.title || "محادثة", date: c.updated_at, messageCount: c.messages?.length || 0 }; })); }
     } catch (err) {}
   }
 
   async function saveChatToSupabase() {
-    const currentMessages = messagesRef.current;
+    var currentMessages = messagesRef.current;
     if (!currentMessages || currentMessages.length <= 1) return;
-    const title = currentMessages.find(function(m) { return m.role === "user"; })?.content?.slice(0, 50) || "محادثة";
+    var title = currentMessages.find(function(m) { return m.role === "user"; })?.content?.slice(0, 50) || "محادثة";
     try {
       await supabase.from('chats').upsert({ id: currentChatIdRef.current, user_id: user.id, title: title, messages: currentMessages.slice(-40), updated_at: new Date().toISOString() });
     } catch (err) {}
   }
 
-  async function newChat() { await saveChatToSupabase(); const newId = Date.now().toString(); currentChatIdRef.current = newId; setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
-  async function openChat(chatId) { await saveChatToSupabase(); const { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) { currentChatIdRef.current = chatId; setCurrentChatId(chatId); setMessages(data.messages.slice(-40)); } setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); }
-  function copyMessage(content, id) { navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { const ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }); }
-  async function handleFileUpload(e) { const files = Array.from(e.target.files); if (files.length === 0) return; const newFiles = []; for (const file of files) { newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content: await readFileAsText(file) }); } setAttachedFiles(function(prev) { return [...prev, ...newFiles]; }); inputRef.current?.focus(); }
+  async function newChat() { await saveChatToSupabase(); var newId = Date.now().toString(); currentChatIdRef.current = newId; setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
+  async function openChat(chatId) { await saveChatToSupabase(); var { data } = await supabase.from('chats').select('*').eq('id', chatId).single(); if (data?.messages) { currentChatIdRef.current = chatId; setCurrentChatId(chatId); setMessages(data.messages.slice(-40)); } setShowHistory(false); setShowMenu(false); setInput(""); setAttachedFiles([]); }
+  function copyMessage(content, id) { navigator.clipboard.writeText(content).then(function() { setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }).catch(function() { var ta = document.createElement("textarea"); ta.value = content; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); setCopiedId(id); setTimeout(function() { setCopiedId(null); }, 2000); }); }
+  async function handleFileUpload(e) { var files = Array.from(e.target.files); if (files.length === 0) return; var newFiles = []; for (var file of files) { newFiles.push({ id: Date.now() + Math.random(), name: file.name, type: file.type, size: file.size, icon: getFileIcon(file), content: await readFileAsText(file) }); } setAttachedFiles(function(prev) { return [...prev, ...newFiles]; }); inputRef.current?.focus(); }
   function removeFile(fileId) { setAttachedFiles(function(prev) { return prev.filter(function(f) { return f.id !== fileId; }); }); }
   function handleKeyDown(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
 
-  const totalLimit = keys.reduce(function(s, k) { return s + k.dailyLimit; }, 0);
-  const totalUsed = keys.reduce(function(s, k) { return s + k.used; }, 0);
-  const tokenPercent = totalLimit > 0 ? ((totalUsed / totalLimit) * 100).toFixed(1) : "0.0";
-  const availKeys = keys.filter(function(k) { return k.used < k.dailyLimit; }).length;
-  const tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
-  const isDark = theme === "dark";
+  var totalLimit = keys.reduce(function(s, k) { return s + k.dailyLimit; }, 0);
+  var totalUsed = keys.reduce(function(s, k) { return s + k.used; }, 0);
+  var tokenPercent = totalLimit > 0 ? ((totalUsed / totalLimit) * 100).toFixed(1) : "0.0";
+  var availKeys = keys.filter(function(k) { return k.used < k.dailyLimit; }).length;
+  var tokenColor = tokenPercent < 50 ? "#4ade80" : tokenPercent < 80 ? "#facc15" : "#f87171";
+  var isDark = theme === "dark";
 
   if (!isLoaded) return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}><div>🖤 جاري التحميل...</div></div>;
 
