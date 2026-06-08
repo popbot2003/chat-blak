@@ -5,6 +5,16 @@ import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
 import { SYSTEM_PROMPT, DEFAULT_SETTINGS } from '../config/constants';
 
+const CODE_SYSTEM_PROMPT = `أنت بلاك، مساعد برمجة متخصص وخبير.
+عند كتابة أي كود:
+- اكتب الكود كامل وقابل للتشغيل فوراً بدون أي اختصار
+- لا تكتب placeholder أو تعليقات زي "// add your logic here"
+- راجع الكود في ذهنك قبل ما تكتبه وتأكد إنه صح
+- اذكر المكتبات المطلوبة صراحة
+- لو الكود طويل، اكتبه كله في بلوك واحد
+- اشرح بشكل مختصر بعد الكود فقط لو لزم
+- ردودك بالعربية والكود بالإنجليزي طبعاً`;
+
 function cleanResponse(text) {
   if (!text) return "";
   return text.replace(/[а-яёА-ЯЁ]+/g, '').replace(/[ \t]+/g, ' ').trim();
@@ -82,16 +92,12 @@ export default function Chat({ user, onLogout }) {
 
   useEffect(function() {
     if (!isLoaded || messages.length <= 1) return;
-    const timer = setTimeout(function() {
-      saveChatToSupabase();
-    }, 3000);
+    const timer = setTimeout(function() { saveChatToSupabase(); }, 3000);
     return function() { clearTimeout(timer); };
   }, [messages, isLoaded]);
 
   useEffect(function() {
-    function handleBeforeUnload() {
-      saveChatToSupabase();
-    }
+    function handleBeforeUnload() { saveChatToSupabase(); }
     window.addEventListener("beforeunload", handleBeforeUnload);
     return function() { window.removeEventListener("beforeunload", handleBeforeUnload); };
   }, [isLoaded]);
@@ -116,9 +122,7 @@ export default function Chat({ user, onLogout }) {
           selectedModel: data.selected_model || DEFAULT_SETTINGS.selectedModel
         });
       }
-    } catch (err) {
-      console.error("❌ loadUserSettings:", err);
-    }
+    } catch (err) { console.error("❌ loadUserSettings:", err); }
   }
 
   async function loadUserKeys() {
@@ -131,9 +135,7 @@ export default function Chat({ user, onLogout }) {
         });
       }
       setKeys(savedKeys);
-    } catch (err) {
-      console.error("❌ loadUserKeys:", err);
-    }
+    } catch (err) { console.error("❌ loadUserKeys:", err); }
   }
 
   function pickBestKey() {
@@ -178,6 +180,14 @@ export default function Chat({ user, onLogout }) {
     executeRequest(nextRequest.text, nextRequest.isRetry);
   }
 
+  function getActiveSystemPrompt() {
+    return userSettingsRef.current.selectedModel === 'code-mode' ? CODE_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  }
+
+  function getActiveModel() {
+    return userSettingsRef.current.selectedModel === 'code-mode' ? 'llama-3.3-70b-versatile' : userSettingsRef.current.selectedModel;
+  }
+
   async function executeRequest(text, isRetry) {
     const selectedKey = pickBestKey();
     if (!selectedKey) {
@@ -197,7 +207,13 @@ export default function Chat({ user, onLogout }) {
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + selectedKey.key },
-        body: JSON.stringify({ model: userSettingsRef.current.selectedModel, messages: [{ role: "system", content: SYSTEM_PROMPT }, ...clean.slice(-40)], temperature: 0.8, max_tokens: 2000, stream: false }),
+        body: JSON.stringify({
+          model: getActiveModel(),
+          messages: [{ role: "system", content: getActiveSystemPrompt() }, ...clean.slice(-40)],
+          temperature: userSettingsRef.current.selectedModel === 'code-mode' ? 0.3 : 0.8,
+          max_tokens: 2000,
+          stream: false
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -220,13 +236,13 @@ export default function Chat({ user, onLogout }) {
       let i = 0;
       function type() {
         if (i <= reply.length) { setStreamingText(reply.slice(0, i)); i++; typingTimerRef.current = setTimeout(type, 15); }
-        else { 
-          setStreamingText(""); 
+        else {
+          setStreamingText("");
           const finalMessages = [...messagesRef.current, { role: "assistant", content: reply, id: Date.now() }];
-          setMessages(finalMessages); 
-          setLoading(false); 
-          setTimeout(function() { inputRef.current?.focus(); }, 100); 
-          processingRef.current = false; 
+          setMessages(finalMessages);
+          setLoading(false);
+          setTimeout(function() { inputRef.current?.focus(); }, 100);
+          processingRef.current = false;
           processQueue();
         }
       }
@@ -265,9 +281,7 @@ export default function Chat({ user, onLogout }) {
       const { data: existing } = await supabase.from('user_usage').select('*').eq('user_id', user.id).eq('date', today).single();
       if (existing) { await supabase.from('user_usage').update({ tokens_used: newUsed, updated_at: new Date().toISOString() }).eq('id', existing.id); }
       else { await supabase.from('user_usage').insert({ user_id: user.id, tokens_used: newUsed, date: today }); }
-    } catch (err) {
-      console.error("❌ saveKeyUsage:", err);
-    }
+    } catch (err) { console.error("❌ saveKeyUsage:", err); }
   }
 
   async function loadChatsFromSupabase() {
@@ -275,9 +289,7 @@ export default function Chat({ user, onLogout }) {
       const { data: chats, error } = await supabase.from('chats').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }).limit(20);
       if (error) { console.error("❌ loadChats:", error); return; }
       if (chats && chats.length > 0) { setAllChats(chats.map(function(c) { return { id: c.id, title: c.title || "محادثة", date: c.updated_at, messageCount: c.messages?.length || 0 }; })); }
-    } catch (err) {
-      console.error("❌ loadChats:", err);
-    }
+    } catch (err) { console.error("❌ loadChats:", err); }
   }
 
   async function saveChatToSupabase() {
@@ -288,15 +300,19 @@ export default function Chat({ user, onLogout }) {
     try {
       const { error } = await supabase.from('chats').upsert({ id: chatId, user_id: user.id, user_email: user.email, title: title, messages: currentMessages.slice(-40), updated_at: new Date().toISOString() });
       if (error) console.error("❌ saveChat:", error);
-    } catch (err) {
-      console.error("❌ saveChat:", err);
-    }
+    } catch (err) { console.error("❌ saveChat:", err); }
   }
 
   function getModelEmoji() {
     if (userSettings.selectedModel === 'llama-3.1-8b-instant') return '🟢';
-    if (userSettings.selectedModel === 'deepseek-r1-distill-llama-70b') return '🔵';
+    if (userSettings.selectedModel === 'code-mode') return '🔵';
     return '🟣';
+  }
+
+  function getModelLabel() {
+    if (userSettings.selectedModel === 'llama-3.1-8b-instant') return '🟢 سريع';
+    if (userSettings.selectedModel === 'code-mode') return '🔵 مبرمج';
+    return '🟣 ذكي';
   }
 
   async function newChat() { await saveChatToSupabase(); const newId = Date.now().toString(); currentChatIdRef.current = newId; setCurrentChatId(newId); setMessages([{ role: "assistant", content: "محادثة جديدة 🖤", id: Date.now() }]); setShowMenu(false); setShowHistory(false); setInput(""); setAttachedFiles([]); }
@@ -345,7 +361,7 @@ export default function Chat({ user, onLogout }) {
             <div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
               <div style={{ padding: "8px 16px", fontSize: "12px", opacity: 0.5 }}>⚙️ إعداداتك</div>
               <div style={{ padding: "4px 16px", fontSize: "11px", opacity: 0.4 }}>
-                🎯 نموذج: {userSettings.selectedModel === 'llama-3.1-8b-instant' ? '🟢 سريع' : userSettings.selectedModel === 'deepseek-r1-distill-llama-70b' ? '🔵 مبرمج' : '🟣 ذكي'}<br/>
+                🎯 نموذج: {getModelLabel()}<br/>
                 ⏱️ تبريد: {userSettings.cooldownSeconds}ث<br/>
                 📊 RPM: {userSettings.rateLimitRPM}<br/>
                 💰 يومي: {userSettings.dailyLimit.toLocaleString()}
@@ -356,7 +372,7 @@ export default function Chat({ user, onLogout }) {
                 <div style={{ paddingRight: "12px", borderLeft: "2px solid rgba(108,92,231,0.3)", marginRight: "8px" }}>
                   <button onClick={function() { changeModel('llama-3.1-8b-instant'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟢 سريع (8b)</button>
                   <button onClick={function() { changeModel('llama-3.3-70b-versatile'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🟣 ذكي (70b)</button>
-                  <button onClick={function() { changeModel('deepseek-r1-distill-llama-70b'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🔵 مبرمج (DeepSeek)</button>
+                  <button onClick={function() { changeModel('code-mode'); setShowModelMenu(false); setShowMenu(false); }} className="menu-item" style={{ fontSize: "13px" }}>🔵 مبرمج (70b + كود)</button>
                 </div>
               )}
               <button onClick={function() { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
@@ -398,7 +414,7 @@ export default function Chat({ user, onLogout }) {
       <div className="input-area">
         <button onClick={function() { fileInputRef.current?.click(); }} className="header-btn" style={{ fontSize: "20px" }}>📎</button>
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.pdf,image/*" />
-        <textarea ref={inputRef} value={input} onChange={function(e) { setInput(e.target.value); }} onKeyDown={handleKeyDown} placeholder={loading ? "بلاك بيكتب..." : "اكتب لبلاك..."} rows={1} className="textarea" disabled={loading && !streamingText} />
+        <textarea ref={inputRef} value={input} onChange={function(e) { setInput(e.target.value); }} onKeyDown={handleKeyDown} placeholder={loading ? "بلاك بيكتب..." : userSettings.selectedModel === 'code-mode' ? "اكتب سؤالك البرمجي..." : "اكتب لبلاك..."} rows={1} className="textarea" disabled={loading && !streamingText} />
         <button onClick={function() { sendMessage(); }} className="send-btn" style={{ opacity: !input.trim() || loading ? 0.4 : 1, background: loading ? "#f87171" : "" }}>{loading ? "⏳" : "↑"}</button>
       </div>
     </div>
