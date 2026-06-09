@@ -27,35 +27,22 @@ export default function Admin({ user, onLogout }) {
 
   // ========== Realtime subscriptions ==========
   useEffect(() => {
-    // الاستماع لتغيرات جدول profiles (استهلاك المستخدمين)
     const profilesChannel = supabase
       .channel('profiles-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles' },
-        (payload) => {
-          console.log("🔄 تحديث ملف تعريف:", payload.new);
-          setUsers(prev => prev.map(u => 
-            u.id === payload.new.id ? { ...u, ...payload.new } : u
-          ));
-        }
-      )
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+        console.log("🔄 تحديث ملف تعريف:", payload.new);
+        setUsers(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u));
+      })
       .subscribe();
 
-    // الاستماع للمحادثات الجديدة
     const chatsChannel = supabase
       .channel('chats-realtime')
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'chats' },
-        (payload) => {
-          console.log("💬 محادثة جديدة:", payload.new);
-          setAllChats(prev => [payload.new, ...prev]);
-        }
-      )
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, (payload) => {
+        console.log("💬 محادثة جديدة:", payload.new);
+        setAllChats(prev => [payload.new, ...prev]);
+      })
       .subscribe();
 
-    // تنظيف الاشتراكات عند إغلاق الصفحة
     return () => {
       profilesChannel.unsubscribe();
       chatsChannel.unsubscribe();
@@ -248,10 +235,10 @@ export default function Admin({ user, onLogout }) {
                       <td className="admin-td-actions">
                         <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow">⚙️</button>
                         <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} className={`admin-btn ${u.is_blocked ? "admin-btn-green" : "admin-btn-red"}`}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
-                        <button onClick={() => deleteUser(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف المستخدم نهائياً">🗑️ حذف</button>
-                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف كل المحادثات">🗑️ محادثات</button>
+                        <button onClick={() => deleteUser(u.id, u.name || u.email)} className="admin-btn admin-btn-red">🗑️ حذف</button>
+                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red">🗑️ محادثات</button>
                       </td>
-                    </table>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -265,7 +252,9 @@ export default function Admin({ user, onLogout }) {
           <div className="admin-section-head"><h2>🔑 مفاتيح API العامة</h2><button onClick={() => setShowAddKeyModal(true)} className="admin-add-btn">➕ إضافة مفتاح</button></div>
           <div className="admin-overflow-x">
             <table className="admin-table">
-              <thead><tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+              <thead>
+                <tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th></tr>
+              </thead>
               <tbody>
                 {apiKeys.map(key => {
                   const percent = (key.used_today / key.daily_limit) * 100;
@@ -299,17 +288,17 @@ export default function Admin({ user, onLogout }) {
                   <tbody>
                     {userChatsList.map(chat => (
                       <tr key={chat.id}>
-                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td
-                        <td>{chat.messages?.length || 0}</td
-                        <td className="date-cell">{formatDate(chat.updated_at)}</td
+                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
+                        <td>{chat.messages?.length || 0}</td>
+                        <td className="date-cell">{formatDate(chat.updated_at)}</td>
                         <td className="admin-td-actions-tight">
                           <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button>
                           <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button>
-                        </td
-                      </tr
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
-                </table
+                </table>
               </div>
             )}
             <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
