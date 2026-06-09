@@ -1,6 +1,6 @@
 // ============================================
 // constants.js
-// الإعدادات العامة والثوابت
+// الإعدادات العامة والثوابت (نسخة محسنة)
 // ============================================
 
 // الحد المبدئي للمستخدم الجديد (توكن/يوم)
@@ -11,11 +11,11 @@ export const DEFAULT_KEY_DAILY_LIMIT = 1000000;
 
 // إعدادات Groq API
 export const GROQ_MODEL = "llama-3.3-70b-versatile";
-export const GROQ_MAX_TOKENS = 2000;
-export const GROQ_TEMPERATURE = 0.3;
+export const GROQ_MAX_TOKENS = 2000;  // ✅ باقي كما هو (مناسب)
+export const GROQ_TEMPERATURE = 0.5;   // ✅ تم التعديل من 0.3 إلى 0.5 (أبدع شوية)
 
 // إعدادات التطبيق
-export const CHAT_HISTORY_LIMIT = 40;
+export const CHAT_HISTORY_LIMIT = 25;   // ✅ تم التعديل من 40 إلى 25 (توفير توكنات)
 export const SAVE_CHAT_DELAY_MS = 3000;
 export const MAX_MESSAGE_LENGTH = 4000;
 
