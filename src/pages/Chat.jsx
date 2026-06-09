@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - النسخة النهائية مع طرد المستخدم
+// Chat.jsx - مع طرد المستخدم عند حذف الحساب
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -108,7 +108,7 @@ export default function Chat({ user, onLogout }) {
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-  // ✅ الاستماع لتغيرات بيانات المستخدم (تحديث تلقائي للاستهلاك)
+  // الاستماع لتغيرات بيانات المستخدم (تحديث تلقائي للاستهلاك)
   useEffect(() => {
     const userChannel = supabase
       .channel('user-updates')
@@ -601,6 +601,7 @@ export default function Chat({ user, onLogout }) {
     setShowHistory(false);
     setInput("");
     setAttachedFiles([]);
+    inputRef.current?.focus();
   }
 
   async function openChat(chatId) {
@@ -619,6 +620,7 @@ export default function Chat({ user, onLogout }) {
     setShowMenu(false);
     setInput("");
     setAttachedFiles([]);
+    inputRef.current?.focus();
   }
 
   function copyMessage(content, id) {
