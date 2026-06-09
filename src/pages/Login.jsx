@@ -1,6 +1,6 @@
 // ============================================
 // Login.jsx
-// صفحة تسجيل الدخول مع زر العين وتحديث آخر دخول
+// صفحة تسجيل الدخول مع التحقق من تأكيد البريد
 // ============================================
 
 import { useState } from "react";
@@ -48,6 +48,11 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         throw new Error("البريد أو كلمة المرور غير صحيحة");
       }
 
+      // ✅ التحقق من أن البريد مؤكد
+      if (!user.is_verified) {
+        throw new Error("❌ لم يتم تأكيد البريد الإلكتروني. تحقق من بريدك.");
+      }
+
       if (user.is_blocked) {
         throw new Error("هذا الحساب محظور");
       }
@@ -63,7 +68,6 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         updatedUser.last_reset_date = today;
       }
 
-      // ✅ تحديث آخر تاريخ دخول
       const today = new Date().toISOString().slice(0, 10);
       await supabase
         .from('profiles')
