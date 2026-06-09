@@ -310,6 +310,50 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
+      {showUserChatsModal && selectedUserForChats && (
+        <div className="admin-modal">
+          <div className="admin-modal-content" style={{ maxWidth: "700px", maxHeight: "80vh", overflowY: "auto" }}>
+            <div className="admin-modal-head">
+              <h3>💬 محادثات {selectedUserForChats.name}</h3>
+              <button onClick={() => setShowUserChatsModal(false)} className="close-btn">✕</button>
+            </div>
+
+            {userChatsList.length === 0 ? (
+              <p style={{ textAlign: "center", opacity: 0.5, marginTop: "30px" }}>لا توجد محادثات</p>
+            ) : (
+              <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                {userChatsList.map(chat => (
+                  <div key={chat.id} style={{ background: "rgba(255,255,255,0.04)", borderRadius: "12px", padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: "14px", marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {chat.title || "محادثة بدون عنوان"}
+                      </div>
+                      <div style={{ fontSize: "11px", opacity: 0.5 }}>
+                        {formatDate(chat.updated_at)} · {chat.messages?.length || 0} رسالة
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+                      <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple">👁️ عرض</button>
+                      <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red">🗑️</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="admin-modal-actions" style={{ marginTop: "20px" }}>
+              <button
+                onClick={() => deleteAllUserChats(selectedUserForChats.id, selectedUserForChats.name)}
+                className="admin-btn admin-btn-red"
+              >
+                🗑️ حذف الكل
+              </button>
+              <button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showChatModal && selectedChat && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "700px", maxHeight: "80vh", overflowY: "auto" }}>
