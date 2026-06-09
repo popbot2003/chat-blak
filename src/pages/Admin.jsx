@@ -137,6 +137,21 @@ export default function Admin({ user, onLogout }) {
     if (selectedUserForChats?.id === userId) setUserChatsList([]);
   }
   
+  // ✅ دالة حذف المستخدم نهائياً (جديدة)
+  async function deleteUser(userId, userName) {
+    if (!confirm(`⚠️ تحذير: هل أنت متأكد من حذف المستخدم "${userName}" نهائياً؟\n\nسيتم حذف:\n- حساب المستخدم بالكامل\n- جميع محادثاته\n\nلا يمكن التراجع!`)) return;
+    
+    try {
+      await supabase.from('chats').delete().eq('user_id', userId);
+      await supabase.from('profiles').delete().eq('id', userId);
+      alert("✅ تم حذف المستخدم نهائياً");
+      loadUsers();
+      loadAllChats();
+    } catch (err) {
+      alert("❌ خطأ في حذف المستخدم: " + err.message);
+    }
+  }
+  
   async function saveUserSettings() {
     if (!selectedUser) return;
     await supabase.from('profiles').update({ daily_limit: editDailyLimit }).eq('id', selectedUser.id);
@@ -171,7 +186,9 @@ export default function Admin({ user, onLogout }) {
           </div>
           <div className="admin-overflow-x">
             <table className="admin-table">
-              <thead><tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+              <thead>
+                <tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الحالة</th><th>الإجراءات</th></tr>
+              </thead>
               <tbody>
                 {filteredUsers.map(u => {
                   const chatCount = getUserChats(u.id).length;
@@ -196,7 +213,9 @@ export default function Admin({ user, onLogout }) {
                       <td className="admin-td-actions">
                         <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow">⚙️</button>
                         <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} className={`admin-btn ${u.is_blocked ? "admin-btn-green" : "admin-btn-red"}`}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
-                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red">🗑️ محادثات</button>
+                        {/* ✅ زر حذف المستخدم نهائياً */}
+                        <button onClick={() => deleteUser(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف المستخدم نهائياً">🗑️ حذف</button>
+                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف كل المحادثات">🗑️ محادثات</button>
                       </td>
                     </tr>
                   );
@@ -244,17 +263,17 @@ export default function Admin({ user, onLogout }) {
                   <tbody>
                     {userChatsList.map(chat => (
                       <tr key={chat.id}>
-                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
-                        <td>{chat.messages?.length || 0}</td>
-                        <td className="date-cell">{formatDate(chat.updated_at)}</td>
+                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td
+                        <td>{chat.messages?.length || 0}</td
+                        <td className="date-cell">{formatDate(chat.updated_at)}</td
                         <td className="admin-td-actions-tight">
                           <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button>
                           <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button>
-                        </td>
-                      </tr>
+                        </td
+                      </tr
                     ))}
                   </tbody>
-                </table>
+                </table
               </div>
             )}
             <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
