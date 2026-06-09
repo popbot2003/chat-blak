@@ -168,8 +168,10 @@ export default function Chat({ user, onLogout }) {
     await loadApiKeys(); 
     await loadChatsFromSupabase();
     await refreshUserData();
-    await loadLastChat();
-    await checkAndShowWelcome();
+    const hasOldChat = await loadLastChat();
+    if (!hasOldChat) {
+      await checkAndShowWelcome();
+    }
     setIsLoaded(true); 
   }
 
@@ -183,9 +185,13 @@ export default function Chat({ user, onLogout }) {
     
     if (data && data.length > 0) {
       const lastChat = data[0];
-      setCurrentChatId(lastChat.id);
-      setMessages(lastChat.messages || []);
+      if (lastChat.messages && lastChat.messages.length > 1) {
+        setCurrentChatId(lastChat.id);
+        setMessages(lastChat.messages);
+        return true;
+      }
     }
+    return false;
   }
 
   async function loadApiKeys() {
