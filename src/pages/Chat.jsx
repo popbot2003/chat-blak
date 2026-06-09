@@ -7,7 +7,8 @@ import "../App.css";
 import MessageContent from "../components/MessageContent";
 import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
-import { SYSTEM_PROMPT, GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TEMPERATURE, CHAT_HISTORY_LIMIT, SAVE_CHAT_DELAY_MS } from '../config/constants';
+import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TEMPERATURE, CHAT_HISTORY_LIMIT, SAVE_CHAT_DELAY_MS } from '../config/constants';
+import { PERSONALITIES, DEFAULT_PERSONALITY } from '../config/personalities';
 import { formatDate, copyToClipboard, getUsagePercent, getUsageColor, isNewDay, debounce } from '../utils/helpers';
 import { checkUserDailyLimit } from '../utils/validators';
 
@@ -523,7 +524,7 @@ export default function Chat({ user, onLogout }) {
         body: JSON.stringify({ 
           model: GROQ_MODEL, 
           messages: [
-            { role: "system", content: SYSTEM_PROMPT }, 
+            { role: "system", content: PERSONALITIES[user?.personality] || PERSONALITIES[DEFAULT_PERSONALITY] },
             ...chatMessages.slice(-CHAT_HISTORY_LIMIT), 
             { role: "user", content: enhancedText }
           ], 
@@ -787,24 +788,26 @@ export default function Chat({ user, onLogout }) {
       </div>
       
       {showHistory && (
-        <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px", maxHeight: "250px", overflowY: "auto" }}>
-          <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "0", padding: "0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
             <strong>📝 السجل</strong>
             <button onClick={() => setShowHistory(false)} className="close-btn">✕</button>
           </div>
-          {allChats.length === 0 ? (
-            <div style={{ textAlign: "center", opacity: 0.6, padding: "10px" }}>مفيش محادثات</div>
-          ) : (
-            allChats.map(c => (
-              <div key={c.id} onClick={() => openChat(c.id)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: c.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)" }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: "14px", fontWeight: 500 }}>{c.title}</div>
-                  <div style={{ fontSize: "11px", opacity: 0.5 }}>{formatDate(c.date)} · {c.messageCount} رسالة</div>
+          <div style={{ overflowY: "auto", maxHeight: "220px", display: "flex", flexDirection: "column", gap: "6px", padding: "8px" }}>
+            {allChats.length === 0 ? (
+              <div style={{ textAlign: "center", opacity: 0.6, padding: "10px" }}>مفيش محادثات</div>
+            ) : (
+              allChats.map(c => (
+                <div key={c.id} onClick={() => openChat(c.id)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: c.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 500 }}>{c.title}</div>
+                    <div style={{ fontSize: "11px", opacity: 0.5 }}>{formatDate(c.date)} · {c.messageCount} رسالة</div>
+                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); supabase.from('chats').delete().eq('id', c.id).then(loadChatsFromSupabase); }} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5 }}>🗑️</button>
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); supabase.from('chats').delete().eq('id', c.id).then(loadChatsFromSupabase); }} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5 }}>🗑️</button>
-              </div>
-            ))
-          )}
+              ))
+            )}
+          </div>
         </div>
       )}
       
