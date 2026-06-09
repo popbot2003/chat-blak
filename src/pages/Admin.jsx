@@ -287,37 +287,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {showUserChatsModal && selectedUserForChats && (
-        <div className="admin-modal">
-          <div className="admin-modal-content" style={{ maxWidth: "800px", maxHeight: "80vh", overflowY: "auto" }}>
-            <div className="admin-modal-head"><h3>💬 محادثات: {selectedUserForChats.name}</h3><button onClick={() => setShowUserChatsModal(false)} className="close-btn">✕</button></div>
-            {userChatsList.length === 0 ? <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>📭 لا توجد محادثات لهذا المستخدم</div> : (
-              <div className="admin-overflow-x">
-                <table className="admin-table">
-                  <thead>
-                    <tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr>
-                  </thead>
-                  <tbody>
-                    {userChatsList.map(chat => (
-                      <tr key={chat.id}>
-                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td
-                        <td>{chat.messages?.length || 0}</td
-                        <td className="date-cell">{formatDate(chat.updated_at)}</td
-                        <td className="admin-td-actions-tight">
-                          <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button>
-                          <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button>
-                        </td
-                      </tr
-                    ))}
-                  </tbody>
-                </table
-              </div>
-            )}
-            <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
-          </div>
-        </div>
-      )}
-      
       {showAddKeyModal && (
         <div className="admin-modal">
           <div className="admin-modal-content">
