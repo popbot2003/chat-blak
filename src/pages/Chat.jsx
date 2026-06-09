@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - النسخة القديمة المستقرة
+// Chat.jsx - النسخة النهائية مع التحديث التلقائي
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -107,6 +107,29 @@ export default function Chat({ user, onLogout }) {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
+  // ✅ الاستماع لتغيرات بيانات المستخدم في قاعدة البيانات (تحديث تلقائي)
+  useEffect(() => {
+    const userChannel = supabase
+      .channel('user-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log("🔄 تحديث بيانات المستخدم:", payload.new);
+          setCurrentUser(payload.new);
+          localStorage.setItem("black-user", JSON.stringify(payload.new));
+        }
+      )
+      .subscribe();
+
+    return () => userChannel.unsubscribe();
+  }, [user.id]);
 
   useEffect(() => { 
     loadAllData(); 
