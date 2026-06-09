@@ -1,7 +1,10 @@
 // ============================================
-// Admin.jsx - نسخة نهائية
-// - تبويبات: المستخدمين + المفاتيح فقط
-// - زر 💬 يفتح مودال محادثات المستخدم
+// Admin.jsx - النسخة النهائية
+// تحتوي على:
+// - إدارة المستخدمين (بحث، استهلاك، حظر، تعديل حد)
+// - إدارة المفاتيح العامة (إضافة، حذف، تفعيل/تعطيل)
+// - استهلاك عام للمفاتيح + استهلاك كل مفتاح على حدة
+// - مودال عرض محادثات المستخدم
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -93,9 +96,16 @@ export default function Admin({ user, onLogout }) {
     );
   });
   
+  // ========== إحصائيات المفاتيح ==========
+  const totalKeysLimit = apiKeys.reduce((sum, key) => sum + (key.daily_limit || 0), 0);
+  const totalKeysUsed = apiKeys.reduce((sum, key) => sum + (key.used_today || 0), 0);
+  const totalKeysPercent = totalKeysLimit > 0 ? (totalKeysUsed / totalKeysLimit) * 100 : 0;
+  const activeKeysCount = apiKeys.filter(key => key.is_active).length;
+  const inactiveKeysCount = apiKeys.filter(key => !key.is_active).length;
+  const keysUsageColor = getUsageColor(totalKeysPercent);
+  
   // ========== دوال عرض محادثات المستخدم ==========
   async function openUserChatsModal(userId, userName) {
-    // جلب محادثات المستخدم من قاعدة البيانات
     const { data } = await supabase
       .from('chats')
       .select('*')
@@ -114,14 +124,13 @@ export default function Admin({ user, onLogout }) {
       .delete()
       .eq('id', chatId);
     if (!error) {
-      // تحديث القائمة
       const { data } = await supabase
         .from('chats')
         .select('*')
         .eq('user_id', selectedUserForChats.id)
         .order('updated_at', { ascending: false });
       setUserChatsList(data || []);
-      loadAllChats(); // تحديث الـ allChats كمان
+      loadAllChats();
     }
   }
   
@@ -240,7 +249,7 @@ export default function Admin({ user, onLogout }) {
         <button onClick={onLogout} className="admin-logout-btn">تسجيل خروج</button>
       </div>
       
-      {/* علامات التبويب - تم حذف تبويب المحادثات */}
+      {/* علامات التبويب */}
       <div className="admin-tabs">
         <button 
           className={`admin-tab ${activeTab === "users" ? "active" : ""}`}
@@ -316,7 +325,7 @@ export default function Admin({ user, onLogout }) {
                             {percent.toFixed(0)}%
                           </div>
                         </div>
-                       </td>
+                      </td>
                       <td>
                         <button
                           onClick={() => openUserChatsModal(u.id, u.name || u.email)}
@@ -325,12 +334,12 @@ export default function Admin({ user, onLogout }) {
                         >
                           💬 {chatCount}
                         </button>
-                       </td>
+                      </td>
                       <td>
                         <span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>
                           {u.is_blocked ? "محظور" : "نشط"}
                         </span>
-                       </td>
+                      </td>
                       <td className="admin-td-actions">
                         <button
                           onClick={() => {
@@ -369,6 +378,34 @@ export default function Admin({ user, onLogout }) {
       {/* ========== تبويب المفاتيح ========== */}
       {activeTab === "keys" && (
         <div className="admin-table-wrapper">
+          {/* كارت الاستهلاك العام */}
+          <div style={{
+            background: "rgba(108,92,231,0.1)",
+            borderRadius: "16px",
+            padding: "16px",
+            marginBottom: "20px",
+            border: "1px solid rgba(108,92,231,0.2)"
+          }}>
+            <h3 style={{ margin: "0 0 10px 0", fontSize: "16px" }}>📊 الاستهلاك العام للمفاتيح</h3>
+            
+            <div style={{ marginBottom: "10px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "5px" }}>
+                <span>{totalKeysUsed.toLocaleString()} / {totalKeysLimit.toLocaleString()} توكن</span>
+                <span style={{ color: keysUsageColor }}>{totalKeysPercent.toFixed(2)}%</span>
+              </div>
+              <div style={{ width: "100%", height: "8px", background: "rgba(255,255,255,0.1)", borderRadius: "4px", overflow: "hidden" }}>
+                <div style={{ width: totalKeysPercent + "%", height: "100%", background: keysUsageColor, transition: "width 0.3s" }} />
+              </div>
+            </div>
+            
+            <div style={{ display: "flex", gap: "20px", fontSize: "12px", opacity: 0.7, flexWrap: "wrap" }}>
+              <span>🔑 نشط: {activeKeysCount}</span>
+              <span>🚫 معطل: {inactiveKeysCount}</span>
+              <span>📊 إجمالي مستهلك: {totalKeysUsed.toLocaleString()}</span>
+              <span>🎯 إجمالي الحد: {totalKeysLimit.toLocaleString()}</span>
+            </div>
+          </div>
+          
           <div className="admin-section-head">
             <h2>🔑 مفاتيح API العامة</h2>
             <button onClick={() => setShowAddKeyModal(true)} className="admin-add-btn">
@@ -384,6 +421,7 @@ export default function Admin({ user, onLogout }) {
                   <th>المفتاح</th>
                   <th>الاستهلاك</th>
                   <th>الحد</th>
+                  <th>النسبة</th>
                   <th>الحالة</th>
                   <th>الإجراءات</th>
                 </tr>
@@ -391,22 +429,31 @@ export default function Admin({ user, onLogout }) {
               <tbody>
                 {apiKeys.map(key => {
                   const percent = (key.used_today / key.daily_limit) * 100;
+                  const usageColor = getUsageColor(percent);
                   return (
                     <tr key={key.id}>
                       <td>{key.key_name || "مفتاح Groq"}</td>
                       <td>
-                        <span className="key-mono">{key.key_value?.slice(0, 20)}...</span>
-                      </td>
+                        <span className="key-mono">{key.key_value?.slice(0, 25)}...</span>
+                      </td
                       <td>
                         <div>{key.used_today?.toLocaleString()}</div>
-                        <div className="key-usage-bar">
+                        <div className="key-usage-bar" style={{ marginTop: "4px", width: "100px" }}>
                           <div
                             className={`key-usage-fill ${percent < 50 ? "low" : "high"}`}
                             style={{ width: Math.min(percent, 100) + "%" }}
                           />
                         </div>
-                      </td>
-                      <td>{key.daily_limit?.toLocaleString()}</td>
+                      </td
+                      <td>{key.daily_limit?.toLocaleString()}</td
+                      <td>
+                        <span style={{ color: usageColor, fontWeight: "bold" }}>
+                          {percent.toFixed(1)}%
+                        </span>
+                        <div style={{ width: "100%", height: "3px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", marginTop: "4px", overflow: "hidden" }}>
+                          <div style={{ width: percent + "%", height: "100%", background: usageColor }} />
+                        </div>
+                       </td
                       <td>
                         <button
                           onClick={() => toggleKeyStatus(key.id, key.is_active)}
@@ -414,17 +461,32 @@ export default function Admin({ user, onLogout }) {
                         >
                           {key.is_active ? "نشط" : "معطل"}
                         </button>
-                      </td>
+                       </td
                       <td className="admin-td-actions-tight">
                         <button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow" title="إعادة ضبط">🔄</button>
                         <button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red" title="حذف">🗑️</button>
-                      </td>
-                    </tr>
+                       </td
+                     </tr
                   );
                 })}
               </tbody>
             </table>
           </div>
+          
+          {/* إجمالي سريع */}
+          {apiKeys.length > 0 && (
+            <div style={{
+              marginTop: "16px",
+              padding: "12px",
+              background: "rgba(255,255,255,0.03)",
+              borderRadius: "12px",
+              textAlign: "center",
+              fontSize: "13px",
+              opacity: 0.7
+            }}>
+              📊 إجمالي: {totalKeysUsed.toLocaleString()} / {totalKeysLimit.toLocaleString()} توكن مستهلك ({totalKeysPercent.toFixed(2)}%)
+            </div>
+          )}
         </div>
       )}
       
@@ -460,10 +522,7 @@ export default function Admin({ user, onLogout }) {
                         <td className="date-cell">{formatDate(chat.updated_at)}</td>
                         <td className="admin-td-actions-tight">
                           <button 
-                            onClick={() => {
-                              setSelectedChat(chat);
-                              setShowChatModal(true);
-                            }} 
+                            onClick={() => openChatViewer(chat)} 
                             className="admin-btn admin-btn-purple admin-btn-icon" 
                             title="عرض"
                           >
@@ -530,7 +589,7 @@ export default function Admin({ user, onLogout }) {
         <div className="admin-modal">
           <div className="admin-modal-content">
             <h3 style={{ marginBottom: "20px" }}>⚙️ تعديل حد {selectedUser.name || selectedUser.email}</h3>
-            <label style={{ fontSize: "13px", opacity: 0.7, marginBottom: "5px", display: "block" }}>الحد اليومي (توكن)</label>
+            <label style={{ fontSize: "13px", opacity: 0.7, display: "block", marginBottom: "5px" }}>الحد اليومي (توكن)</label>
             <input
               className="admin-input"
               type="number"
@@ -546,7 +605,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* ========== مودال عرض تفاصيل المحادثة (الرسائل) ========== */}
+      {/* ========== مودال عرض تفاصيل المحادثة ========== */}
       {showChatModal && selectedChat && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "700px", maxHeight: "80vh", overflowY: "auto" }}>
