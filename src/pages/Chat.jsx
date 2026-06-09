@@ -1,12 +1,5 @@
 // ============================================
-// Chat.jsx - النسخة النهائية الكاملة
-// تشمل:
-// - نظام المفاتيح العامة والحد الشخصي
-// - شريط استهلاك التوكن
-// - سجل المحادثات
-// - رفع الملفات
-// - إعدادات المستخدم (تغيير الاسم + كلمة المرور + حذف الحساب)
-// - زر العين لإظهار/إخفاء كلمة المرور
+// Chat.jsx - النسخة النهائية مع رسائل الترحيب
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -132,7 +125,7 @@ export default function Chat({ user, onLogout }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" }); 
   }, [messages, streamingText]);
 
-  // حفظ المحادثة تلقائياً (باستخدام debounce)
+  // حفظ المحادثة تلقائياً
   useEffect(() => {
     if (!isLoaded || messages.length <= 1) return;
     const save = debounce(() => saveChatToSupabase(), SAVE_CHAT_DELAY_MS);
@@ -152,6 +145,7 @@ export default function Chat({ user, onLogout }) {
     await loadChatsFromSupabase();
     await refreshUserData();
     await loadLastChat();
+    await checkAndShowWelcome(); // ✅ رسالة الترحيب
     setIsLoaded(true); 
   }
 
@@ -258,6 +252,80 @@ export default function Chat({ user, onLogout }) {
       });
     } catch (err) {
       console.error("خطأ في حفظ المحادثة:", err);
+    }
+  }
+
+  // ========== دوال الترحيب ==========
+
+  function getTimeBasedGreeting() {
+    const hour = new Date().getHours();
+    if (hour >= 6 && hour < 12) return "صباح الخير";
+    if (hour >= 12 && hour < 17) return "نهارك سعيد";
+    if (hour >= 17 && hour < 22) return "مساء الخير";
+    return "يا سلاام";
+  }
+
+  function getWelcomeMessage(lastLoginDate, userName, usedToday, dailyLimit, chatCount) {
+    const today = new Date().toISOString().slice(0, 10);
+    const isFirstTimeToday = lastLoginDate !== today;
+    const percentLeft = ((dailyLimit - usedToday) / dailyLimit) * 100;
+    const greeting = getTimeBasedGreeting();
+    const name = userName || "صاحبي";
+    
+    if (isFirstTimeToday) {
+      let message = `${greeting} يا ${name} 🖤\n\nياهلا بيك في يوم جديد.\n\n📊 النهاردة:\n`;
+      message += `- متبقي: ${(dailyLimit - usedToday).toLocaleString()} / ${dailyLimit.toLocaleString()} توكن (${Math.floor(percentLeft)}%)\n`;
+      if (chatCount > 0) {
+        message += `- عدد محادثاتك: ${chatCount} محادثة\n`;
+      }
+      message += `\nجهز نفسك، النهاردة هنتكلم كتير 🚀`;
+      return message;
+    } else {
+      const messagesList = [
+        `أهلاً بعودتك يا ${name} 🖤\n\nفاتك حاجة ولا إيه؟ تعالا نكمل.`,
+        `مرحباً مرة تانية يا ${name} 🖤\n\nوحشتني بجد. احكلي إيه الأخبار.`,
+        `يا ${name}.. رجعت! 🖤\n\nكنت مستنيك. يلا احكيلي.`,
+        `هلا والله يا ${name} 🖤\n\nعودتك تسعدني. إيه اللي جابك؟`
+      ];
+      return messagesList[Math.floor(Math.random() * messagesList.length)];
+    }
+  }
+
+  async function checkAndShowWelcome() {
+    if (!currentUser) return;
+    
+    const today = new Date().toISOString().slice(0, 10);
+    const lastLogin = currentUser.last_login_date;
+    const chatCount = allChats.length;
+    
+    const shouldShowWelcome = !lastLogin || lastLogin !== today || messages.length === 1;
+    
+    if (shouldShowWelcome) {
+      const welcomeMessage = getWelcomeMessage(
+        lastLogin,
+        currentUser.name,
+        currentUser.used_today || 0,
+        currentUser.daily_limit || 5000,
+        chatCount
+      );
+      
+      if (messages.length === 1 && messages[0].content.includes("أهلاً.. أنا بلاك")) {
+        setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
+      } else {
+        setMessages(prev => [
+          { role: "assistant", content: welcomeMessage, id: Date.now() },
+          ...prev
+        ]);
+      }
+    }
+    
+    if (lastLogin !== today) {
+      await supabase
+        .from('profiles')
+        .update({ last_login_date: today })
+        .eq('id', user.id);
+      
+      setCurrentUser(prev => ({ ...prev, last_login_date: today }));
     }
   }
 
@@ -808,7 +876,7 @@ export default function Chat({ user, onLogout }) {
         </button>
       </div>
       
-      {/* ========== مودال إعدادات المستخدم ========== */}
+      {/* مودال إعدادات المستخدم */}
       {showSettings && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "400px" }}>
@@ -823,7 +891,7 @@ export default function Chat({ user, onLogout }) {
               </div>
             )}
             
-            {/* البريد الإلكتروني (للقراءة فقط) */}
+            {/* البريد الإلكتروني */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>📧 البريد الإلكتروني</label>
               <div style={{ 
@@ -860,7 +928,7 @@ export default function Chat({ user, onLogout }) {
               />
             </div>
             
-            {/* كلمة المرور الجديدة مع زر العين */}
+            {/* كلمة المرور الجديدة */}
             <div style={{ position: "relative", marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>🔑 كلمة المرور الجديدة (اختياري)</label>
               <input
@@ -898,7 +966,7 @@ export default function Chat({ user, onLogout }) {
               </button>
             </div>
             
-            {/* تأكيد كلمة المرور مع زر العين */}
+            {/* تأكيد كلمة المرور */}
             <div style={{ position: "relative", marginBottom: "20px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>✓ تأكيد كلمة المرور الجديدة</label>
               <input
@@ -943,7 +1011,7 @@ export default function Chat({ user, onLogout }) {
               <button onClick={() => setShowSettings(false)} className="admin-modal-cancel-btn">إلغاء</button>
             </div>
             
-            {/* زر حذف الحساب */}
+            {/* حذف الحساب */}
             <button
               onClick={deleteAccount}
               disabled={settingsLoading}
