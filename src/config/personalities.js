@@ -77,6 +77,7 @@ export const PERSONALITY_LABELS = {
   blak: "🖤 بلاك",
   formal: "👔 رسمي",
   teacher: "📚 معلم",
+  gair:"صديقة مميزة تعترف بشقها كل رد ",
 };
 
 export const DEFAULT_PERSONALITY = "blak";
