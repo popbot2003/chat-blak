@@ -1,19 +1,16 @@
+// ============================================
+// CodeBlock.jsx
+// مكون عرض الكود البرمجي مع زر نسخ
+// ============================================
+
 import { useState } from "react";
+import { copyToClipboard } from "../utils/helpers";
 
 export default function CodeBlock({ lang, content }) {
   const [copied, setCopied] = useState(false);
 
-  const copy = () => {
-    navigator.clipboard.writeText(content).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch(() => {
-      const textarea = document.createElement("textarea");
-      textarea.value = content;
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
+  const handleCopy = () => {
+    copyToClipboard(content, () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     });
@@ -22,8 +19,8 @@ export default function CodeBlock({ lang, content }) {
   return (
     <div className="code-wrapper">
       <div className="code-header">
-        <span className="code-lang">{lang}</span>
-        <button onClick={copy} className="code-copy-btn">
+        <span className="code-lang">{lang || "code"}</span>
+        <button onClick={handleCopy} className="code-copy-btn">
           {copied ? "✓ تم النسخ" : "📋 نسخ"}
         </button>
       </div>
@@ -32,4 +29,4 @@ export default function CodeBlock({ lang, content }) {
       </pre>
     </div>
   );
-        }
+}
