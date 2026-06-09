@@ -24,6 +24,80 @@ export default function Admin({ user, onLogout }) {
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyLimit, setNewKeyLimit] = useState(1000000);
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
+  const [notification, setNotification] = useState(null);
+
+  // ========== Realtime Subscriptions ==========
+  useEffect(() => {
+    // 1. الاستماع لتغيرات المستخدمين (استهلاك، حظر، تعديل)
+    const profilesChannel = supabase
+      .channel('profiles-realtime')
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'profiles' }, 
+        (payload) => {
+          console.log("🔄 تحديث مستخدم:", payload.new);
+          setUsers(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u));
+        }
+      )
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'profiles' }, 
+        (payload) => {
+          console.log("🆕 مستخدم جديد:", payload.new);
+          setNotification(`🆕 مستخدم جديد: ${payload.new.name || payload.new.email}`);
+          setTimeout(() => setNotification(null), 5000);
+          setUsers(prev => [payload.new, ...prev]);
+        }
+      )
+      .subscribe();
+
+    // 2. الاستماع للمحادثات الجديدة
+    const chatsInsertChannel = supabase
+      .channel('chats-insert')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'chats' }, 
+        (payload) => {
+          console.log("💬 محادثة جديدة:", payload.new);
+          setAllChats(prev => [payload.new, ...prev]);
+          // تحديث عدد المحادثات للمستخدم
+          setUsers(prev => prev.map(u => 
+            u.id === payload.new.user_id 
+              ? { ...u, chatCount: (u.chatCount || 0) + 1 }
+              : u
+          ));
+        }
+      )
+      .subscribe();
+
+    // 3. الاستماع لتحديثات المحادثات (تغيير الرسائل، العنوان، إلخ)
+    const chatsUpdateChannel = supabase
+      .channel('chats-update')
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'chats' }, 
+        (payload) => {
+          console.log("🔄 تحديث محادثة:", payload.new);
+          setAllChats(prev => prev.map(c => c.id === payload.new.id ? payload.new : c));
+        }
+      )
+      .subscribe();
+
+    // 4. الاستماع لحذف المحادثات
+    const chatsDeleteChannel = supabase
+      .channel('chats-delete')
+      .on('postgres_changes', 
+        { event: 'DELETE', schema: 'public', table: 'chats' }, 
+        (payload) => {
+          console.log("🗑️ حذف محادثة:", payload.old);
+          setAllChats(prev => prev.filter(c => c.id !== payload.old.id));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      profilesChannel.unsubscribe();
+      chatsInsertChannel.unsubscribe();
+      chatsUpdateChannel.unsubscribe();
+      chatsDeleteChannel.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     loadAllData();
@@ -160,6 +234,22 @@ export default function Admin({ user, onLogout }) {
 
   return (
     <div className="admin-page">
+      {notification && (
+        <div style={{
+          position: 'fixed',
+          top: '20px',
+          right: '20px',
+          background: '#6c5ce7',
+          color: '#fff',
+          padding: '12px 20px',
+          borderRadius: '12px',
+          zIndex: 1000,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}>
+          {notification}
+        </div>
+      )}
+
       <div className="admin-header">
         <div className="admin-header-inner">
           <span className="admin-header-icon">🖤</span>
@@ -232,7 +322,7 @@ export default function Admin({ user, onLogout }) {
           <div className="admin-overflow-x">
             <table className="admin-table">
               <thead>
-                <tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th></tr>
+                <tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th><tr>
               </thead>
               <tbody>
                 {apiKeys.map(key => {
@@ -267,17 +357,17 @@ export default function Admin({ user, onLogout }) {
                   <tbody>
                     {userChatsList.map(chat => (
                       <tr key={chat.id}>
-                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
-                        <td>{chat.messages?.length || 0}</td>
-                        <td className="date-cell">{formatDate(chat.updated_at)}</td>
+                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td
+                        <td>{chat.messages?.length || 0}</td
+                        <td className="date-cell">{formatDate(chat.updated_at)}</td
                         <td className="admin-td-actions-tight">
                           <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button>
                           <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button>
-                        </td>
-                      </tr>
+                        </td
+                      </tr
                     ))}
                   </tbody>
-                </table>
+                </table
               </div>
             )}
             <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
