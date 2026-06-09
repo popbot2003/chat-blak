@@ -1,6 +1,12 @@
 // ============================================
-// Chat.jsx
-// صفحة الدردشة الرئيسية
+// Chat.jsx - النسخة النهائية الكاملة
+// تشمل:
+// - نظام المفاتيح العامة والحد الشخصي
+// - شريط استهلاك التوكن
+// - سجل المحادثات
+// - رفع الملفات
+// - إعدادات المستخدم (تغيير الاسم + كلمة المرور + حذف الحساب)
+// - زر العين لإظهار/إخفاء كلمة المرور
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -91,6 +97,16 @@ export default function Chat({ user, onLogout }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
   
+  // إعدادات المستخدم
+  const [showSettings, setShowSettings] = useState(false);
+  const [editName, setEditName] = useState(user?.name || "");
+  const [editNewPassword, setEditNewPassword] = useState("");
+  const [editConfirmPassword, setEditConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsError, setSettingsError] = useState("");
+  
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -135,7 +151,23 @@ export default function Chat({ user, onLogout }) {
     await loadApiKeys(); 
     await loadChatsFromSupabase();
     await refreshUserData();
+    await loadLastChat();
     setIsLoaded(true); 
+  }
+
+  async function loadLastChat() {
+    const { data } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    
+    if (data && data.length > 0) {
+      const lastChat = data[0];
+      setCurrentChatId(lastChat.id);
+      setMessages(lastChat.messages || []);
+    }
   }
 
   async function loadApiKeys() {
@@ -171,7 +203,6 @@ export default function Chat({ user, onLogout }) {
         .single();
       
       if (data) {
-        // إعادة ضبط الاستهلاك إذا تغير اليوم
         if (isNewDay(data.last_reset_date)) {
           const today = new Date().toISOString().slice(0, 10);
           await supabase
@@ -235,7 +266,6 @@ export default function Chat({ user, onLogout }) {
   function pickBestKey() {
     const available = apiKeysRef.current.filter(k => k.used < k.dailyLimit);
     if (available.length === 0) return null;
-    // اختيار المفتاح الأقل استهلاكاً نسبياً
     return available.sort((a, b) => (a.used / a.dailyLimit) - (b.used / b.dailyLimit))[0];
   }
 
@@ -270,10 +300,87 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
+  // ========== دوال إعدادات المستخدم ==========
+
+  async function updateUserSettings() {
+    setSettingsError("");
+    
+    if (editNewPassword !== editConfirmPassword) {
+      setSettingsError("❌ كلمة المرور الجديدة غير متطابقة");
+      return;
+    }
+    
+    if (editNewPassword && editNewPassword.length < 6) {
+      setSettingsError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
+      return;
+    }
+    
+    setSettingsLoading(true);
+    
+    try {
+      const updates = {};
+      if (editName && editName !== currentUser?.name) {
+        updates.name = editName;
+      }
+      if (editNewPassword) {
+        updates.password = editNewPassword;
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        setSettingsError("❌ لا توجد تغييرات للحفظ");
+        setSettingsLoading(false);
+        return;
+      }
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user.id);
+      
+      if (error) throw error;
+      
+      const updatedUser = { ...currentUser, ...updates };
+      setCurrentUser(updatedUser);
+      localStorage.setItem("black-user", JSON.stringify(updatedUser));
+      
+      setEditNewPassword("");
+      setEditConfirmPassword("");
+      setSettingsError("");
+      setShowSettings(false);
+      
+      alert("✅ تم تحديث الإعدادات بنجاح");
+      
+    } catch (err) {
+      setSettingsError("❌ خطأ: " + err.message);
+    } finally {
+      setSettingsLoading(false);
+    }
+  }
+
+  async function deleteAccount() {
+    const confirmDelete = window.confirm(
+      "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
+    );
+    
+    if (!confirmDelete) return;
+    
+    setSettingsLoading(true);
+    
+    try {
+      await supabase.from('chats').delete().eq('user_id', user.id);
+      await supabase.from('profiles').delete().eq('id', user.id);
+      localStorage.removeItem("black-user");
+      window.location.reload();
+      
+    } catch (err) {
+      setSettingsError("❌ خطأ في حذف الحساب: " + err.message);
+      setSettingsLoading(false);
+    }
+  }
+
   // ========== دوال الدردشة ==========
 
   async function executeRequest(text, isRetry = false) {
-    // التحقق من حد المستخدم
     const limitCheck = checkUserDailyLimit(currentUserRef.current);
     if (!limitCheck.canChat) {
       setMessages(prev => [...prev, { 
@@ -309,17 +416,14 @@ export default function Chat({ user, onLogout }) {
     setStreamingText("");
 
     try {
-      // تحسين النص بالبحث
       let enhancedText = text;
       const searchResult = await searchDuckDuckGo(text);
       if (searchResult) {
         enhancedText = text + "\n\n[نتائج البحث]:\n" + searchResult + "\n\nاستخدم النتائج في إجابتك.";
       }
 
-      // تحضير رسائل API
       const chatMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
       
-      // استدعاء Groq API
       const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: { 
@@ -343,7 +447,6 @@ export default function Chat({ user, onLogout }) {
 
       if (!res.ok) {
         if (data.error?.code === "rate_limit_exceeded") {
-          // تجاوز حد المفتاح → نضع استهلاكه كحد أقصى
           await updateKeyUsage(key.id, key.dailyLimit);
           if (!isRetry) {
             setTimeout(() => executeRequest(text, true), 1000);
@@ -356,12 +459,10 @@ export default function Chat({ user, onLogout }) {
       const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
       const tokensUsed = data.usage?.total_tokens || 500;
 
-      // تحديث الاستهلاك
       await updateKeyUsage(key.id, tokensUsed);
       await updateUserUsage(tokensUsed);
       await refreshUserData();
 
-      // تأثير الكتابة
       let i = 0;
       function type() {
         if (i <= reply.length) {
@@ -569,6 +670,21 @@ export default function Chat({ user, onLogout }) {
                 </div>
               </div>
               
+              {/* زر الإعدادات */}
+              <button 
+                onClick={() => {
+                  setEditName(currentUser?.name || "");
+                  setEditNewPassword("");
+                  setEditConfirmPassword("");
+                  setSettingsError("");
+                  setShowSettings(true);
+                  setShowMenu(false);
+                }} 
+                className="menu-item"
+              >
+                ⚙️ الإعدادات
+              </button>
+              
               <button onClick={() => { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
               <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} className="menu-item">{isDark ? "☀️ النهاري" : "🌙 الليلي"}</button>
               <button onClick={onLogout} className="menu-item" style={{ color: "#f87171" }}>🚪 خروج</button>
@@ -691,6 +807,164 @@ export default function Chat({ user, onLogout }) {
           {loading ? "⏳" : "↑"}
         </button>
       </div>
+      
+      {/* ========== مودال إعدادات المستخدم ========== */}
+      {showSettings && (
+        <div className="admin-modal">
+          <div className="admin-modal-content" style={{ maxWidth: "400px" }}>
+            <div className="admin-modal-head">
+              <h3>⚙️ إعدادات المستخدم</h3>
+              <button onClick={() => setShowSettings(false)} className="close-btn">✕</button>
+            </div>
+            
+            {settingsError && (
+              <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: "10px", borderRadius: "8px", marginBottom: "15px", fontSize: "13px" }}>
+                {settingsError}
+              </div>
+            )}
+            
+            {/* البريد الإلكتروني (للقراءة فقط) */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>📧 البريد الإلكتروني</label>
+              <div style={{ 
+                padding: "12px", 
+                background: "rgba(255,255,255,0.05)", 
+                borderRadius: "10px", 
+                fontSize: "14px",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "#a29bfe"
+              }}>
+                {currentUser?.email}
+              </div>
+              <div style={{ fontSize: "10px", opacity: 0.5, marginTop: "4px" }}>لا يمكن تغيير البريد الإلكتروني</div>
+            </div>
+            
+            {/* الاسم */}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>👤 الاسم</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="الاسم"
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "#e0e0e0",
+                  fontSize: "14px",
+                  outline: "none"
+                }}
+              />
+            </div>
+            
+            {/* كلمة المرور الجديدة مع زر العين */}
+            <div style={{ position: "relative", marginBottom: "15px" }}>
+              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>🔑 كلمة المرور الجديدة (اختياري)</label>
+              <input
+                type={showNewPassword ? "text" : "password"}
+                value={editNewPassword}
+                onChange={(e) => setEditNewPassword(e.target.value)}
+                placeholder="********"
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  paddingLeft: "45px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "#e0e0e0",
+                  fontSize: "14px",
+                  outline: "none"
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  bottom: "8px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  color: "#a29bfe"
+                }}
+              >
+                {showNewPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+            
+            {/* تأكيد كلمة المرور مع زر العين */}
+            <div style={{ position: "relative", marginBottom: "20px" }}>
+              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>✓ تأكيد كلمة المرور الجديدة</label>
+              <input
+                type={showConfirmPassword ? "text" : "password"}
+                value={editConfirmPassword}
+                onChange={(e) => setEditConfirmPassword(e.target.value)}
+                placeholder="********"
+                style={{
+                  width: "100%",
+                  padding: "12px",
+                  paddingLeft: "45px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "#e0e0e0",
+                  fontSize: "14px",
+                  outline: "none"
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                style={{
+                  position: "absolute",
+                  left: "10px",
+                  bottom: "8px",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "18px",
+                  color: "#a29bfe"
+                }}
+              >
+                {showConfirmPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+            
+            <div className="admin-modal-actions" style={{ gap: "10px", marginBottom: "15px" }}>
+              <button onClick={updateUserSettings} className="admin-modal-save-btn" disabled={settingsLoading}>
+                {settingsLoading ? "جاري الحفظ..." : "💾 حفظ التغييرات"}
+              </button>
+              <button onClick={() => setShowSettings(false)} className="admin-modal-cancel-btn">إلغاء</button>
+            </div>
+            
+            {/* زر حذف الحساب */}
+            <button
+              onClick={deleteAccount}
+              disabled={settingsLoading}
+              style={{
+                width: "100%",
+                padding: "12px",
+                background: "rgba(248,113,113,0.15)",
+                color: "#f87171",
+                border: "1px solid rgba(248,113,113,0.3)",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontSize: "14px",
+                fontWeight: "bold",
+                marginTop: "10px"
+              }}
+            >
+              🗑️ حذف الحساب (نهائياً)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
