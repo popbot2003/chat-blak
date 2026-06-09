@@ -1,6 +1,6 @@
 // ============================================
 // Login.jsx
-// صفحة تسجيل الدخول مع زر إظهار/إخفاء كلمة المرور
+// صفحة تسجيل الدخول مع زر العين وتحديث آخر دخول
 // ============================================
 
 import { useState } from "react";
@@ -34,8 +34,6 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
     setLoading(true);
 
     try {
-      console.log("🔍 محاولة تسجيل الدخول:", { email });
-
       const { data: user, error: userError } = await supabase
         .from('profiles')
         .select('*')
@@ -65,10 +63,17 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         updatedUser.last_reset_date = today;
       }
 
+      // ✅ تحديث آخر تاريخ دخول
+      const today = new Date().toISOString().slice(0, 10);
       await supabase
         .from('profiles')
-        .update({ last_seen: new Date().toISOString() })
+        .update({ 
+          last_seen: new Date().toISOString(),
+          last_login_date: today 
+        })
         .eq('id', user.id);
+      
+      updatedUser.last_login_date = today;
 
       localStorage.setItem("black-user", JSON.stringify(updatedUser));
       onLogin(updatedUser);
@@ -134,7 +139,6 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
             required 
           />
           
-          {/* حقل كلمة المرور مع زر العين */}
           <div style={{ position: "relative", marginBottom: "20px" }}>
             <input 
               type={showPassword ? "text" : "password"} 
