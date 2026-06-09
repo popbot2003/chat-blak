@@ -1,5 +1,5 @@
 // ============================================
-// Admin.jsx - النسخة النهائية مع قائمة منسدلة
+// Admin.jsx - نسخة معدلة (بدون أخطاء)
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -14,7 +14,6 @@ export default function Admin({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("users");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null); // للقائمة المنسدلة
   
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -32,13 +31,6 @@ export default function Admin({ user, onLogout }) {
 
   useEffect(() => {
     loadAllData();
-  }, []);
-  
-  // إغلاق القائمة عند الضغط في أي مكان
-  useEffect(() => {
-    const handleClickOutside = () => setOpenMenuId(null);
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
   
   async function loadAllData() {
@@ -93,22 +85,6 @@ export default function Admin({ user, onLogout }) {
     );
   });
   
-  // ========== دوال الإجراءات ==========
-  async function deleteUser(userId, userName) {
-    if (!confirm(`⚠️ تحذير: هل أنت متأكد من حذف المستخدم "${userName}" نهائياً؟\n\nسيتم حذف:\n- حساب المستخدم بالكامل\n- جميع محادثاته\n\nلا يمكن التراجع!`)) return;
-    
-    try {
-      await supabase.from('chats').delete().eq('user_id', userId);
-      await supabase.from('profiles').delete().eq('id', userId);
-      alert("✅ تم حذف المستخدم");
-      loadUsers();
-      loadAllChats();
-      setOpenMenuId(null);
-    } catch (err) {
-      alert("❌ خطأ في حذف المستخدم: " + err.message);
-    }
-  }
-  
   async function openUserChatsModal(userId, userName) {
     const { data } = await supabase
       .from('chats')
@@ -119,7 +95,6 @@ export default function Admin({ user, onLogout }) {
     setSelectedUserForChats({ id: userId, name: userName });
     setUserChatsList(data || []);
     setShowUserChatsModal(true);
-    setOpenMenuId(null);
   }
   
   async function deleteChatFromModal(chatId) {
@@ -202,10 +177,7 @@ export default function Admin({ user, onLogout }) {
       .from('profiles')
       .update({ is_blocked: !isBlocked })
       .eq('id', userId);
-    if (!error) {
-      loadUsers();
-      setOpenMenuId(null);
-    }
+    if (!error) loadUsers();
   }
   
   async function deleteAllUserChats(userId, userName) {
@@ -220,7 +192,6 @@ export default function Admin({ user, onLogout }) {
       if (selectedUserForChats?.id === userId) {
         setUserChatsList([]);
       }
-      setOpenMenuId(null);
     }
   }
   
@@ -259,7 +230,6 @@ export default function Admin({ user, onLogout }) {
         <button className={`admin-tab ${activeTab === "keys" ? "active" : ""}`} onClick={() => setActiveTab("keys")}>🔑 المفاتيح</button>
       </div>
       
-      {/* تبويب المستخدمين */}
       {activeTab === "users" && (
         <div className="admin-table-wrapper">
           <div style={{ marginBottom: "20px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
@@ -269,7 +239,13 @@ export default function Admin({ user, onLogout }) {
           <div className="admin-overflow-x">
             <table className="admin-table">
               <thead>
-                <tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الحالة</th><th>الإجراءات</th></tr>
+                <tr>
+                  <th>المستخدم</th>
+                  <th>الاستهلاك اليومي</th>
+                  <th>المحادثات</th>
+                  <th>الحالة</th>
+                  <th>الإجراءات</th>
+                </tr>
               </thead>
               <tbody>
                 {filteredUsers.map(u => {
@@ -280,102 +256,157 @@ export default function Admin({ user, onLogout }) {
                   const color = getUsageColor(percent);
                   return (
                     <tr key={u.id}>
-                      <td><strong>{u.name || "مستخدم"}</strong><br /><span className="key-mono">{u.email}</span></td>
-                      <td><div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}><div style={{ fontSize: "12px" }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div><div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}><div style={{ width: percent + "%", height: "100%", background: color }} /></div><div style={{ fontSize: "10px", opacity: 0.6 }}>{percent.toFixed(0)}%</div></div></td>
-                      <td><button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow" style={{ fontSize: "12px" }}>💬 {chatCount}</button></td>
-                      <td><span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>{u.is_blocked ? "محظور" : "نشط"}</span></td>
-                      <td style={{ position: "relative" }}>
-                        <button 
-                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === u.id ? null : u.id); }} 
-                          style={{ background: "transparent", border: "none", color: "#e0e0e0", fontSize: "20px", cursor: "pointer" }}
-                        >
-                          ⋮
-                        </button>
-                        {openMenuId === u.id && (
-                          <div style={{
-                            position: "absolute",
-                            top: "30px",
-                            right: "0",
-                            background: "#1a1a2e",
-                            border: "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: "8px",
-                            padding: "5px 0",
-                            minWidth: "130px",
-                            zIndex: 100,
-                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
-                          }}>
-                            <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); setOpenMenuId(null); }} style={{ display: "block", width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "#fbbf24", textAlign: "right", cursor: "pointer", fontSize: "13px" }}>⚙️ تعديل الحد</button>
-                            <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ display: "block", width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: u.is_blocked ? "#4ade80" : "#f87171", textAlign: "right", cursor: "pointer", fontSize: "13px" }}>{u.is_blocked ? "🔓 فك الحظر" : "🔒 حظر"}</button>
-                            <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} style={{ display: "block", width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "#f87171", textAlign: "right", cursor: "pointer", fontSize: "13px" }}>🗑️ حذف المحادثات</button>
-                            <hr style={{ margin: "4px 0", borderColor: "rgba(255,255,255,0.1)" }} />
-                            <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ display: "block", width: "100%", padding: "8px 12px", background: "rgba(248,113,113,0.2)", border: "none", color: "#f87171", textAlign: "right", cursor: "pointer", fontSize: "13px", fontWeight: "bold" }}>🗑️ حذف الحساب</button>
+                      <td>
+                        <strong>{u.name || "مستخدم"}</strong>
+                        <br />
+                        <span className="key-mono">{u.email}</span>
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}>
+                          <div style={{ fontSize: "12px" }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div>
+                          <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}>
+                            <div style={{ width: percent + "%", height: "100%", background: color }} />
                           </div>
-                        )}
-                       </td>
-                     </tr>
+                          <div style={{ fontSize: "10px", opacity: 0.6 }}>{percent.toFixed(0)}%</div>
+                        </div>
+                      </td>
+                      <td>
+                        <button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow">💬 {chatCount}</button>
+                      </td>
+                      <td>
+                        <span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>
+                          {u.is_blocked ? "محظور" : "نشط"}
+                        </span>
+                      </td>
+                      <td className="admin-td-actions">
+                        <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow">⚙️</button>
+                        <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} className={`admin-btn ${u.is_blocked ? "admin-btn-green" : "admin-btn-red"}`}>
+                          {u.is_blocked ? "فك الحظر" : "حظر"}
+                        </button>
+                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red">🗑️ محادثات</button>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
-             </table>
+            </table>
           </div>
         </div>
       )}
       
-      {/* تبويب المفاتيح */}
       {activeTab === "keys" && (
         <div className="admin-table-wrapper">
-          <div className="admin-section-head"><h2>🔑 مفاتيح API العامة</h2><button onClick={() => setShowAddKeyModal(true)} className="admin-add-btn">➕ إضافة مفتاح</button></div>
+          <div className="admin-section-head">
+            <h2>🔑 مفاتيح API العامة</h2>
+            <button onClick={() => setShowAddKeyModal(true)} className="admin-add-btn">➕ إضافة مفتاح</button>
+          </div>
           <div className="admin-overflow-x">
             <table className="admin-table">
-              <thead><tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+              <thead>
+                <tr>
+                  <th>الاسم</th>
+                  <th>المفتاح</th>
+                  <th>الاستهلاك</th>
+                  <th>الحد</th>
+                  <th>الحالة</th>
+                  <th>الإجراءات</th>
+                </tr>
+              </thead>
               <tbody>
                 {apiKeys.map(key => {
                   const percent = (key.used_today / key.daily_limit) * 100;
                   return (
                     <tr key={key.id}>
-                      <td>{key.key_name || "مفتاح Groq"}</td
-                      <td><span className="key-mono">{key.key_value?.slice(0, 25)}...</span></td
-                      <td>{key.used_today?.toLocaleString()}</td
-                      <td>{key.daily_limit?.toLocaleString()}</td
-                      <td><button onClick={() => toggleKeyStatus(key.id, key.is_active)} className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}>{key.is_active ? "نشط" : "معطل"}</button></td
-                      <td className="admin-td-actions-tight"><button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow">🔄</button><button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red">🗑️</button></td
-                     </tr>
+                      <td>{key.key_name || "مفتاح Groq"}</td>
+                      <td><span className="key-mono">{key.key_value?.slice(0, 25)}...</span></td>
+                      <td>{key.used_today?.toLocaleString()}</td>
+                      <td>{key.daily_limit?.toLocaleString()}</td>
+                      <td>
+                        <button onClick={() => toggleKeyStatus(key.id, key.is_active)} className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}>
+                          {key.is_active ? "نشط" : "معطل"}
+                        </button>
+                      </td>
+                      <td className="admin-td-actions-tight">
+                        <button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow">🔄</button>
+                        <button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red">🗑️</button>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
-             </table>
+            </table>
           </div>
         </div>
       )}
       
-      {/* باقي المودالات */}
       {showUserChatsModal && selectedUserForChats && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "800px", maxHeight: "80vh", overflowY: "auto" }}>
-            <div className="admin-modal-head"><h3>💬 محادثات: {selectedUserForChats.name}</h3><button onClick={() => setShowUserChatsModal(false)} className="close-btn">✕</button></div>
-            {userChatsList.length === 0 ? <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>📭 لا توجد محادثات لهذا المستخدم</div> : <div className="admin-overflow-x"><table className="admin-table"><thead><tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead><tbody>{userChatsList.map(chat => (<tr key={chat.id}><td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td><td>{chat.messages?.length || 0}</td><td className="date-cell">{formatDate(chat.updated_at)}</td><td className="admin-td-actions-tight"><button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button><button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button></td></tr>))}</tbody></table></div>}
-            <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
+            <div className="admin-modal-head">
+              <h3>💬 محادثات: {selectedUserForChats.name}</h3>
+              <button onClick={() => setShowUserChatsModal(false)} className="close-btn">✕</button>
+            </div>
+            {userChatsList.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>📭 لا توجد محادثات لهذا المستخدم</div>
+            ) : (
+              <div className="admin-overflow-x">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>العنوان</th>
+                      <th>الرسائل</th>
+                      <th>آخر تحديث</th>
+                      <th>إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userChatsList.map(chat => (
+                      <tr key={chat.id}>
+                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
+                        <td>{chat.messages?.length || 0}</td>
+                        <td className="date-cell">{formatDate(chat.updated_at)}</td>
+                        <td className="admin-td-actions-tight">
+                          <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button>
+                          <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="admin-modal-actions" style={{ marginTop: "20px" }}>
+              <button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button>
+            </div>
           </div>
         </div>
       )}
       
       {showAddKeyModal && (
         <div className="admin-modal">
-          <div className="admin-modal-content"><h3 style={{ marginBottom: "20px" }}>➕ إضافة مفتاح API عام</h3>
+          <div className="admin-modal-content">
+            <h3 style={{ marginBottom: "20px" }}>➕ إضافة مفتاح API عام</h3>
             <input className="admin-input" type="text" placeholder="اسم المفتاح" value={newKeyName} onChange={e => setNewKeyName(e.target.value)} />
             <input className="admin-input key-mono" type="text" placeholder="gsk_xxxxxxxxxxxx" value={newKeyValue} onChange={e => setNewKeyValue(e.target.value)} />
             <input className="admin-input" type="number" placeholder="الحد اليومي" value={newKeyLimit} onChange={e => setNewKeyLimit(parseInt(e.target.value) || 0)} />
-            <div className="admin-modal-actions"><button onClick={addApiKey} className="admin-modal-save-btn">✅ إضافة</button><button onClick={() => setShowAddKeyModal(false)} className="admin-modal-cancel-btn">إلغاء</button></div>
+            <div className="admin-modal-actions">
+              <button onClick={addApiKey} className="admin-modal-save-btn">✅ إضافة</button>
+              <button onClick={() => setShowAddKeyModal(false)} className="admin-modal-cancel-btn">إلغاء</button>
+            </div>
           </div>
         </div>
       )}
       
       {showEditUserModal && selectedUser && (
         <div className="admin-modal">
-          <div className="admin-modal-content"><h3 style={{ marginBottom: "20px" }}>⚙️ تعديل حد {selectedUser.name || selectedUser.email}</h3>
+          <div className="admin-modal-content">
+            <h3 style={{ marginBottom: "20px" }}>⚙️ تعديل حد {selectedUser.name || selectedUser.email}</h3>
             <label style={{ fontSize: "13px", opacity: 0.7, display: "block", marginBottom: "5px" }}>الحد اليومي (توكن)</label>
             <input className="admin-input" type="number" value={editDailyLimit} onChange={e => setEditDailyLimit(parseInt(e.target.value) || 0)} />
-            <div className="admin-modal-actions"><button onClick={saveUserSettings} className="admin-modal-save-btn">💾 حفظ</button><button onClick={() => setShowEditUserModal(false)} className="admin-modal-cancel-btn">إلغاء</button></div>
+            <div className="admin-modal-actions">
+              <button onClick={saveUserSettings} className="admin-modal-save-btn">💾 حفظ</button>
+              <button onClick={() => setShowEditUserModal(false)} className="admin-modal-cancel-btn">إلغاء</button>
+            </div>
           </div>
         </div>
       )}
@@ -383,9 +414,25 @@ export default function Admin({ user, onLogout }) {
       {showChatModal && selectedChat && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "700px", maxHeight: "80vh", overflowY: "auto" }}>
-            <div className="admin-modal-head"><h3>💬 {selectedChat.title || "محادثة"}</h3><button onClick={() => setShowChatModal(false)} className="close-btn">✕</button></div>
-            <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>{selectedChat.messages?.map((msg, idx) => (<div key={idx} style={{ background: msg.role === "user" ? "rgba(108,92,231,0.1)" : "rgba(255,255,255,0.03)", padding: "12px", borderRadius: "12px", borderRight: msg.role === "user" ? "3px solid #6c5ce7" : "none" }}><div style={{ fontSize: "12px", opacity: 0.6, marginBottom: "8px" }}>{msg.role === "user" ? "👤 المستخدم" : "🖤 بلاك"}</div><div style={{ fontSize: "14px", lineHeight: 1.6 }}><MessageContent content={msg.content} /></div></div>))}</div>
-            <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowChatModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
+            <div className="admin-modal-head">
+              <h3>💬 {selectedChat.title || "محادثة"}</h3>
+              <button onClick={() => setShowChatModal(false)} className="close-btn">✕</button>
+            </div>
+            <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "16px" }}>
+              {selectedChat.messages?.map((msg, idx) => (
+                <div key={idx} style={{ background: msg.role === "user" ? "rgba(108,92,231,0.1)" : "rgba(255,255,255,0.03)", padding: "12px", borderRadius: "12px", borderRight: msg.role === "user" ? "3px solid #6c5ce7" : "none" }}>
+                  <div style={{ fontSize: "12px", opacity: 0.6, marginBottom: "8px" }}>
+                    {msg.role === "user" ? "👤 المستخدم" : "🖤 بلاك"}
+                  </div>
+                  <div style={{ fontSize: "14px", lineHeight: 1.6 }}>
+                    <MessageContent content={msg.content} />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="admin-modal-actions" style={{ marginTop: "20px" }}>
+              <button onClick={() => setShowChatModal(false)} className="admin-modal-cancel-btn">إغلاق</button>
+            </div>
           </div>
         </div>
       )}
