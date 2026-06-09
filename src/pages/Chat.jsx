@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - النسخة النهائية مع رسائل الترحيب
+// Chat.jsx - النسخة النهائية مع طرد المستخدم عند الحذف
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -114,6 +114,25 @@ export default function Chat({ user, onLogout }) {
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
+  // ✅ الاستماع لحذف الحساب من المدير (طرد المستخدم فوراً)
+  useEffect(() => {
+    const deleteChannel = supabase
+      .channel('profile-delete')
+      .on('postgres_changes', 
+        { event: 'DELETE', schema: 'public', table: 'profiles' }, 
+        (payload) => {
+          if (payload.old.id === user.id) {
+            alert("⚠️ تم حذف حسابك بواسطة المدير. سيتم تسجيل خروجك.");
+            localStorage.removeItem("black-user");
+            window.location.reload();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => deleteChannel.unsubscribe();
+  }, [user.id]);
+
   // تحميل البيانات عند بدء التشغيل
   useEffect(() => { 
     loadAllData(); 
@@ -125,7 +144,7 @@ export default function Chat({ user, onLogout }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" }); 
   }, [messages, streamingText]);
 
-  // حفظ المحادثة تلقائياً
+  // حفظ المحادثة تلقائياً (باستخدام debounce)
   useEffect(() => {
     if (!isLoaded || messages.length <= 1) return;
     const save = debounce(() => saveChatToSupabase(), SAVE_CHAT_DELAY_MS);
@@ -145,7 +164,7 @@ export default function Chat({ user, onLogout }) {
     await loadChatsFromSupabase();
     await refreshUserData();
     await loadLastChat();
-    await checkAndShowWelcome(); // ✅ رسالة الترحيب
+    await checkAndShowWelcome();
     setIsLoaded(true); 
   }
 
@@ -738,7 +757,6 @@ export default function Chat({ user, onLogout }) {
                 </div>
               </div>
               
-              {/* زر الإعدادات */}
               <button 
                 onClick={() => {
                   setEditName(currentUser?.name || "");
