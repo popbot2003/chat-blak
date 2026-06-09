@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - النسخة النهائية مع طرد المستخدم عند الحذف
+// Chat.jsx - النسخة القديمة المستقرة
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -10,8 +10,6 @@ import { supabase } from '../lib/supabase';
 import { SYSTEM_PROMPT, GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TEMPERATURE, CHAT_HISTORY_LIMIT, SAVE_CHAT_DELAY_MS } from '../config/constants';
 import { formatDate, copyToClipboard, getUsagePercent, getUsageColor, isNewDay, debounce } from '../utils/helpers';
 import { checkUserDailyLimit } from '../utils/validators';
-
-// ========== دوال مساعدة ==========
 
 async function searchDuckDuckGo(query) {
   try {
@@ -68,8 +66,6 @@ function getFileIcon(file) {
   return "📎";
 }
 
-// ========== المكون الرئيسي ==========
-
 export default function Chat({ user, onLogout }) {
   const [apiKeys, setApiKeys] = useState([]);
   const [allChats, setAllChats] = useState([]);
@@ -90,7 +86,6 @@ export default function Chat({ user, onLogout }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
   
-  // إعدادات المستخدم
   const [showSettings, setShowSettings] = useState(false);
   const [editName, setEditName] = useState(user?.name || "");
   const [editNewPassword, setEditNewPassword] = useState("");
@@ -108,56 +103,30 @@ export default function Chat({ user, onLogout }) {
   const currentChatIdRef = useRef(currentChatId);
   const currentUserRef = useRef(currentUser);
 
-  // تحديث refs
   useEffect(() => { apiKeysRef.current = apiKeys; }, [apiKeys]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-  // ✅ الاستماع لحذف الحساب من المدير (طرد المستخدم فوراً)
-  useEffect(() => {
-    const deleteChannel = supabase
-      .channel('profile-delete')
-      .on('postgres_changes', 
-        { event: 'DELETE', schema: 'public', table: 'profiles' }, 
-        (payload) => {
-          if (payload.old.id === user.id) {
-            alert("⚠️ تم حذف حسابك بواسطة المدير. سيتم تسجيل خروجك.");
-            localStorage.removeItem("black-user");
-            window.location.reload();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => deleteChannel.unsubscribe();
-  }, [user.id]);
-
-  // تحميل البيانات عند بدء التشغيل
   useEffect(() => { 
     loadAllData(); 
     inputRef.current?.focus(); 
   }, []);
 
-  // التمرير للأسفل عند رسائل جديدة
   useEffect(() => { 
     bottomRef.current?.scrollIntoView({ behavior: "smooth" }); 
   }, [messages, streamingText]);
 
-  // حفظ المحادثة تلقائياً (باستخدام debounce)
   useEffect(() => {
     if (!isLoaded || messages.length <= 1) return;
     const save = debounce(() => saveChatToSupabase(), SAVE_CHAT_DELAY_MS);
     save();
   }, [messages, isLoaded]);
 
-  // حفظ قبل إغلاق الصفحة
   useEffect(() => {
     window.addEventListener("beforeunload", () => saveChatToSupabase());
     return () => window.removeEventListener("beforeunload", () => saveChatToSupabase());
   }, [isLoaded]);
-
-  // ========== دوال تحميل البيانات ==========
 
   async function loadAllData() { 
     await loadApiKeys(); 
@@ -274,8 +243,6 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
-  // ========== دوال الترحيب ==========
-
   function getTimeBasedGreeting() {
     const hour = new Date().getHours();
     if (hour >= 6 && hour < 12) return "صباح الخير";
@@ -348,8 +315,6 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
-  // ========== دوال المفاتيح والحدود ==========
-
   function pickBestKey() {
     const available = apiKeysRef.current.filter(k => k.used < k.dailyLimit);
     if (available.length === 0) return null;
@@ -386,8 +351,6 @@ export default function Chat({ user, onLogout }) {
       console.error("خطأ في تحديث استهلاك المستخدم:", err);
     }
   }
-
-  // ========== دوال إعدادات المستخدم ==========
 
   async function updateUserSettings() {
     setSettingsError("");
@@ -464,8 +427,6 @@ export default function Chat({ user, onLogout }) {
       setSettingsLoading(false);
     }
   }
-
-  // ========== دوال الدردشة ==========
 
   async function executeRequest(text, isRetry = false) {
     const limitCheck = checkUserDailyLimit(currentUserRef.current);
@@ -591,8 +552,6 @@ export default function Chat({ user, onLogout }) {
     executeRequest(finalText, isRetry);
   }
 
-  // ========== دوال المحادثات ==========
-
   async function newChat() {
     await saveChatToSupabase();
     const newId = Date.now().toString();
@@ -632,8 +591,6 @@ export default function Chat({ user, onLogout }) {
       setTimeout(() => setCopiedId(null), 2000);
     });
   }
-
-  // ========== دوال الملفات ==========
 
   async function handleFileUpload(e) {
     const files = Array.from(e.target.files || []);
@@ -679,8 +636,6 @@ export default function Chat({ user, onLogout }) {
       sendMessage();
     }
   }
-
-  // ========== حسابات العرض ==========
   
   const totalLimit = apiKeys.reduce((sum, k) => sum + k.dailyLimit, 0);
   const totalUsed = apiKeys.reduce((sum, k) => sum + k.used, 0);
@@ -691,12 +646,10 @@ export default function Chat({ user, onLogout }) {
   const userColor = getUsageColor(userPercent);
   const remainingTokens = (currentUser?.daily_limit || 5000) - (currentUser?.used_today || 0);
 
-  // شاشة تحميل
   if (!isLoaded) {
     return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}>🖤 جاري التحميل...</div>;
   }
 
-  // لا توجد مفاتيح
   if (isLoaded && apiKeys.length === 0) {
     return (
       <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui, sans-serif", textAlign: "center", padding: "20px" }}>
@@ -711,11 +664,8 @@ export default function Chat({ user, onLogout }) {
     );
   }
 
-  // ========== واجهة المستخدم الرئيسية ==========
-  
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
-      {/* الهيدر */}
       <div className="header">
         <div className="header-left">
           <div className="avatar">🖤</div>
@@ -734,13 +684,11 @@ export default function Chat({ user, onLogout }) {
           </button>
         </div>
         
-        {/* القائمة المنسدلة */}
         {showMenu && (
           <>
             <div onClick={() => setShowMenu(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} />
             <div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
               
-              {/* بطاقة استهلاك المستخدم */}
               <div style={{ padding: "12px", margin: "4px", background: "rgba(108,92,231,0.1)", borderRadius: "12px", border: "1px solid rgba(108,92,231,0.2)" }}>
                 <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px" }}>📊 استهلاك اليوم</div>
                 <div style={{ fontSize: "12px", marginBottom: "4px" }}>
@@ -779,7 +727,6 @@ export default function Chat({ user, onLogout }) {
         )}
       </div>
       
-      {/* شريط التوكن */}
       <div className="token-bar">
         <div className="token-info">
           <span>📊 {currentUser?.used_today?.toLocaleString() || 0} / {currentUser?.daily_limit?.toLocaleString() || 5000} توكن</span>
@@ -795,7 +742,6 @@ export default function Chat({ user, onLogout }) {
         )}
       </div>
       
-      {/* سجل المحادثات */}
       {showHistory && (
         <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "8px", maxHeight: "250px", overflowY: "auto" }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -818,7 +764,6 @@ export default function Chat({ user, onLogout }) {
         </div>
       )}
       
-      {/* الرسائل */}
       <div className="messages">
         {messages.map(msg => (
           <div key={msg.id} className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}>
@@ -855,7 +800,6 @@ export default function Chat({ user, onLogout }) {
         <div ref={bottomRef} />
       </div>
       
-      {/* الملفات المرفقة */}
       {attachedFiles.length > 0 && (
         <div style={{ display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap" }}>
           {attachedFiles.map(f => (
@@ -868,7 +812,6 @@ export default function Chat({ user, onLogout }) {
         </div>
       )}
       
-      {/* منطقة الكتابة */}
       <div className="input-area">
         <button onClick={() => fileInputRef.current?.click()} className="header-btn" style={{ fontSize: "20px", padding: "8px" }}>📎</button>
         <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*" />
@@ -894,7 +837,6 @@ export default function Chat({ user, onLogout }) {
         </button>
       </div>
       
-      {/* مودال إعدادات المستخدم */}
       {showSettings && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "400px" }}>
@@ -909,7 +851,6 @@ export default function Chat({ user, onLogout }) {
               </div>
             )}
             
-            {/* البريد الإلكتروني */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>📧 البريد الإلكتروني</label>
               <div style={{ 
@@ -925,7 +866,6 @@ export default function Chat({ user, onLogout }) {
               <div style={{ fontSize: "10px", opacity: 0.5, marginTop: "4px" }}>لا يمكن تغيير البريد الإلكتروني</div>
             </div>
             
-            {/* الاسم */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>👤 الاسم</label>
               <input
@@ -946,7 +886,6 @@ export default function Chat({ user, onLogout }) {
               />
             </div>
             
-            {/* كلمة المرور الجديدة */}
             <div style={{ position: "relative", marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>🔑 كلمة المرور الجديدة (اختياري)</label>
               <input
@@ -984,7 +923,6 @@ export default function Chat({ user, onLogout }) {
               </button>
             </div>
             
-            {/* تأكيد كلمة المرور */}
             <div style={{ position: "relative", marginBottom: "20px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>✓ تأكيد كلمة المرور الجديدة</label>
               <input
@@ -1029,7 +967,6 @@ export default function Chat({ user, onLogout }) {
               <button onClick={() => setShowSettings(false)} className="admin-modal-cancel-btn">إلغاء</button>
             </div>
             
-            {/* حذف الحساب */}
             <button
               onClick={deleteAccount}
               disabled={settingsLoading}
