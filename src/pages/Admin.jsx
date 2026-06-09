@@ -1,6 +1,5 @@
 // ============================================
-// Admin.jsx
-// لوحة تحكم المدير - إدارة المستخدمين والمفاتيح والمحادثات
+// Admin.jsx - النسخة الجديدة (تبويب محادثات مع بحث)
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -17,6 +16,12 @@ export default function Admin({ user, onLogout }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   
+  // حالة تبويب المحادثات (الجديد)
+  const [searchUserTerm, setSearchUserTerm] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedChatUser, setSelectedChatUser] = useState(null);
+  const [userChats, setUserChats] = useState([]);
+  
   // حالة المودالات
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -28,7 +33,6 @@ export default function Admin({ user, onLogout }) {
   const [newKeyValue, setNewKeyValue] = useState("");
   const [newKeyName, setNewKeyName] = useState("");
   const [newKeyLimit, setNewKeyLimit] = useState(1000000);
-  
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
   
   // ========== تحميل البيانات ==========
@@ -80,7 +84,7 @@ export default function Admin({ user, onLogout }) {
     return users.find(u => u.id === userId);
   }
   
-  // فلترة المستخدمين حسب البحث
+  // فلترة المستخدمين حسب البحث (لتبويب المستخدمين)
   const filteredUsers = users.filter(u => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
@@ -89,6 +93,36 @@ export default function Admin({ user, onLogout }) {
       u.email?.toLowerCase().includes(term)
     );
   });
+  
+  // ========== دوال تبويب المحادثات الجديدة ==========
+  async function searchUsersForChats(term) {
+    if (!term.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .or(`name.ilike.%${term}%,email.ilike.%${term}%`)
+      .limit(10);
+    
+    setSearchResults(data || []);
+  }
+  
+  async function loadUserChatsForAdmin(userId) {
+    const { data } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+    
+    const selectedUserData = users.find(u => u.id === userId);
+    setSelectedChatUser(selectedUserData);
+    setUserChats(data || []);
+    setSearchResults([]);
+    setSearchUserTerm("");
+  }
   
   // ========== إدارة المفاتيح ==========
   async function addApiKey() {
@@ -162,6 +196,10 @@ export default function Admin({ user, onLogout }) {
     if (!error) {
       alert("✅ تم حذف كل المحادثات");
       loadAllChats();
+      if (selectedChatUser?.id === userId) {
+        setUserChats([]);
+        setSelectedChatUser(null);
+      }
     }
   }
   
@@ -171,15 +209,12 @@ export default function Admin({ user, onLogout }) {
       .from('chats')
       .delete()
       .eq('id', chatId);
-    if (!error) loadAllChats();
-  }
-  
-  async function updateUserLimit(userId, dailyLimit) {
-    const { error } = await supabase
-      .from('profiles')
-      .update({ daily_limit: dailyLimit })
-      .eq('id', userId);
-    if (!error) loadUsers();
+    if (!error) {
+      loadAllChats();
+      if (selectedChatUser) {
+        loadUserChatsForAdmin(selectedChatUser.id);
+      }
+    }
   }
   
   async function saveUserSettings() {
@@ -187,9 +222,7 @@ export default function Admin({ user, onLogout }) {
     
     const { error } = await supabase
       .from('profiles')
-      .update({
-        daily_limit: editDailyLimit
-      })
+      .update({ daily_limit: editDailyLimit })
       .eq('id', selectedUser.id);
     
     if (error) {
@@ -292,7 +325,7 @@ export default function Admin({ user, onLogout }) {
                         <br />
                         <span className="key-mono">{u.email}</span>
                       </td>
-                       <td>
+                      <td>
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}>
                           <div style={{ fontSize: "12px" }}>
                             {used.toLocaleString()} / {limit.toLocaleString()} توكن
@@ -304,24 +337,15 @@ export default function Admin({ user, onLogout }) {
                             {percent.toFixed(0)}%
                           </div>
                         </div>
-                       </td>
-                       <td>
-                        <button
-                          onClick={() => {
-                            const chat = { user_id: u.id, title: "محادثات " + u.name, messages: [] };
-                            setSelectedChat(chat);
-                            setShowChatModal(true);
-                          }}
-                          className="admin-btn admin-badge-yellow"
-                        >
-                          💬 {chatCount}
-                        </button>
-                       </td>
-                       <td>
+                      </td>
+                      <td>
+                        <span className="admin-badge admin-badge-yellow">💬 {chatCount}</span>
+                      </td>
+                      <td>
                         <span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>
                           {u.is_blocked ? "محظور" : "نشط"}
                         </span>
-                       </td>
+                      </td>
                       <td className="admin-td-actions">
                         <button
                           onClick={() => {
@@ -347,8 +371,8 @@ export default function Admin({ user, onLogout }) {
                         >
                           🗑️ محادثات
                         </button>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -419,41 +443,132 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* ========== تبويب المحادثات ========== */}
+      {/* ========== تبويب المحادثات (نسخة جديدة مع بحث) ========== */}
       {activeTab === "chats" && (
         <div className="admin-table-wrapper">
           <h2 style={{ marginBottom: "20px" }}>💬 محادثات المستخدمين</h2>
           
-          <div className="admin-overflow-x">
-            <table className="admin-table">
-              <thead>
-                <tr>
-                  <th>المستخدم</th>
-                  <th>العنوان</th>
-                  <th>الرسائل</th>
-                  <th>آخر تحديث</th>
-                  <th>الإجراءات</th>
-                </tr>
-              </thead>
-              <tbody>
-                {allChats.map(chat => {
-                  const chatUser = getUserById(chat.user_id);
-                  return (
-                    <tr key={chat.id}>
-                       <td>{chatUser?.name || chatUser?.email || "غير معروف"}</td>
-                      <td className="chat-title-cell">{truncate(chat.title, 50)}</td>
-                       <td>{chat.messages?.length || 0}</td>
-                      <td className="date-cell">{formatDate(chat.updated_at)}</td>
-                      <td className="admin-td-actions-tight">
-                        <button onClick={() => openChatModal(chat)} className="admin-btn admin-btn-purple admin-btn-icon" title="عرض">👁️</button>
-                        <button onClick={() => deleteChat(chat.id)} className="admin-btn admin-btn-red admin-btn-icon" title="حذف">🗑️</button>
-                       </td>
-                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          {/* شريط البحث */}
+          <input
+            type="text"
+            placeholder="🔍 بحث بالاسم أو البريد..."
+            value={searchUserTerm}
+            onChange={(e) => {
+              setSearchUserTerm(e.target.value);
+              searchUsersForChats(e.target.value);
+            }}
+            style={{
+              width: "100%",
+              padding: "12px",
+              marginBottom: "20px",
+              borderRadius: "12px",
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "rgba(255,255,255,0.05)",
+              color: "#e0e0e0",
+              fontSize: "14px"
+            }}
+          />
+          
+          {/* نتائج البحث */}
+          {searchResults.length > 0 && !selectedChatUser && (
+            <div style={{ marginBottom: "20px" }}>
+              <h3 style={{ marginBottom: "10px" }}>📋 نتائج البحث:</h3>
+              {searchResults.map(u => (
+                <div key={u.id} style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "12px",
+                  margin: "8px 0",
+                  background: "rgba(255,255,255,0.03)",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.05)"
+                }}>
+                  <div>
+                    <strong>{u.name || "مستخدم"}</strong>
+                    <br />
+                    <span className="key-mono">{u.email}</span>
+                  </div>
+                  <button
+                    onClick={() => loadUserChatsForAdmin(u.id)}
+                    className="admin-btn admin-btn-purple"
+                  >
+                    عرض المحادثات ({getUserChats(u.id).length})
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* حالة عدم وجود نتائج */}
+          {searchUserTerm && searchResults.length === 0 && !selectedChatUser && (
+            <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>
+              🔍 لا توجد نتائج لـ "{searchUserTerm}"
+            </div>
+          )}
+          
+          {/* زر إلغاء اختيار المستخدم */}
+          {selectedChatUser && (
+            <div style={{ marginBottom: "20px" }}>
+              <button
+                onClick={() => {
+                  setSelectedChatUser(null);
+                  setUserChats([]);
+                  setSearchUserTerm("");
+                }}
+                className="admin-btn admin-btn-yellow"
+              >
+                ← العودة للبحث
+              </button>
+            </div>
+          )}
+          
+          {/* جدول المحادثات للمستخدم المختار */}
+          {selectedChatUser && (
+            <>
+              <h3 style={{ marginBottom: "15px" }}>
+                📋 محادثات: {selectedChatUser.name || selectedChatUser.email}
+              </h3>
+              {userChats.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>
+                  💬 لا توجد محادثات لهذا المستخدم
+                </div>
+              ) : (
+                <div className="admin-overflow-x">
+                  <table className="admin-table">
+                    <thead>
+                      <tr>
+                        <th>العنوان</th>
+                        <th>الرسائل</th>
+                        <th>آخر تحديث</th>
+                        <th>إجراءات</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {userChats.map(chat => (
+                        <tr key={chat.id}>
+                          <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
+                          <td>{chat.messages?.length || 0}</td>
+                          <td className="date-cell">{formatDate(chat.updated_at)}</td>
+                          <td className="admin-td-actions-tight">
+                            <button onClick={() => openChatModal(chat)} className="admin-btn admin-btn-purple admin-btn-icon" title="عرض">👁️</button>
+                            <button onClick={() => deleteChat(chat.id)} className="admin-btn admin-btn-red admin-btn-icon" title="حذف">🗑️</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          )}
+          
+          {/* رسالة ترحيب أول مرة */}
+          {!searchUserTerm && !selectedChatUser && (
+            <div style={{ textAlign: "center", padding: "60px", opacity: 0.5 }}>
+              🔍 ابحث عن مستخدم لعرض محادثاته
+            </div>
+          )}
         </div>
       )}
       
