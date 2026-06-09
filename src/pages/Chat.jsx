@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - النسخة النهائية مع التحديث التلقائي
+// Chat.jsx - النسخة النهائية مع طرد المستخدم
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -108,18 +108,12 @@ export default function Chat({ user, onLogout }) {
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-  // ✅ الاستماع لتغيرات بيانات المستخدم في قاعدة البيانات (تحديث تلقائي)
+  // ✅ الاستماع لتغيرات بيانات المستخدم (تحديث تلقائي للاستهلاك)
   useEffect(() => {
     const userChannel = supabase
       .channel('user-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.id}`
-        },
+      .on('postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
         (payload) => {
           console.log("🔄 تحديث بيانات المستخدم:", payload.new);
           setCurrentUser(payload.new);
@@ -129,6 +123,25 @@ export default function Chat({ user, onLogout }) {
       .subscribe();
 
     return () => userChannel.unsubscribe();
+  }, [user.id]);
+
+  // ✅ الاستماع لحذف الحساب من المدير (طرد المستخدم فوراً)
+  useEffect(() => {
+    const deleteChannel = supabase
+      .channel('profile-delete')
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'profiles' },
+        (payload) => {
+          if (payload.old.id === user.id) {
+            alert("⚠️ تم حذف حسابك بواسطة المدير. سيتم تسجيل خروجك.");
+            localStorage.removeItem("black-user");
+            window.location.reload();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => deleteChannel.unsubscribe();
   }, [user.id]);
 
   useEffect(() => { 
