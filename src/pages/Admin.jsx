@@ -1,5 +1,7 @@
 // ============================================
-// Admin.jsx - النسخة الجديدة (تبويب محادثات مع بحث)
+// Admin.jsx - نسخة نهائية
+// - تبويبات: المستخدمين + المفاتيح فقط
+// - زر 💬 يفتح مودال محادثات المستخدم
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -16,17 +18,14 @@ export default function Admin({ user, onLogout }) {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // حالة تبويب المحادثات (الجديد)
-  const [searchUserTerm, setSearchUserTerm] = useState("");
-  const [searchResults, setSearchResults] = useState([]);
-  const [selectedChatUser, setSelectedChatUser] = useState(null);
-  const [userChats, setUserChats] = useState([]);
-  
   // حالة المودالات
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
-  const [showChatModal, setShowChatModal] = useState(false);
+  const [showUserChatsModal, setShowUserChatsModal] = useState(false);
+  const [selectedUserForChats, setSelectedUserForChats] = useState(null);
+  const [userChatsList, setUserChatsList] = useState([]);
   const [selectedChat, setSelectedChat] = useState(null);
+  const [showChatModal, setShowChatModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   
   // حالة النماذج
@@ -84,7 +83,7 @@ export default function Admin({ user, onLogout }) {
     return users.find(u => u.id === userId);
   }
   
-  // فلترة المستخدمين حسب البحث (لتبويب المستخدمين)
+  // فلترة المستخدمين حسب البحث
   const filteredUsers = users.filter(u => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
@@ -94,34 +93,41 @@ export default function Admin({ user, onLogout }) {
     );
   });
   
-  // ========== دوال تبويب المحادثات الجديدة ==========
-  async function searchUsersForChats(term) {
-    if (!term.trim()) {
-      setSearchResults([]);
-      return;
-    }
-    
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .or(`name.ilike.%${term}%,email.ilike.%${term}%`)
-      .limit(10);
-    
-    setSearchResults(data || []);
-  }
-  
-  async function loadUserChatsForAdmin(userId) {
+  // ========== دوال عرض محادثات المستخدم ==========
+  async function openUserChatsModal(userId, userName) {
+    // جلب محادثات المستخدم من قاعدة البيانات
     const { data } = await supabase
       .from('chats')
       .select('*')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false });
     
-    const selectedUserData = users.find(u => u.id === userId);
-    setSelectedChatUser(selectedUserData);
-    setUserChats(data || []);
-    setSearchResults([]);
-    setSearchUserTerm("");
+    setSelectedUserForChats({ id: userId, name: userName });
+    setUserChatsList(data || []);
+    setShowUserChatsModal(true);
+  }
+  
+  async function deleteChatFromModal(chatId) {
+    if (!confirm("حذف هذه المحادثة؟")) return;
+    const { error } = await supabase
+      .from('chats')
+      .delete()
+      .eq('id', chatId);
+    if (!error) {
+      // تحديث القائمة
+      const { data } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', selectedUserForChats.id)
+        .order('updated_at', { ascending: false });
+      setUserChatsList(data || []);
+      loadAllChats(); // تحديث الـ allChats كمان
+    }
+  }
+  
+  function openChatViewer(chat) {
+    setSelectedChat(chat);
+    setShowChatModal(true);
   }
   
   // ========== إدارة المفاتيح ==========
@@ -196,23 +202,8 @@ export default function Admin({ user, onLogout }) {
     if (!error) {
       alert("✅ تم حذف كل المحادثات");
       loadAllChats();
-      if (selectedChatUser?.id === userId) {
-        setUserChats([]);
-        setSelectedChatUser(null);
-      }
-    }
-  }
-  
-  async function deleteChat(chatId) {
-    if (!confirm("حذف هذه المحادثة؟")) return;
-    const { error } = await supabase
-      .from('chats')
-      .delete()
-      .eq('id', chatId);
-    if (!error) {
-      loadAllChats();
-      if (selectedChatUser) {
-        loadUserChatsForAdmin(selectedChatUser.id);
+      if (selectedUserForChats?.id === userId) {
+        setUserChatsList([]);
       }
     }
   }
@@ -234,12 +225,6 @@ export default function Admin({ user, onLogout }) {
     }
   }
   
-  // ========== عرض المحادثات ==========
-  function openChatModal(chat) {
-    setSelectedChat(chat);
-    setShowChatModal(true);
-  }
-  
   // ========== واجهة المستخدم ==========
   return (
     <div className="admin-page">
@@ -255,7 +240,7 @@ export default function Admin({ user, onLogout }) {
         <button onClick={onLogout} className="admin-logout-btn">تسجيل خروج</button>
       </div>
       
-      {/* علامات التبويب */}
+      {/* علامات التبويب - تم حذف تبويب المحادثات */}
       <div className="admin-tabs">
         <button 
           className={`admin-tab ${activeTab === "users" ? "active" : ""}`}
@@ -268,12 +253,6 @@ export default function Admin({ user, onLogout }) {
           onClick={() => setActiveTab("keys")}
         >
           🔑 المفاتيح
-        </button>
-        <button 
-          className={`admin-tab ${activeTab === "chats" ? "active" : ""}`}
-          onClick={() => setActiveTab("chats")}
-        >
-          💬 المحادثات
         </button>
       </div>
       
@@ -337,15 +316,21 @@ export default function Admin({ user, onLogout }) {
                             {percent.toFixed(0)}%
                           </div>
                         </div>
-                      </td>
+                       </td>
                       <td>
-                        <span className="admin-badge admin-badge-yellow">💬 {chatCount}</span>
-                      </td>
+                        <button
+                          onClick={() => openUserChatsModal(u.id, u.name || u.email)}
+                          className="admin-btn admin-badge-yellow"
+                          title="عرض المحادثات"
+                        >
+                          💬 {chatCount}
+                        </button>
+                       </td>
                       <td>
                         <span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>
                           {u.is_blocked ? "محظور" : "نشط"}
                         </span>
-                      </td>
+                       </td>
                       <td className="admin-td-actions">
                         <button
                           onClick={() => {
@@ -408,11 +393,11 @@ export default function Admin({ user, onLogout }) {
                   const percent = (key.used_today / key.daily_limit) * 100;
                   return (
                     <tr key={key.id}>
-                       <td>{key.key_name || "مفتاح Groq"}</td>
-                       <td>
+                      <td>{key.key_name || "مفتاح Groq"}</td>
+                      <td>
                         <span className="key-mono">{key.key_value?.slice(0, 20)}...</span>
-                       </td>
-                       <td>
+                      </td>
+                      <td>
                         <div>{key.used_today?.toLocaleString()}</div>
                         <div className="key-usage-bar">
                           <div
@@ -420,21 +405,21 @@ export default function Admin({ user, onLogout }) {
                             style={{ width: Math.min(percent, 100) + "%" }}
                           />
                         </div>
-                       </td>
-                       <td>{key.daily_limit?.toLocaleString()}</td>
-                       <td>
+                      </td>
+                      <td>{key.daily_limit?.toLocaleString()}</td>
+                      <td>
                         <button
                           onClick={() => toggleKeyStatus(key.id, key.is_active)}
                           className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}
                         >
                           {key.is_active ? "نشط" : "معطل"}
                         </button>
-                       </td>
+                      </td>
                       <td className="admin-td-actions-tight">
                         <button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow" title="إعادة ضبط">🔄</button>
                         <button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red" title="حذف">🗑️</button>
-                       </td>
-                     </tr>
+                      </td>
+                    </tr>
                   );
                 })}
               </tbody>
@@ -443,132 +428,66 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* ========== تبويب المحادثات (نسخة جديدة مع بحث) ========== */}
-      {activeTab === "chats" && (
-        <div className="admin-table-wrapper">
-          <h2 style={{ marginBottom: "20px" }}>💬 محادثات المستخدمين</h2>
-          
-          {/* شريط البحث */}
-          <input
-            type="text"
-            placeholder="🔍 بحث بالاسم أو البريد..."
-            value={searchUserTerm}
-            onChange={(e) => {
-              setSearchUserTerm(e.target.value);
-              searchUsersForChats(e.target.value);
-            }}
-            style={{
-              width: "100%",
-              padding: "12px",
-              marginBottom: "20px",
-              borderRadius: "12px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
-              color: "#e0e0e0",
-              fontSize: "14px"
-            }}
-          />
-          
-          {/* نتائج البحث */}
-          {searchResults.length > 0 && !selectedChatUser && (
-            <div style={{ marginBottom: "20px" }}>
-              <h3 style={{ marginBottom: "10px" }}>📋 نتائج البحث:</h3>
-              {searchResults.map(u => (
-                <div key={u.id} style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "12px",
-                  margin: "8px 0",
-                  background: "rgba(255,255,255,0.03)",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(255,255,255,0.05)"
-                }}>
-                  <div>
-                    <strong>{u.name || "مستخدم"}</strong>
-                    <br />
-                    <span className="key-mono">{u.email}</span>
-                  </div>
-                  <button
-                    onClick={() => loadUserChatsForAdmin(u.id)}
-                    className="admin-btn admin-btn-purple"
-                  >
-                    عرض المحادثات ({getUserChats(u.id).length})
-                  </button>
-                </div>
-              ))}
+      {/* ========== مودال عرض محادثات المستخدم ========== */}
+      {showUserChatsModal && selectedUserForChats && (
+        <div className="admin-modal">
+          <div className="admin-modal-content" style={{ maxWidth: "800px", maxHeight: "80vh", overflowY: "auto" }}>
+            <div className="admin-modal-head">
+              <h3>💬 محادثات: {selectedUserForChats.name}</h3>
+              <button onClick={() => setShowUserChatsModal(false)} className="close-btn">✕</button>
             </div>
-          )}
-          
-          {/* حالة عدم وجود نتائج */}
-          {searchUserTerm && searchResults.length === 0 && !selectedChatUser && (
-            <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>
-              🔍 لا توجد نتائج لـ "{searchUserTerm}"
-            </div>
-          )}
-          
-          {/* زر إلغاء اختيار المستخدم */}
-          {selectedChatUser && (
-            <div style={{ marginBottom: "20px" }}>
-              <button
-                onClick={() => {
-                  setSelectedChatUser(null);
-                  setUserChats([]);
-                  setSearchUserTerm("");
-                }}
-                className="admin-btn admin-btn-yellow"
-              >
-                ← العودة للبحث
-              </button>
-            </div>
-          )}
-          
-          {/* جدول المحادثات للمستخدم المختار */}
-          {selectedChatUser && (
-            <>
-              <h3 style={{ marginBottom: "15px" }}>
-                📋 محادثات: {selectedChatUser.name || selectedChatUser.email}
-              </h3>
-              {userChats.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>
-                  💬 لا توجد محادثات لهذا المستخدم
-                </div>
-              ) : (
-                <div className="admin-overflow-x">
-                  <table className="admin-table">
-                    <thead>
-                      <tr>
-                        <th>العنوان</th>
-                        <th>الرسائل</th>
-                        <th>آخر تحديث</th>
-                        <th>إجراءات</th>
+            
+            {userChatsList.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>
+                📭 لا توجد محادثات لهذا المستخدم
+              </div>
+            ) : (
+              <div className="admin-overflow-x">
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>العنوان</th>
+                      <th>الرسائل</th>
+                      <th>آخر تحديث</th>
+                      <th>إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {userChatsList.map(chat => (
+                      <tr key={chat.id}>
+                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
+                        <td>{chat.messages?.length || 0}</td>
+                        <td className="date-cell">{formatDate(chat.updated_at)}</td>
+                        <td className="admin-td-actions-tight">
+                          <button 
+                            onClick={() => {
+                              setSelectedChat(chat);
+                              setShowChatModal(true);
+                            }} 
+                            className="admin-btn admin-btn-purple admin-btn-icon" 
+                            title="عرض"
+                          >
+                            👁️
+                          </button>
+                          <button 
+                            onClick={() => deleteChatFromModal(chat.id)} 
+                            className="admin-btn admin-btn-red admin-btn-icon" 
+                            title="حذف"
+                          >
+                            🗑️
+                          </button>
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {userChats.map(chat => (
-                        <tr key={chat.id}>
-                          <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
-                          <td>{chat.messages?.length || 0}</td>
-                          <td className="date-cell">{formatDate(chat.updated_at)}</td>
-                          <td className="admin-td-actions-tight">
-                            <button onClick={() => openChatModal(chat)} className="admin-btn admin-btn-purple admin-btn-icon" title="عرض">👁️</button>
-                            <button onClick={() => deleteChat(chat.id)} className="admin-btn admin-btn-red admin-btn-icon" title="حذف">🗑️</button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          )}
-          
-          {/* رسالة ترحيب أول مرة */}
-          {!searchUserTerm && !selectedChatUser && (
-            <div style={{ textAlign: "center", padding: "60px", opacity: 0.5 }}>
-              🔍 ابحث عن مستخدم لعرض محادثاته
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            
+            <div className="admin-modal-actions" style={{ marginTop: "20px" }}>
+              <button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button>
             </div>
-          )}
+          </div>
         </div>
       )}
       
@@ -627,7 +546,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* ========== مودال عرض المحادثة ========== */}
+      {/* ========== مودال عرض تفاصيل المحادثة (الرسائل) ========== */}
       {showChatModal && selectedChat && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "700px", maxHeight: "80vh", overflowY: "auto" }}>
