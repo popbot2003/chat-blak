@@ -187,7 +187,9 @@ export default function Admin({ user, onLogout }) {
           </div>
           <div className="admin-overflow-x">
             <table className="admin-table">
-              <thead><tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+              <thead>
+                <tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الحالة</th><th>الإجراءات</th></tr>
+              </thead>
               <tbody>
                 {filteredUsers.map(u => {
                   const chatCount = getUserChats(u.id).length;
@@ -198,7 +200,15 @@ export default function Admin({ user, onLogout }) {
                   return (
                     <tr key={u.id}>
                       <td><strong>{u.name || "مستخدم"}</strong><br /><span className="key-mono">{u.email}</span></td>
-                      <td><div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}><div style={{ fontSize: "12px" }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div><div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}><div style={{ width: percent + "%", height: "100%", background: color }} /></div><div style={{ fontSize: "10px", opacity: 0.6 }}>{percent.toFixed(0)}%</div></div></td>
+                      <td>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}>
+                          <div style={{ fontSize: "12px" }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div>
+                          <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}>
+                            <div style={{ width: percent + "%", height: "100%", background: color }} />
+                          </div>
+                          <div style={{ fontSize: "10px", opacity: 0.6 }}>{percent.toFixed(0)}%</div>
+                        </div>
+                      </td>
                       <td><button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow">💬 {chatCount}</button></td>
                       <td><span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>{u.is_blocked ? "محظور" : "نشط"}</span></td>
                       <td className="admin-td-actions">
@@ -211,7 +221,7 @@ export default function Admin({ user, onLogout }) {
                   );
                 })}
               </tbody>
-            </tr>
+            </table>
           </div>
         </div>
       )}
@@ -221,7 +231,9 @@ export default function Admin({ user, onLogout }) {
           <div className="admin-section-head"><h2>🔑 مفاتيح API العامة</h2><button onClick={() => setShowAddKeyModal(true)} className="admin-add-btn">➕ إضافة مفتاح</button></div>
           <div className="admin-overflow-x">
             <table className="admin-table">
-              <thead><tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th></tr></thead>
+              <thead>
+                <tr><th>الاسم</th><th>المفتاح</th><th>الاستهلاك</th><th>الحد</th><th>الحالة</th><th>الإجراءات</th></tr>
+              </thead>
               <tbody>
                 {apiKeys.map(key => {
                   const percent = (key.used_today / key.daily_limit) * 100;
@@ -249,21 +261,23 @@ export default function Admin({ user, onLogout }) {
             {userChatsList.length === 0 ? <div style={{ textAlign: "center", padding: "40px", opacity: 0.6 }}>📭 لا توجد محادثات لهذا المستخدم</div> : (
               <div className="admin-overflow-x">
                 <table className="admin-table">
-                  <thead><tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr></thead>
+                  <thead>
+                    <tr><th>العنوان</th><th>الرسائل</th><th>آخر تحديث</th><th>إجراءات</th></tr>
+                  </thead>
                   <tbody>
                     {userChatsList.map(chat => (
                       <tr key={chat.id}>
-                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td
-                        <td>{chat.messages?.length || 0}</td
-                        <td className="date-cell">{formatDate(chat.updated_at)}</td
+                        <td className="chat-title-cell">{truncate(chat.title || "بدون عنوان", 50)}</td>
+                        <td>{chat.messages?.length || 0}</td>
+                        <td className="date-cell">{formatDate(chat.updated_at)}</td>
                         <td className="admin-td-actions-tight">
                           <button onClick={() => openChatViewer(chat)} className="admin-btn admin-btn-purple admin-btn-icon">👁️</button>
                           <button onClick={() => deleteChatFromModal(chat.id)} className="admin-btn admin-btn-red admin-btn-icon">🗑️</button>
-                        </td
-                      </tr
+                        </td>
+                      </tr>
                     ))}
                   </tbody>
-                </table
+                </table>
               </div>
             )}
             <div className="admin-modal-actions" style={{ marginTop: "20px" }}><button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button></div>
