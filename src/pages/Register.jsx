@@ -1,5 +1,5 @@
 // ============================================
-// Register.jsx - نسخة مبسطة (تجاوز التأكيد)
+// Register.jsx - نسخة نهائية (بدون أي تحقق)
 // ============================================
 
 import { useState } from "react";
@@ -42,50 +42,55 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
-    // التحقق من وجود المستخدم
-    const { data: existingUser } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('email', email)
-      .single();
+    try {
+      // محاولة جلب المستخدم (لو موجود)
+      const { data: existingUser } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('email', email)
+        .maybeSingle(); // استخدام maybeSingle بدل single عشان مايطلباش خطأ
+        
+      if (existingUser) {
+        setError("❌ هذا البريد الإلكتروني مستخدم بالفعل");
+        setLoading(false);
+        return;
+      }
+
+      const newUser = {
+        id: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+        email,
+        password,
+        name: name.trim() || email.split('@')[0],
+        role: 'user',
+        is_blocked: false,
+        is_verified: true,
+        daily_limit: DEFAULT_USER_DAILY_LIMIT,
+        used_today: 0,
+        last_reset_date: new Date().toISOString().slice(0, 10),
+        created_at: new Date().toISOString(),
+        last_seen: new Date().toISOString(),
+        last_login_date: new Date().toISOString().slice(0, 10)
+      };
+
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert(newUser);
+        
+      if (insertError) {
+        console.error("❌ خطأ في الإدراج:", insertError);
+        setError("❌ حدث خطأ أثناء إنشاء الحساب: " + insertError.message);
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem("black-user", JSON.stringify(newUser));
+      onRegister(newUser);
       
-    if (existingUser) {
-      setError("❌ هذا البريد الإلكتروني مستخدم بالفعل");
+    } catch (err) {
+      console.error("❌ خطأ:", err);
+      setError("❌ حدث خطأ: " + err.message);
       setLoading(false);
-      return;
     }
-
-    // ✅ إنشاء مستخدم جديد (مع is_verified = true مباشرة)
-    const newUser = {
-      id: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-      email,
-      password,
-      name: name.trim() || email.split('@')[0],
-      role: 'user',
-      is_blocked: false,
-      is_verified: true,  // ✅ مؤكد تلقائياً - بدون الحاجة لكود
-      daily_limit: DEFAULT_USER_DAILY_LIMIT,
-      used_today: 0,
-      last_reset_date: new Date().toISOString().slice(0, 10),
-      created_at: new Date().toISOString(),
-      last_seen: new Date().toISOString(),
-      last_login_date: new Date().toISOString().slice(0, 10)
-    };
-
-    const { error: insertError } = await supabase
-      .from('profiles')
-      .insert(newUser);
-      
-    if (insertError) {
-      console.error("❌ خطأ في الإدراج:", insertError);
-      setError("❌ حدث خطأ أثناء إنشاء الحساب");
-      setLoading(false);
-      return;
-    }
-
-    // حفظ المستخدم وتسجيل الدخول مباشرة
-    localStorage.setItem("black-user", JSON.stringify(newUser));
-    onRegister(newUser);
   }
 
   return (
@@ -160,7 +165,6 @@ export default function Register({ onRegister, onSwitchToLogin }) {
             required 
           />
           
-          {/* حقل كلمة المرور مع زر العين */}
           <div style={{ position: "relative", marginBottom: "15px" }}>
             <input 
               type={showPassword ? "text" : "password"} 
@@ -201,7 +205,6 @@ export default function Register({ onRegister, onSwitchToLogin }) {
             </button>
           </div>
           
-          {/* حقل تأكيد كلمة المرور مع زر العين */}
           <div style={{ position: "relative", marginBottom: "20px" }}>
             <input 
               type={showConfirmPassword ? "text" : "password"} 
