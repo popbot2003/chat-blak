@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from '../lib/supabase';
 import MessageContent from "../components/MessageContent";
 import { formatDate, getUsagePercent, getUsageColor, truncate } from '../utils/helpers';
+import { PERSONALITY_LABELS, DEFAULT_PERSONALITY } from '../config/personalities';
 
 export default function Admin({ user, onLogout }) {
   const [users, setUsers] = useState([]);
@@ -185,6 +186,11 @@ export default function Admin({ user, onLogout }) {
     loadUsers();
   }
 
+  async function changePersonality(userId, personality) {
+    await supabase.from("profiles").update({ personality }).eq("id", userId);
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, personality } : u));
+  }
+
   return (
     <div className="admin-page">
       {notification && (
@@ -221,7 +227,7 @@ export default function Admin({ user, onLogout }) {
           <div className="admin-overflow-x">
             <table className="admin-table">
               <thead>
-                <tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الحالة</th><th>الإجراءات</th></tr>
+                <tr><th>المستخدم</th><th>الاستهلاك اليومي</th><th>المحادثات</th><th>الشخصية</th><th>الحالة</th><th>الإجراءات</th></tr>
               </thead>
               <tbody>
                 {filteredUsers.map(u => {
@@ -243,6 +249,17 @@ export default function Admin({ user, onLogout }) {
                         </div>
                       </td>
                       <td><button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow">💬 {chatCount}</button></td>
+                      <td>
+                        <select
+                          value={u.personality || DEFAULT_PERSONALITY}
+                          onChange={e => changePersonality(u.id, e.target.value)}
+                          style={{ background: "rgba(255,255,255,0.07)", color: "#e0e0e0", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "8px", padding: "6px 10px", fontSize: "13px", cursor: "pointer" }}
+                        >
+                          {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (
+                            <option key={key} value={key} style={{ background: "#1a1a2e" }}>{label}</option>
+                          ))}
+                        </select>
+                      </td>
                       <td><span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>{u.is_blocked ? "محظور" : "نشط"}</span></td>
                       <td className="admin-td-actions">
                         <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow">⚙️</button>
@@ -317,7 +334,6 @@ export default function Admin({ user, onLogout }) {
               <h3>💬 محادثات {selectedUserForChats.name}</h3>
               <button onClick={() => setShowUserChatsModal(false)} className="close-btn">✕</button>
             </div>
-
             {userChatsList.length === 0 ? (
               <p style={{ textAlign: "center", opacity: 0.5, marginTop: "30px" }}>لا توجد محادثات</p>
             ) : (
@@ -340,14 +356,8 @@ export default function Admin({ user, onLogout }) {
                 ))}
               </div>
             )}
-
             <div className="admin-modal-actions" style={{ marginTop: "20px" }}>
-              <button
-                onClick={() => deleteAllUserChats(selectedUserForChats.id, selectedUserForChats.name)}
-                className="admin-btn admin-btn-red"
-              >
-                🗑️ حذف الكل
-              </button>
+              <button onClick={() => deleteAllUserChats(selectedUserForChats.id, selectedUserForChats.name)} className="admin-btn admin-btn-red">🗑️ حذف الكل</button>
               <button onClick={() => setShowUserChatsModal(false)} className="admin-modal-cancel-btn">إغلاق</button>
             </div>
           </div>
