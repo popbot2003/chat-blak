@@ -1,6 +1,6 @@
 // ============================================
 // Register.jsx
-// صفحة إنشاء حساب جديد
+// صفحة إنشاء حساب جديد مع زر إظهار/إخفاء كلمة المرور
 // ============================================
 
 import { useState } from "react";
@@ -13,6 +13,8 @@ export default function Register({ onRegister, onSwitchToLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,14 +23,12 @@ export default function Register({ onRegister, onSwitchToLogin }) {
     setError("");
     setLoading(true);
 
-    // التحقق من تطابق كلمة المرور
     if (password !== confirmPassword) {
       setError("❌ كلمة المرور غير متطابقة");
       setLoading(false);
       return;
     }
 
-    // التحقق من صحة كلمة المرور
     const passwordCheck = validatePassword(password);
     if (!passwordCheck.valid) {
       setError("❌ " + passwordCheck.error);
@@ -36,7 +36,6 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
-    // التحقق من صحة البريد
     const emailCheck = validateEmail(email);
     if (!emailCheck.valid) {
       setError("❌ " + emailCheck.error);
@@ -44,7 +43,6 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
-    // التحقق من وجود المستخدم مسبقاً
     const { data: existingUser } = await supabase
       .from('profiles')
       .select('email')
@@ -57,15 +55,14 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
-    // إنشاء مستخدم جديد مع الحد المبدئي
     const newUser = {
-      id: 'user-' + Date.now(),
+      id: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
       email,
-      password, // ⚠️ مؤقتاً نص عادي - سنشفر لاحقاً
+      password,
       name: name.trim() || email.split('@')[0],
       role: 'user',
       is_blocked: false,
-      daily_limit: DEFAULT_USER_DAILY_LIMIT, // 5000 توكن
+      daily_limit: DEFAULT_USER_DAILY_LIMIT,
       used_today: 0,
       last_reset_date: new Date().toISOString().slice(0, 10),
       created_at: new Date().toISOString(),
@@ -83,7 +80,6 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
-    // حفظ المستخدم في localStorage ودعوة onRegister
     localStorage.setItem("black-user", JSON.stringify(newUser));
     onRegister(newUser);
   }
@@ -160,45 +156,87 @@ export default function Register({ onRegister, onSwitchToLogin }) {
             required 
           />
           
-          <input 
-            type="password" 
-            placeholder="كلمة المرور" 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
-            style={{ 
-              width: "100%", 
-              padding: "14px", 
-              marginBottom: "15px", 
-              borderRadius: "12px", 
-              border: "1px solid rgba(255,255,255,0.1)", 
-              background: "rgba(255,255,255,0.05)", 
-              color: "#e0e0e0", 
-              fontSize: "16px", 
-              outline: "none", 
-              direction: "ltr" 
-            }} 
-            required 
-          />
+          {/* حقل كلمة المرور مع زر العين */}
+          <div style={{ position: "relative", marginBottom: "15px" }}>
+            <input 
+              type={showPassword ? "text" : "password"} 
+              placeholder="كلمة المرور" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              style={{ 
+                width: "100%", 
+                padding: "14px", 
+                paddingLeft: "50px",
+                borderRadius: "12px", 
+                border: "1px solid rgba(255,255,255,0.1)", 
+                background: "rgba(255,255,255,0.05)", 
+                color: "#e0e0e0", 
+                fontSize: "16px", 
+                outline: "none", 
+                direction: "ltr" 
+              }} 
+              required 
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "20px",
+                padding: "8px",
+                color: "#a29bfe"
+              }}
+            >
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
           
-          <input 
-            type="password" 
-            placeholder="تأكيد كلمة المرور" 
-            value={confirmPassword} 
-            onChange={(e) => setConfirmPassword(e.target.value)} 
-            style={{ 
-              width: "100%", 
-              padding: "14px", 
-              marginBottom: "20px", 
-              borderRadius: "12px", 
-              border: "1px solid rgba(255,255,255,0.1)", 
-              background: "rgba(255,255,255,0.05)", 
-              color: "#e0e0e0", 
-              fontSize: "16px", 
-              outline: "none", 
-              direction: "ltr" 
-            }} 
-            required 
-          />
+          {/* حقل تأكيد كلمة المرور مع زر العين */}
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <input 
+              type={showConfirmPassword ? "text" : "password"} 
+              placeholder="تأكيد كلمة المرور" 
+              value={confirmPassword} 
+              onChange={(e) => setConfirmPassword(e.target.value)} 
+              style={{ 
+                width: "100%", 
+                padding: "14px", 
+                paddingLeft: "50px",
+                borderRadius: "12px", 
+                border: "1px solid rgba(255,255,255,0.1)", 
+                background: "rgba(255,255,255,0.05)", 
+                color: "#e0e0e0", 
+                fontSize: "16px", 
+                outline: "none", 
+                direction: "ltr" 
+              }} 
+              required 
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "20px",
+                padding: "8px",
+                color: "#a29bfe"
+              }}
+            >
+              {showConfirmPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
           
           <button 
             type="submit" 
