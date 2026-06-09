@@ -1,6 +1,6 @@
 // ============================================
 // Login.jsx
-// صفحة تسجيل الدخول مع طباعة أخطاء للتحقق
+// صفحة تسجيل الدخول مع زر إظهار/إخفاء كلمة المرور
 // ============================================
 
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { isNewDay } from '../utils/helpers';
 export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPassword }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,14 +19,12 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
     e.preventDefault();
     setError("");
 
-    // التحقق من صحة البريد
     const emailCheck = validateEmail(email);
     if (!emailCheck.valid) {
       setError("❌ " + emailCheck.error);
       return;
     }
 
-    // التحقق من صحة كلمة المرور
     const passwordCheck = validatePassword(password);
     if (!passwordCheck.valid) {
       setError("❌ " + passwordCheck.error);
@@ -37,79 +36,44 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
     try {
       console.log("🔍 محاولة تسجيل الدخول:", { email });
 
-      // جلب بيانات المستخدم
       const { data: user, error: userError } = await supabase
         .from('profiles')
         .select('*')
         .eq('email', email)
         .single();
 
-      if (userError) {
-        console.error("❌ خطأ في جلب المستخدم:", userError);
+      if (userError || !user) {
         throw new Error("البريد أو كلمة المرور غير صحيحة");
       }
 
-      if (!user) {
-        console.error("❌ المستخدم غير موجود:", email);
-        throw new Error("البريد أو كلمة المرور غير صحيحة");
-      }
-
-      console.log("✅ المستخدم موجود:", { id: user.id, email: user.email, role: user.role });
-
-      // التحقق من كلمة المرور
       if (user.password !== password) {
-        console.error("❌ كلمة المرور غير متطابقة:", {
-          stored: user.password,
-          entered: password,
-          storedLength: user.password?.length,
-          enteredLength: password.length
-        });
         throw new Error("البريد أو كلمة المرور غير صحيحة");
       }
 
-      console.log("✅ كلمة المرور صحيحة");
-
-      // التحقق من الحظر
       if (user.is_blocked) {
-        console.error("❌ المستخدم محظور:", user.is_blocked);
         throw new Error("هذا الحساب محظور");
       }
 
-      // إعادة ضبط الاستهلاك اليومي إذا تغير اليوم
       let updatedUser = { ...user };
       if (isNewDay(user.last_reset_date)) {
-        console.log("🔄 إعادة ضبط الاستهلاك اليومي");
         const today = new Date().toISOString().slice(0, 10);
-        const { error: resetError } = await supabase
+        await supabase
           .from('profiles')
-          .update({ 
-            used_today: 0, 
-            last_reset_date: today 
-          })
+          .update({ used_today: 0, last_reset_date: today })
           .eq('id', user.id);
-
-        if (!resetError) {
-          updatedUser.used_today = 0;
-          updatedUser.last_reset_date = today;
-        } else {
-          console.error("❌ خطأ في إعادة الضبط:", resetError);
-        }
+        updatedUser.used_today = 0;
+        updatedUser.last_reset_date = today;
       }
 
-      // تحديث آخر ظهور
       await supabase
         .from('profiles')
         .update({ last_seen: new Date().toISOString() })
         .eq('id', user.id);
 
-      // حفظ المستخدم في localStorage
       localStorage.setItem("black-user", JSON.stringify(updatedUser));
-      console.log("✅ تسجيل الدخول ناجح، سيتم التوجيه...");
-      
       onLogin(updatedUser);
 
     } catch (err) {
-      console.error("🔥 خطأ في handleLogin:", err);
       setError("❌ " + err.message);
     } finally {
       setLoading(false);
@@ -170,25 +134,46 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
             required 
           />
           
-          <input 
-            type="password" 
-            placeholder="كلمة المرور" 
-            value={password} 
-            onChange={(e) => setPassword(e.target.value)} 
-            style={{ 
-              width: "100%", 
-              padding: "14px", 
-              marginBottom: "20px", 
-              borderRadius: "12px", 
-              border: "1px solid rgba(255,255,255,0.1)", 
-              background: "rgba(255,255,255,0.05)", 
-              color: "#e0e0e0", 
-              fontSize: "16px", 
-              outline: "none", 
-              direction: "ltr" 
-            }} 
-            required 
-          />
+          {/* حقل كلمة المرور مع زر العين */}
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <input 
+              type={showPassword ? "text" : "password"} 
+              placeholder="كلمة المرور" 
+              value={password} 
+              onChange={(e) => setPassword(e.target.value)} 
+              style={{ 
+                width: "100%", 
+                padding: "14px", 
+                paddingLeft: "50px",
+                borderRadius: "12px", 
+                border: "1px solid rgba(255,255,255,0.1)", 
+                background: "rgba(255,255,255,0.05)", 
+                color: "#e0e0e0", 
+                fontSize: "16px", 
+                outline: "none", 
+                direction: "ltr" 
+              }} 
+              required 
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "20px",
+                padding: "8px",
+                color: "#a29bfe"
+              }}
+            >
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
           
           <button 
             type="submit" 
