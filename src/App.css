@@ -35,7 +35,7 @@ html, body {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .container:has(.admin-page) {
@@ -154,7 +154,7 @@ html, body {
 .menu-item:hover { background: rgba(108,92,231,0.15); }
 .light .menu-item:hover { background: rgba(108,92,231,0.1); }
 
-/* ========== شريط التوكن المحسن ========== */
+/* ========== شريط التوكن ========== */
 .token-bar {
   padding: 10px 16px;
   flex-shrink: 0;
@@ -225,7 +225,7 @@ html, body {
   padding: 4px;
 }
 
-/* ========== الرسائل المحسنة ========== */
+/* ========== الرسائل ========== */
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -296,7 +296,7 @@ html, body {
 
 .avatar-user { background: linear-gradient(135deg, #4ade80, #22c55e); }
 
-/* بالونات الرسائل المحسنة */
+/* بالونات الرسائل */
 .bubble {
   padding: 12px 16px;
   border-radius: 18px;
@@ -349,7 +349,7 @@ html, body {
   background: rgba(108,92,231,0.2);
 }
 
-/* ========== كود بلوك محسن ========== */
+/* ========== كود بلوك ========== */
 .code-wrapper {
   margin: 8px 0;
   border-radius: 10px;
@@ -516,7 +516,7 @@ html, body {
   .code-content { font-size: 13px; }
 }
 
-/* ========== Admin Styles (مختصرة) ========== */
+/* ========== Admin Styles ========== */
 .admin-page {
   width: 100%;
   min-height: 100vh;
@@ -636,6 +636,31 @@ html, body {
 .admin-badge-purple { background: rgba(108,92,231,0.2); color: #a29bfe; }
 .admin-badge-yellow { background: rgba(251,191,36,0.2); color: #fbbf24; }
 
+/* ========== شريط تقدم المفاتيح في Admin ========== */
+.key-usage-bar {
+  width: 100px;
+  height: 6px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.key-usage-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.key-usage-fill.low {
+  background: #4ade80;
+}
+
+.key-usage-fill.high {
+  background: #f87171;
+}
+
+/* مودالات */
 .admin-modal {
   position: fixed;
   top: 0;
@@ -660,14 +685,11 @@ html, body {
   overflow-y: auto;
 }
 
-.admin-input, .admin-select {
-  width: 100%;
-  padding: 10px;
-  margin-bottom: 12px;
-  border-radius: 10px;
-  background: rgba(255,255,255,0.05);
-  color: #e0e0e0;
-  border: 1px solid rgba(255,255,255,0.1);
+.admin-modal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
 }
 
 .admin-modal-actions {
@@ -694,4 +716,65 @@ html, body {
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 10px;
   cursor: pointer;
+}
+
+.admin-input, .admin-select {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.05);
+  color: #e0e0e0;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.admin-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.admin-add-btn {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.admin-td-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.admin-td-actions-tight {
+  display: flex;
+  gap: 4px;
+}
+
+.key-mono {
+  font-family: monospace;
+  opacity: 0.5;
+  font-size: 12px;
+}
+
+.chat-title-cell {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-cell {
+  font-size: 12px;
+  opacity: 0.6;
+  white-space: nowrap;
+}
+
+.admin-overflow-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
