@@ -1,6 +1,6 @@
 // ============================================
 // Login.jsx
-// صفحة تسجيل الدخول
+// صفحة تسجيل الدخول مع طباعة أخطاء للتحقق
 // ============================================
 
 import { useState } from "react";
@@ -35,25 +35,50 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
     setLoading(true);
 
     try {
+      console.log("🔍 محاولة تسجيل الدخول:", { email });
+
       // جلب بيانات المستخدم
       const { data: user, error: userError } = await supabase
         .from('profiles')
         .select('*')
         .eq('email', email)
-        .eq('password', password)
         .single();
 
-      if (userError || !user) {
+      if (userError) {
+        console.error("❌ خطأ في جلب المستخدم:", userError);
         throw new Error("البريد أو كلمة المرور غير صحيحة");
       }
 
+      if (!user) {
+        console.error("❌ المستخدم غير موجود:", email);
+        throw new Error("البريد أو كلمة المرور غير صحيحة");
+      }
+
+      console.log("✅ المستخدم موجود:", { id: user.id, email: user.email, role: user.role });
+
+      // التحقق من كلمة المرور
+      if (user.password !== password) {
+        console.error("❌ كلمة المرور غير متطابقة:", {
+          stored: user.password,
+          entered: password,
+          storedLength: user.password?.length,
+          enteredLength: password.length
+        });
+        throw new Error("البريد أو كلمة المرور غير صحيحة");
+      }
+
+      console.log("✅ كلمة المرور صحيحة");
+
+      // التحقق من الحظر
       if (user.is_blocked) {
+        console.error("❌ المستخدم محظور:", user.is_blocked);
         throw new Error("هذا الحساب محظور");
       }
 
-      // ✅ إعادة ضبط الاستهلاك اليومي إذا تغير اليوم
+      // إعادة ضبط الاستهلاك اليومي إذا تغير اليوم
       let updatedUser = { ...user };
       if (isNewDay(user.last_reset_date)) {
+        console.log("🔄 إعادة ضبط الاستهلاك اليومي");
         const today = new Date().toISOString().slice(0, 10);
         const { error: resetError } = await supabase
           .from('profiles')
@@ -66,6 +91,8 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         if (!resetError) {
           updatedUser.used_today = 0;
           updatedUser.last_reset_date = today;
+        } else {
+          console.error("❌ خطأ في إعادة الضبط:", resetError);
         }
       }
 
@@ -77,9 +104,12 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
 
       // حفظ المستخدم في localStorage
       localStorage.setItem("black-user", JSON.stringify(updatedUser));
+      console.log("✅ تسجيل الدخول ناجح، سيتم التوجيه...");
+      
       onLogin(updatedUser);
 
     } catch (err) {
+      console.error("🔥 خطأ في handleLogin:", err);
       setError("❌ " + err.message);
     } finally {
       setLoading(false);
