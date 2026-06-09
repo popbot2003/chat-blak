@@ -1,3 +1,8 @@
+// ============================================
+// ErrorBoundary.jsx
+// مكون التقاط الأخطاء ومنع انهيار التطبيق
+// ============================================
+
 import { Component } from "react";
 
 export default class ErrorBoundary extends Component {
@@ -36,7 +41,7 @@ export default class ErrorBoundary extends Component {
             {this.state.error?.message || "جرب تعمل Refresh للصفحة"}
           </p>
           <button
-            onClick={function() { window.location.reload(); }}
+            onClick={() => window.location.reload()}
             style={{
               background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
               border: "none",
