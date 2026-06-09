@@ -1,12 +1,13 @@
 // ============================================
 // Register.jsx
-// صفحة إنشاء حساب جديد مع زر إظهار/إخفاء كلمة المرور
+// صفحة إنشاء حساب جديد مع تأكيد الإيميل
 // ============================================
 
 import { useState } from "react";
 import { supabase } from '../lib/supabase';
 import { validateEmail, validatePassword } from '../utils/validators';
 import { DEFAULT_USER_DAILY_LIMIT } from '../config/constants';
+import VerificationModal from "../components/VerificationModal";
 
 export default function Register({ onRegister, onSwitchToLogin }) {
   const [name, setName] = useState("");
@@ -17,6 +18,11 @@ export default function Register({ onRegister, onSwitchToLogin }) {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  
+  // حالة مودال التفعيل
+  const [showVerification, setShowVerification] = useState(false);
+  const [tempUserId, setTempUserId] = useState(null);
+  const [tempEmail, setTempEmail] = useState("");
 
   async function handleRegister(e) {
     e.preventDefault();
@@ -55,6 +61,10 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
+    // إنشاء كود تفعيل عشوائي
+    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
     const newUser = {
       id: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
       email,
@@ -62,6 +72,9 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       name: name.trim() || email.split('@')[0],
       role: 'user',
       is_blocked: false,
+      is_verified: false,  // ✅ غير مؤكد حتى يدخل الكود
+      verification_code: verificationCode,
+      verification_code_expires: verificationExpires,
       daily_limit: DEFAULT_USER_DAILY_LIMIT,
       used_today: 0,
       last_reset_date: new Date().toISOString().slice(0, 10),
@@ -80,8 +93,25 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       return;
     }
 
-    localStorage.setItem("black-user", JSON.stringify(newUser));
-    onRegister(newUser);
+    // ✅ فتح مودال التفعيل بدلاً من تسجيل الدخول مباشرة
+    setTempUserId(newUser.id);
+    setTempEmail(email);
+    setShowVerification(true);
+    setLoading(false);
+    
+    // عرض الكود في console للتجربة (حتى يتم إعداد الإيميل)
+    console.log("📧 كود التفعيل:", verificationCode);
+  }
+
+  function handleVerified() {
+    setShowVerification(false);
+    // جلب المستخدم المحدث من قاعدة البيانات
+    supabase.from('profiles').select('*').eq('id', tempUserId).single().then(({ data }) => {
+      if (data) {
+        localStorage.setItem("black-user", JSON.stringify(data));
+        onRegister(data);
+      }
+    });
   }
 
   return (
@@ -270,6 +300,16 @@ export default function Register({ onRegister, onSwitchToLogin }) {
           عندك حساب بالفعل؟ سجل دخول
         </button>
       </div>
+
+      {/* مودال تأكيد البريد */}
+      {showVerification && (
+        <VerificationModal
+          email={tempEmail}
+          userId={tempUserId}
+          onVerified={handleVerified}
+          onClose={() => setShowVerification(false)}
+        />
+      )}
     </div>
   );
 }
