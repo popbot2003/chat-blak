@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -7,21 +7,57 @@ import Chat from "./pages/Chat";
 import Admin from "./pages/Admin";
 
 export default function App() {
-  const [user, setUser] = useState(function() {
+  // تفعيل سحب للتحديث على الهواتف (Pull to Refresh)
+  useEffect(() => {
+    let touchStartY = 0;
+    let isAtTop = true;
+
+    const handleTouchStart = (e) => {
+      touchStartY = e.touches[0].clientY;
+      isAtTop = window.scrollY === 0;
+    };
+
+    const handleTouchMove = (e) => {
+      const touchEndY = e.touches[0].clientY;
+      const pullDistance = touchEndY - touchStartY;
+      
+      if (pullDistance > 70 && isAtTop && touchStartY < 50) {
+        e.preventDefault();
+        window.location.reload();
+      }
+    };
+
+    window.addEventListener('touchstart', handleTouchStart, { passive: false });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+    };
+  }, []);
+
+  // تحميل المستخدم من localStorage عند بدء التطبيق
+  const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem("black-user");
-      return saved ? JSON.parse(saved) : null;
+      if (!saved) return null;
+      
+      const parsed = JSON.parse(saved);
+      if (!parsed.id || !parsed.email) {
+        localStorage.removeItem("black-user");
+        return null;
+      }
+      return parsed;
     } catch (error) {
       console.error("❌ خطأ في تحميل المستخدم:", error);
       localStorage.removeItem("black-user");
       return null;
     }
   });
-  
+
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  // دالة تسجيل الخروج الآمنة
   function handleLogout() {
     try {
       localStorage.removeItem("black-user");
@@ -33,37 +69,46 @@ export default function App() {
     setShowForgotPassword(false);
   }
 
-  // لو مش مسجل
   if (!user) {
     if (showRegister) {
       return (
-        <Register 
-          onRegister={function(userData) { setUser(userData); }}
-          onSwitchToLogin={function() { setShowRegister(false); }}
-        />
+        <ErrorBoundary>
+          <Register
+            onRegister={(userData) => {
+              setUser(userData);
+              setShowRegister(false);
+            }}
+            onSwitchToLogin={() => setShowRegister(false)}
+          />
+        </ErrorBoundary>
       );
     }
+
     if (showForgotPassword) {
       return (
-        <ForgotPassword 
-          onSwitchToLogin={function() { 
-            setShowForgotPassword(false); 
-            setShowRegister(false); 
-          }} 
-        />
+        <ErrorBoundary>
+          <ForgotPassword
+            onSwitchToLogin={() => {
+              setShowForgotPassword(false);
+              setShowRegister(false);
+            }}
+          />
+        </ErrorBoundary>
       );
     }
+
     return (
-      <Login 
-        onLogin={function(userData) { setUser(userData); }}
-        onSwitchToRegister={function() { setShowRegister(true); }}
-        onSwitchToForgotPassword={function() { setShowForgotPassword(true); }}
-      />
+      <ErrorBoundary>
+        <Login
+          onLogin={(userData) => setUser(userData)}
+          onSwitchToRegister={() => setShowRegister(true)}
+          onSwitchToForgotPassword={() => setShowForgotPassword(true)}
+        />
+      </ErrorBoundary>
     );
   }
 
-  // Admin
-  if (user && user.role === "admin") {
+  if (user.role === "admin") {
     return (
       <ErrorBoundary>
         <Admin user={user} onLogout={handleLogout} />
@@ -71,7 +116,6 @@ export default function App() {
     );
   }
 
-  // User عادي
   return (
     <ErrorBoundary>
       <Chat user={user} onLogout={handleLogout} />
