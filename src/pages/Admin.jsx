@@ -1,6 +1,5 @@
 // ============================================
-// Admin.jsx - النسخة القديمة المستقرة
-// بدون كارت الاستهلاك العام وبدون شرائط تقدم لكل مفتاح
+// Admin.jsx - النسخة النهائية مع زر حذف المستخدم
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -86,6 +85,25 @@ export default function Admin({ user, onLogout }) {
     );
   });
   
+  // ========== دوال حذف المستخدم ==========
+  async function deleteUser(userId, userName) {
+    if (!confirm(`⚠️ تحذير: هل أنت متأكد من حذف المستخدم "${userName}" نهائياً؟\n\nسيتم حذف:\n- حساب المستخدم بالكامل\n- جميع محادثاته\n\nلا يمكن التراجع!`)) return;
+    
+    try {
+      // حذف المحادثات أولاً
+      await supabase.from('chats').delete().eq('user_id', userId);
+      // ثم حذف المستخدم
+      await supabase.from('profiles').delete().eq('id', userId);
+      
+      alert("✅ تم حذف المستخدم");
+      loadUsers();
+      loadAllChats();
+    } catch (err) {
+      alert("❌ خطأ في حذف المستخدم: " + err.message);
+    }
+  }
+  
+  // ========== باقي الدوال ==========
   async function openUserChatsModal(userId, userName) {
     const { data } = await supabase
       .from('chats')
@@ -257,11 +275,12 @@ export default function Admin({ user, onLogout }) {
                       <td><button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow">💬 {chatCount}</button></td>
                       <td><span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>{u.is_blocked ? "محظور" : "نشط"}</span></td>
                       <td className="admin-td-actions">
-                        <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow">⚙️</button>
+                        <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow" title="تعديل الحد">⚙️</button>
                         <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} className={`admin-btn ${u.is_blocked ? "admin-btn-green" : "admin-btn-red"}`}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
-                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red">🗑️ محادثات</button>
-                      </td>
-                    </tr>
+                        {/* ✅ زر حذف المستخدم الجديد */}
+                        <button onClick={() => deleteUser(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف المستخدم نهائياً">🗑️ حذف</button>
+                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف كل المحادثات">🗑️ محادثات</button>
+                       </tr>
                   );
                 })}
               </tbody>
@@ -297,7 +316,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* مودال عرض محادثات المستخدم */}
+      {/* باقي المودالات كما هي */}
       {showUserChatsModal && selectedUserForChats && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "800px", maxHeight: "80vh", overflowY: "auto" }}>
@@ -308,7 +327,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* مودال إضافة مفتاح */}
       {showAddKeyModal && (
         <div className="admin-modal">
           <div className="admin-modal-content"><h3 style={{ marginBottom: "20px" }}>➕ إضافة مفتاح API عام</h3>
@@ -320,7 +338,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* مودال تعديل المستخدم */}
       {showEditUserModal && selectedUser && (
         <div className="admin-modal">
           <div className="admin-modal-content"><h3 style={{ marginBottom: "20px" }}>⚙️ تعديل حد {selectedUser.name || selectedUser.email}</h3>
@@ -331,7 +348,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
       
-      {/* مودال عرض تفاصيل المحادثة */}
       {showChatModal && selectedChat && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "700px", maxHeight: "80vh", overflowY: "auto" }}>
