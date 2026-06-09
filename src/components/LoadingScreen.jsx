@@ -1,3 +1,8 @@
+// ============================================
+// LoadingScreen.jsx
+// شاشة التحميل المؤقتة
+// ============================================
+
 export default function LoadingScreen() {
   return (
     <div style={{
