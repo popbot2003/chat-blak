@@ -30,10 +30,6 @@ export default function Admin({ user, onLogout }) {
   const [newKeyLimit, setNewKeyLimit] = useState(1000000);
   
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
-  const [editRateLimitRPM, setEditRateLimitRPM] = useState(5);
-  const [editRateLimitTPM, setEditRateLimitTPM] = useState(2000);
-  const [editCooldown, setEditCooldown] = useState(3);
-  const [editSmartMode, setEditSmartMode] = useState(true);
   
   // ========== تحميل البيانات ==========
   useEffect(() => {
@@ -82,10 +78,6 @@ export default function Admin({ user, onLogout }) {
   
   function getUserById(userId) {
     return users.find(u => u.id === userId);
-  }
-  
-  function getKeyById(keyId) {
-    return apiKeys.find(k => k.id === keyId);
   }
   
   // فلترة المستخدمين حسب البحث
@@ -196,11 +188,7 @@ export default function Admin({ user, onLogout }) {
     const { error } = await supabase
       .from('profiles')
       .update({
-        daily_limit: editDailyLimit,
-        rate_limit_rpm: editRateLimitRPM,
-        rate_limit_tpm: editRateLimitTPM,
-        cooldown_seconds: editCooldown,
-        smart_mode: editSmartMode
+        daily_limit: editDailyLimit
       })
       .eq('id', selectedUser.id);
     
@@ -304,7 +292,7 @@ export default function Admin({ user, onLogout }) {
                         <br />
                         <span className="key-mono">{u.email}</span>
                       </td>
-                      <td>
+                       <td>
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}>
                           <div style={{ fontSize: "12px" }}>
                             {used.toLocaleString()} / {limit.toLocaleString()} توكن
@@ -316,23 +304,24 @@ export default function Admin({ user, onLogout }) {
                             {percent.toFixed(0)}%
                           </div>
                         </div>
-                      </td>
-                      <td>
+                       </td>
+                       <td>
                         <button
                           onClick={() => {
-                            setSelectedChat({ user_id: u.id, userName: u.name, chats: getUserChats(u.id) });
+                            const chat = { user_id: u.id, title: "محادثات " + u.name, messages: [] };
+                            setSelectedChat(chat);
                             setShowChatModal(true);
                           }}
                           className="admin-btn admin-badge-yellow"
                         >
                           💬 {chatCount}
                         </button>
-                      </td>
-                      <td>
+                       </td>
+                       <td>
                         <span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>
                           {u.is_blocked ? "محظور" : "نشط"}
                         </span>
-                      </td>
+                       </td>
                       <td className="admin-td-actions">
                         <button
                           onClick={() => {
@@ -358,8 +347,8 @@ export default function Admin({ user, onLogout }) {
                         >
                           🗑️ محادثات
                         </button>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   );
                 })}
               </tbody>
@@ -395,11 +384,11 @@ export default function Admin({ user, onLogout }) {
                   const percent = (key.used_today / key.daily_limit) * 100;
                   return (
                     <tr key={key.id}>
-                      <td>{key.key_name || "مفتاح Groq"}</td>
-                      <td>
+                       <td>{key.key_name || "مفتاح Groq"}</td>
+                       <td>
                         <span className="key-mono">{key.key_value?.slice(0, 20)}...</span>
-                      </td>
-                      <td>
+                       </td>
+                       <td>
                         <div>{key.used_today?.toLocaleString()}</div>
                         <div className="key-usage-bar">
                           <div
@@ -407,21 +396,21 @@ export default function Admin({ user, onLogout }) {
                             style={{ width: Math.min(percent, 100) + "%" }}
                           />
                         </div>
-                      </td>
-                      <td>{key.daily_limit?.toLocaleString()}</td>
-                      <td>
+                       </td>
+                       <td>{key.daily_limit?.toLocaleString()}</td>
+                       <td>
                         <button
                           onClick={() => toggleKeyStatus(key.id, key.is_active)}
                           className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}
                         >
                           {key.is_active ? "نشط" : "معطل"}
                         </button>
-                      </td>
+                       </td>
                       <td className="admin-td-actions-tight">
                         <button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow" title="إعادة ضبط">🔄</button>
                         <button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red" title="حذف">🗑️</button>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   );
                 })}
               </tbody>
@@ -451,15 +440,15 @@ export default function Admin({ user, onLogout }) {
                   const chatUser = getUserById(chat.user_id);
                   return (
                     <tr key={chat.id}>
-                      <td>{chatUser?.name || chatUser?.email || "غير معروف"}</td>
+                       <td>{chatUser?.name || chatUser?.email || "غير معروف"}</td>
                       <td className="chat-title-cell">{truncate(chat.title, 50)}</td>
-                      <td>{chat.messages?.length || 0}</td>
+                       <td>{chat.messages?.length || 0}</td>
                       <td className="date-cell">{formatDate(chat.updated_at)}</td>
                       <td className="admin-td-actions-tight">
                         <button onClick={() => openChatModal(chat)} className="admin-btn admin-btn-purple admin-btn-icon" title="عرض">👁️</button>
                         <button onClick={() => deleteChat(chat.id)} className="admin-btn admin-btn-red admin-btn-icon" title="حذف">🗑️</button>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   );
                 })}
               </tbody>
