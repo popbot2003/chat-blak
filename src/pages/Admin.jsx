@@ -1,5 +1,5 @@
 // ============================================
-// Admin.jsx - النسخة النهائية مع زر حذف المستخدم
+// Admin.jsx - النسخة النهائية مع قائمة منسدلة
 // ============================================
 
 import { useState, useEffect } from "react";
@@ -14,6 +14,7 @@ export default function Admin({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState("users");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null); // للقائمة المنسدلة
   
   const [showAddKeyModal, setShowAddKeyModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -31,6 +32,13 @@ export default function Admin({ user, onLogout }) {
 
   useEffect(() => {
     loadAllData();
+  }, []);
+  
+  // إغلاق القائمة عند الضغط في أي مكان
+  useEffect(() => {
+    const handleClickOutside = () => setOpenMenuId(null);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, []);
   
   async function loadAllData() {
@@ -85,25 +93,22 @@ export default function Admin({ user, onLogout }) {
     );
   });
   
-  // ========== دوال حذف المستخدم ==========
+  // ========== دوال الإجراءات ==========
   async function deleteUser(userId, userName) {
     if (!confirm(`⚠️ تحذير: هل أنت متأكد من حذف المستخدم "${userName}" نهائياً؟\n\nسيتم حذف:\n- حساب المستخدم بالكامل\n- جميع محادثاته\n\nلا يمكن التراجع!`)) return;
     
     try {
-      // حذف المحادثات أولاً
       await supabase.from('chats').delete().eq('user_id', userId);
-      // ثم حذف المستخدم
       await supabase.from('profiles').delete().eq('id', userId);
-      
       alert("✅ تم حذف المستخدم");
       loadUsers();
       loadAllChats();
+      setOpenMenuId(null);
     } catch (err) {
       alert("❌ خطأ في حذف المستخدم: " + err.message);
     }
   }
   
-  // ========== باقي الدوال ==========
   async function openUserChatsModal(userId, userName) {
     const { data } = await supabase
       .from('chats')
@@ -114,6 +119,7 @@ export default function Admin({ user, onLogout }) {
     setSelectedUserForChats({ id: userId, name: userName });
     setUserChatsList(data || []);
     setShowUserChatsModal(true);
+    setOpenMenuId(null);
   }
   
   async function deleteChatFromModal(chatId) {
@@ -196,7 +202,10 @@ export default function Admin({ user, onLogout }) {
       .from('profiles')
       .update({ is_blocked: !isBlocked })
       .eq('id', userId);
-    if (!error) loadUsers();
+    if (!error) {
+      loadUsers();
+      setOpenMenuId(null);
+    }
   }
   
   async function deleteAllUserChats(userId, userName) {
@@ -211,6 +220,7 @@ export default function Admin({ user, onLogout }) {
       if (selectedUserForChats?.id === userId) {
         setUserChatsList([]);
       }
+      setOpenMenuId(null);
     }
   }
   
@@ -272,19 +282,41 @@ export default function Admin({ user, onLogout }) {
                     <tr key={u.id}>
                       <td><strong>{u.name || "مستخدم"}</strong><br /><span className="key-mono">{u.email}</span></td>
                       <td><div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}><div style={{ fontSize: "12px" }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div><div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}><div style={{ width: percent + "%", height: "100%", background: color }} /></div><div style={{ fontSize: "10px", opacity: 0.6 }}>{percent.toFixed(0)}%</div></div></td>
-                      <td><button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow">💬 {chatCount}</button></td>
+                      <td><button onClick={() => openUserChatsModal(u.id, u.name || u.email)} className="admin-btn admin-badge-yellow" style={{ fontSize: "12px" }}>💬 {chatCount}</button></td>
                       <td><span className={`admin-badge ${u.is_blocked ? "admin-badge-red" : "admin-badge-green"}`}>{u.is_blocked ? "محظور" : "نشط"}</span></td>
-                      <td className="admin-td-actions">
-                        <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} className="admin-btn admin-btn-yellow" title="تعديل الحد">⚙️</button>
-                        <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} className={`admin-btn ${u.is_blocked ? "admin-btn-green" : "admin-btn-red"}`}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
-                        {/* ✅ زر حذف المستخدم الجديد */}
-                        <button onClick={() => deleteUser(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف المستخدم نهائياً">🗑️ حذف</button>
-                        <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} className="admin-btn admin-btn-red" title="حذف كل المحادثات">🗑️ محادثات</button>
-                       </tr>
+                      <td style={{ position: "relative" }}>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); setOpenMenuId(openMenuId === u.id ? null : u.id); }} 
+                          style={{ background: "transparent", border: "none", color: "#e0e0e0", fontSize: "20px", cursor: "pointer" }}
+                        >
+                          ⋮
+                        </button>
+                        {openMenuId === u.id && (
+                          <div style={{
+                            position: "absolute",
+                            top: "30px",
+                            right: "0",
+                            background: "#1a1a2e",
+                            border: "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: "8px",
+                            padding: "5px 0",
+                            minWidth: "130px",
+                            zIndex: 100,
+                            boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+                          }}>
+                            <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); setOpenMenuId(null); }} style={{ display: "block", width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "#fbbf24", textAlign: "right", cursor: "pointer", fontSize: "13px" }}>⚙️ تعديل الحد</button>
+                            <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ display: "block", width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: u.is_blocked ? "#4ade80" : "#f87171", textAlign: "right", cursor: "pointer", fontSize: "13px" }}>{u.is_blocked ? "🔓 فك الحظر" : "🔒 حظر"}</button>
+                            <button onClick={() => deleteAllUserChats(u.id, u.name || u.email)} style={{ display: "block", width: "100%", padding: "8px 12px", background: "transparent", border: "none", color: "#f87171", textAlign: "right", cursor: "pointer", fontSize: "13px" }}>🗑️ حذف المحادثات</button>
+                            <hr style={{ margin: "4px 0", borderColor: "rgba(255,255,255,0.1)" }} />
+                            <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ display: "block", width: "100%", padding: "8px 12px", background: "rgba(248,113,113,0.2)", border: "none", color: "#f87171", textAlign: "right", cursor: "pointer", fontSize: "13px", fontWeight: "bold" }}>🗑️ حذف الحساب</button>
+                          </div>
+                        )}
+                       </td>
+                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+             </table>
           </div>
         </div>
       )}
@@ -301,22 +333,22 @@ export default function Admin({ user, onLogout }) {
                   const percent = (key.used_today / key.daily_limit) * 100;
                   return (
                     <tr key={key.id}>
-                      <td>{key.key_name || "مفتاح Groq"}</td>
-                      <td><span className="key-mono">{key.key_value?.slice(0, 25)}...</span></td>
-                      <td>{key.used_today?.toLocaleString()}</td>
-                      <td>{key.daily_limit?.toLocaleString()}</td>
-                      <td><button onClick={() => toggleKeyStatus(key.id, key.is_active)} className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}>{key.is_active ? "نشط" : "معطل"}</button></td>
-                      <td className="admin-td-actions-tight"><button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow">🔄</button><button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red">🗑️</button></td>
-                    </tr>
+                      <td>{key.key_name || "مفتاح Groq"}</td
+                      <td><span className="key-mono">{key.key_value?.slice(0, 25)}...</span></td
+                      <td>{key.used_today?.toLocaleString()}</td
+                      <td>{key.daily_limit?.toLocaleString()}</td
+                      <td><button onClick={() => toggleKeyStatus(key.id, key.is_active)} className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}>{key.is_active ? "نشط" : "معطل"}</button></td
+                      <td className="admin-td-actions-tight"><button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow">🔄</button><button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red">🗑️</button></td
+                     </tr>
                   );
                 })}
               </tbody>
-            </table>
+             </table>
           </div>
         </div>
       )}
       
-      {/* باقي المودالات كما هي */}
+      {/* باقي المودالات */}
       {showUserChatsModal && selectedUserForChats && (
         <div className="admin-modal">
           <div className="admin-modal-content" style={{ maxWidth: "800px", maxHeight: "80vh", overflowY: "auto" }}>
