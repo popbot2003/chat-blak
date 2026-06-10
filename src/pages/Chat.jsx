@@ -38,19 +38,19 @@ function cleanResponse(text) {
 async function readFileAsText(file) {
   return new Promise(function(resolve) {
     const reader = new FileReader();
-    reader.onload = function() { resolve(reader.result); };
     reader.onerror = function() { resolve("❌ خطأ في قراءة الملف"); };
-    if (file.type.startsWith("image/")) { 
-      reader.readAsDataURL(); 
-      resolve("🖼️ صورة: " + file.name); 
-      return; 
+    if (file.type.startsWith("image/")) {
+      reader.onload = function() { resolve("🖼️ صورة: " + file.name); };
+      reader.readAsDataURL(file);
+      return;
     }
-    if (file.type === "application/pdf") { 
-      reader.readAsArrayBuffer(); 
-      resolve("📄 PDF: " + file.name); 
-      return; 
+    if (file.type === "application/pdf") {
+      reader.onload = function() { resolve("📄 PDF: " + file.name); };
+      reader.readAsArrayBuffer(file);
+      return;
     }
-    reader.readAsText();
+    reader.onload = function() { resolve(reader.result); };
+    reader.readAsText(file);
   });
 }
 
