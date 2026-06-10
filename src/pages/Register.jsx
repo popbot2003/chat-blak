@@ -69,7 +69,7 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         last_reset_date: new Date().toISOString().slice(0, 10),
         created_at: new Date().toISOString(),
         last_seen: new Date().toISOString(),
-        last_login_date: new Date().toISOString().slice(0, 10)
+        last_login_date: null
       };
 
       const { error: insertError } = await supabase
