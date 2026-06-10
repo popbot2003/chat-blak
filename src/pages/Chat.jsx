@@ -203,15 +203,26 @@ export default function Chat({ user, onLogout }) {
         .eq('is_active', true);
       
       const keys = [];
+      const today = new Date().toISOString().slice(0, 10);
+
       if (data && data.length > 0) {
-        data.forEach(key => {
+        for (const key of data) {
+          // reset تلقائي للمفتاح لو يوم جديد
+          if (key.last_reset_date !== today) {
+            await supabase
+              .from('api_keys')
+              .update({ used_today: 0, last_reset_date: today })
+              .eq('id', key.id);
+            key.used_today = 0;
+            key.last_reset_date = today;
+          }
           keys.push({ 
             id: key.id, 
             key: key.key_value, 
             used: key.used_today || 0, 
             dailyLimit: key.daily_limit || 1000000 
           });
-        });
+        }
       }
       setApiKeys(keys);
     } catch (err) {
@@ -252,16 +263,14 @@ export default function Chat({ user, onLogout }) {
         .select('*')
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false })
-        .limit(20);
+        .limit(50);
       
-      if (chats && chats.length > 0) {
-        setAllChats(chats.map(c => ({ 
-          id: c.id, 
-          title: c.title || "محادثة", 
-          date: c.updated_at, 
-          messageCount: c.messages?.length || 0 
-        })));
-      }
+      setAllChats((chats || []).map(c => ({ 
+        id: c.id, 
+        title: c.title || "محادثة", 
+        date: c.updated_at, 
+        messageCount: c.messages?.length || 0 
+      })));
     } catch (err) {
       console.error("خطأ في تحميل المحادثات:", err);
     }
@@ -272,14 +281,26 @@ export default function Chat({ user, onLogout }) {
     if (!currentMessages || currentMessages.length <= 1) return;
     
     const title = currentMessages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة";
-    
+    const chatId = currentChatIdRef.current;
+    const now = new Date().toISOString();
+
     try {
       await supabase.from('chats').upsert({ 
-        id: currentChatIdRef.current, 
+        id: chatId, 
         user_id: user.id, 
         title: title, 
         messages: currentMessages.slice(-CHAT_HISTORY_LIMIT), 
-        updated_at: new Date().toISOString() 
+        updated_at: now
+      });
+
+      // تحديث السجل في الـ state مباشرة بدون كول جديد
+      setAllChats(prev => {
+        const exists = prev.find(c => c.id === chatId);
+        const updated = { id: chatId, title, date: now, messageCount: currentMessages.length };
+        if (exists) {
+          return [updated, ...prev.filter(c => c.id !== chatId)];
+        }
+        return [updated, ...prev];
       });
     } catch (err) {
       console.error("خطأ في حفظ المحادثة:", err);
@@ -366,16 +387,9 @@ export default function Chat({ user, onLogout }) {
 
   async function updateKeyUsage(keyId, tokens) {
     try {
-      const key = apiKeysRef.current.find(k => k.id === keyId);
-      if (!key) return;
-      
-      const newUsed = key.used + tokens;
-      await supabase
-        .from('api_keys')
-        .update({ used_today: newUsed })
-        .eq('id', keyId);
-      
-      setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: newUsed } : k));
+      // استخدام increment لتجنب race condition
+      await supabase.rpc('increment_key_usage', { key_id: keyId, tokens_used: tokens });
+      setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: k.used + tokens } : k));
     } catch (err) {
       console.error("خطأ في تحديث استهلاك المفتاح:", err);
     }
@@ -538,9 +552,10 @@ export default function Chat({ user, onLogout }) {
 
       if (!res.ok) {
         if (data.error?.code === "rate_limit_exceeded") {
-          await updateKeyUsage(key.id, key.dailyLimit);
+          // نعلم المفتاح كممتلئ بدون ما نحرقه بالكامل
+          setApiKeys(prev => prev.map(k => k.id === key.id ? { ...k, used: k.dailyLimit } : k));
           if (!isRetry) {
-            setTimeout(() => executeRequest(text, true), 1000);
+            setTimeout(() => executeRequest(text, true), 1500);
             return;
           }
         }
@@ -552,7 +567,6 @@ export default function Chat({ user, onLogout }) {
 
       await updateKeyUsage(key.id, tokensUsed);
       await updateUserUsage(tokensUsed);
-      await refreshUserData();
 
       let i = 0;
       function type() {
@@ -788,27 +802,37 @@ export default function Chat({ user, onLogout }) {
       </div>
       
       {showHistory && (
-        <div className="search-bar" style={{ flexDirection: "column", alignItems: "stretch", gap: "0", padding: "0" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.07)", flexShrink: 0 }}>
-            <strong>📝 السجل</strong>
-            <button onClick={() => setShowHistory(false)} className="close-btn">✕</button>
-          </div>
-          <div style={{ overflowY: "auto", maxHeight: "220px", display: "flex", flexDirection: "column", gap: "6px", padding: "8px" }}>
-            {allChats.length === 0 ? (
-              <div style={{ textAlign: "center", opacity: 0.6, padding: "10px" }}>مفيش محادثات</div>
-            ) : (
-              allChats.map(c => (
-                <div key={c.id} onClick={() => openChat(c.id)} style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: c.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)" }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 500 }}>{c.title}</div>
-                    <div style={{ fontSize: "11px", opacity: 0.5 }}>{formatDate(c.date)} · {c.messageCount} رسالة</div>
+        <>
+          <div onClick={() => setShowHistory(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 300, background: "rgba(0,0,0,0.5)" }} />
+          <div className="history-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "320px", maxWidth: "90vw", zIndex: 301, display: "flex", flexDirection: "column", background: "inherit" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0 }}>
+              <strong style={{ fontSize: "16px" }}>📝 السجل ({allChats.length})</strong>
+              <button onClick={() => setShowHistory(false)} className="close-btn">✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
+              {allChats.length === 0 ? (
+                <div style={{ textAlign: "center", opacity: 0.6, padding: "20px" }}>مفيش محادثات</div>
+              ) : (
+                allChats.map(c => (
+                  <div key={c.id} onClick={() => openChat(c.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: c.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)", border: c.id === currentChatId ? "1px solid rgba(108,92,231,0.3)" : "1px solid transparent" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "14px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
+                      <div style={{ fontSize: "11px", opacity: 0.5, marginTop: "2px" }}>{formatDate(c.date)} · {c.messageCount} رسالة</div>
+                    </div>
+                    <button onClick={(e) => { 
+                      e.stopPropagation(); 
+                      if (!confirm("حذف هذه المحادثة؟")) return;
+                      supabase.from('chats').delete().eq('id', c.id).then(() => {
+                        setAllChats(prev => prev.filter(chat => chat.id !== c.id));
+                        if (c.id === currentChatId) newChat();
+                      });
+                    }} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5, flexShrink: 0, marginRight: "4px" }}>🗑️</button>
                   </div>
-                  <button onClick={(e) => { e.stopPropagation(); supabase.from('chats').delete().eq('id', c.id).then(loadChatsFromSupabase); }} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5 }}>🗑️</button>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
-        </div>
+        </>
       )}
       
       <div className="messages">
@@ -1038,3 +1062,4 @@ export default function Chat({ user, onLogout }) {
     </div>
   );
 }
+
