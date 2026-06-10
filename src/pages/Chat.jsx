@@ -100,6 +100,7 @@ export default function Chat({ user, onLogout }) {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const apiKeysRef = useRef(apiKeys);
+  const keyIndexRef = useRef(0);
   const messagesRef = useRef(messages);
   const currentChatIdRef = useRef(currentChatId);
   const currentUserRef = useRef(currentUser);
@@ -382,7 +383,11 @@ export default function Chat({ user, onLogout }) {
   function pickBestKey() {
     const available = apiKeysRef.current.filter(k => k.used < k.dailyLimit);
     if (available.length === 0) return null;
-    return available.sort((a, b) => (a.used / a.dailyLimit) - (b.used / b.dailyLimit))[0];
+    // Round Robin — توزيع متساوي على كل المفاتيح
+    keyIndexRef.current = keyIndexRef.current % available.length;
+    const key = available[keyIndexRef.current];
+    keyIndexRef.current++;
+    return key;
   }
 
   async function updateKeyUsage(keyId, tokens) {
