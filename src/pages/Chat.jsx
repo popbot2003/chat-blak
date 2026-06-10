@@ -1,5 +1,7 @@
 // ============================================
-// Chat.jsx - مع طرد المستخدم عند حذف الحساب
+// Chat.jsx - نسخة محدثة
+// التعديلات: إصلاح readFileAsText، debounce، beforeunload،
+//            race condition في updateUserUsage، حد الملفات الكبيرة
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -104,6 +106,7 @@ export default function Chat({ user, onLogout }) {
   const messagesRef = useRef(messages);
   const currentChatIdRef = useRef(currentChatId);
   const currentUserRef = useRef(currentUser);
+  const debouncedSaveRef = useRef(null);
 
   useEffect(() => { apiKeysRef.current = apiKeys; }, [apiKeys]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
@@ -157,13 +160,16 @@ export default function Chat({ user, onLogout }) {
 
   useEffect(() => {
     if (!isLoaded || messages.length <= 1) return;
-    const save = debounce(() => saveChatToSupabase(), SAVE_CHAT_DELAY_MS);
-    save();
+    if (!debouncedSaveRef.current) {
+      debouncedSaveRef.current = debounce(() => saveChatToSupabase(), SAVE_CHAT_DELAY_MS);
+    }
+    debouncedSaveRef.current();
   }, [messages, isLoaded]);
 
   useEffect(() => {
-    window.addEventListener("beforeunload", () => saveChatToSupabase());
-    return () => window.removeEventListener("beforeunload", () => saveChatToSupabase());
+    function handleBeforeUnload() { saveChatToSupabase(); }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [isLoaded]);
 
   async function loadAllData() { 
@@ -402,15 +408,19 @@ export default function Chat({ user, onLogout }) {
 
   async function updateUserUsage(tokens) {
     try {
-      const newUsed = (currentUserRef.current?.used_today || 0) + tokens;
-      await supabase
-        .from('profiles')
-        .update({ used_today: newUsed })
-        .eq('id', user.id);
-      
-      setCurrentUser(prev => ({ ...prev, used_today: newUsed }));
+      // استخدام RPC للـ atomic increment لتجنب race condition
+      await supabase.rpc('increment_user_usage', { user_id: user.id, tokens_used: tokens });
+      setCurrentUser(prev => ({ ...prev, used_today: (prev?.used_today || 0) + tokens }));
     } catch (err) {
       console.error("خطأ في تحديث استهلاك المستخدم:", err);
+      // fallback لو الـ RPC مش موجود بعد
+      try {
+        const newUsed = (currentUserRef.current?.used_today || 0) + tokens;
+        await supabase.from('profiles').update({ used_today: newUsed }).eq('id', user.id);
+        setCurrentUser(prev => ({ ...prev, used_today: newUsed }));
+      } catch (fallbackErr) {
+        console.error("خطأ في fallback تحديث الاستهلاك:", fallbackErr);
+      }
     }
   }
 
@@ -605,10 +615,18 @@ export default function Chat({ user, onLogout }) {
     const text = (overrideText || input).trim();
     if (!text && attachedFiles.length === 0 && !isRetry) return;
     
+    // الحد الأقصى لمحتوى الملف — 3000 حرف لكل ملف لتجنب تجاوز حد التوكنز
+    const MAX_FILE_CHARS = 3000;
+    
     let finalText = text;
     if (attachedFiles.length > 0) {
-      finalText = (text || "الملفات المرفقة:") + 
-        attachedFiles.map(f => "\n\n📎 " + f.name + "\n```\n" + f.content + "\n```").join("");
+      const filesText = attachedFiles.map(f => {
+        const content = f.content || "";
+        const isTruncated = content.length > MAX_FILE_CHARS;
+        const truncatedContent = isTruncated ? content.slice(0, MAX_FILE_CHARS) + "\n\n... [تم اقتصار الملف، الحجم كبير]" : content;
+        return "\n\n📎 " + f.name + (isTruncated ? " ⚠️ (تم اقتصاره)" : "") + "\n```\n" + truncatedContent + "\n```";
+      }).join("");
+      finalText = (text || "الملفات المرفقة:") + filesText;
     }
     
     executeRequest(finalText, isRetry);
@@ -1067,4 +1085,5 @@ export default function Chat({ user, onLogout }) {
     </div>
   );
 }
+
 
