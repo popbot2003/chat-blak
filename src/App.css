@@ -778,3 +778,22 @@ html, body {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ========== History Panel ========== */
+.history-panel {
+  background: #0f0f1a;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.light .history-panel {
+  background: #f5f5f5;
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.history-panel::-webkit-scrollbar { width: 4px; }
+.history-panel::-webkit-scrollbar-track { background: transparent; }
+.history-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+.light .history-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
+
