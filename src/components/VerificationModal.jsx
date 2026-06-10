@@ -82,7 +82,6 @@ export default function VerificationModal({ email, userId, onVerified, onClose }
     } else {
       setResendSuccess("✅ تم إرسال الكود الجديد إلى بريدك");
       // TODO: إرسال الكود فعلياً إلى البريد الإلكتروني
-      console.log("📧 كود التفعيل الجديد:", newCode);
     }
     setResendLoading(false);
   }
