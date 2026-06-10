@@ -16,7 +16,7 @@ import { checkUserDailyLimit } from '../utils/validators';
 
 async function searchDuckDuckGo(query) {
   try {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`);
+    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&kl=ar-ar&t=h_`);
     const data = await res.json();
     const results = [];
     if (data.Abstract) results.push(data.Abstract);
@@ -149,6 +149,32 @@ export default function Chat({ user, onLogout }) {
     return () => deleteChannel.unsubscribe();
   }, [user.id]);
 
+  // ✅ الاستماع لحذف المحادثات من المدير (تحديث فوري عند المستخدم)
+  useEffect(() => {
+    const chatsDeleteChannel = supabase
+      .channel('chats-delete-' + user.id)
+      .on('postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'chats', filter: `user_id=eq.${user.id}` },
+        (payload) => {
+          const deletedChatId = payload.old.id;
+          setAllChats(prev => prev.filter(c => c.id !== deletedChatId));
+          // لو المحادثة الحالية هي اللي اتحذفت، افتح محادثة جديدة
+          if (currentChatIdRef.current === deletedChatId) {
+            const newId = Date.now().toString();
+            setCurrentChatId(newId);
+            setMessages([{ 
+              role: "assistant", 
+              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.", 
+              id: Date.now() 
+            }]);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => chatsDeleteChannel.unsubscribe();
+  }, [user.id]);
+
   useEffect(() => { 
     loadAllData(); 
     inputRef.current?.focus(); 
@@ -176,10 +202,7 @@ export default function Chat({ user, onLogout }) {
     await loadApiKeys(); 
     await loadChatsFromSupabase();
     await refreshUserData();
-    const hasOldChat = await loadLastChat();
-    if (!hasOldChat) {
-      await checkAndShowWelcome();
-    }
+    await checkAndShowWelcome();
     setIsLoaded(true); 
   }
 
@@ -246,15 +269,6 @@ export default function Chat({ user, onLogout }) {
         .single();
       
       if (data) {
-        if (isNewDay(data.last_reset_date)) {
-          const today = new Date().toISOString().slice(0, 10);
-          await supabase
-            .from('profiles')
-            .update({ used_today: 0, last_reset_date: today })
-            .eq('id', user.id);
-          data.used_today = 0;
-          data.last_reset_date = today;
-        }
         setCurrentUser(data);
         localStorage.setItem("black-user", JSON.stringify(data));
       }
@@ -354,25 +368,20 @@ export default function Chat({ user, onLogout }) {
     const today = new Date().toISOString().slice(0, 10);
     const lastLogin = currentUser.last_login_date;
     const chatCount = allChats.length;
+
+    // مستخدم جديد خالص - last_login_date = null
+    const isNewUser = !lastLogin;
+    const isFirstTimeToday = lastLogin !== today;
     
-    const shouldShowWelcome = !lastLogin || lastLogin !== today || messages.length === 1;
-    
-    if (shouldShowWelcome) {
-      const welcomeMessage = getWelcomeMessage(
-        lastLogin,
-        currentUser.name,
-        currentUser.used_today || 0,
-        currentUser.daily_limit || 5000,
-        chatCount
-      );
-      
+    const welcomeMessage = isNewUser
+      ? `أهلاً وسهلاً يا ${currentUser.name || "صاحبي"} 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(currentUser.daily_limit || 5000).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`
+      : getWelcomeMessage(lastLogin, currentUser.name, currentUser.used_today || 0, currentUser.daily_limit || 5000, chatCount);
+
+    if (isNewUser || isFirstTimeToday || messages.length === 1) {
       if (messages.length === 1 && messages[0].content.includes("أهلاً.. أنا بلاك")) {
         setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
-      } else {
-        setMessages(prev => [
-          { role: "assistant", content: welcomeMessage, id: Date.now() },
-          ...prev
-        ]);
+      } else if (messages.length === 1) {
+        setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
       }
     }
     
@@ -539,7 +548,7 @@ export default function Chat({ user, onLogout }) {
       let enhancedText = text;
       const searchResult = await searchDuckDuckGo(text);
       if (searchResult) {
-        enhancedText = text + "\n\n[نتائج البحث]:\n" + searchResult + "\n\nاستخدم النتائج في إجابتك.";
+        enhancedText = text + "\n\n[نتائج البحث]:\n" + searchResult + "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
       }
 
       const chatMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
@@ -553,7 +562,7 @@ export default function Chat({ user, onLogout }) {
         body: JSON.stringify({ 
           model: GROQ_MODEL, 
           messages: [
-            { role: "system", content: PERSONALITIES[user?.personality] || PERSONALITIES[DEFAULT_PERSONALITY] },
+            { role: "system", content: PERSONALITIES[currentUserRef.current?.personality] || PERSONALITIES[DEFAULT_PERSONALITY] },
             ...chatMessages.slice(-CHAT_HISTORY_LIMIT), 
             { role: "user", content: enhancedText }
           ], 
@@ -1085,5 +1094,3 @@ export default function Chat({ user, onLogout }) {
     </div>
   );
 }
-
-
