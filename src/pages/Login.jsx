@@ -48,7 +48,6 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         throw new Error("البريد أو كلمة المرور غير صحيحة");
       }
 
-      // ✅ التحقق من أن البريد مؤكد
       if (!user.is_verified) {
         throw new Error("❌ لم يتم تأكيد البريد الإلكتروني. تحقق من بريدك.");
       }
@@ -57,26 +56,28 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         throw new Error("هذا الحساب محظور");
       }
 
+      const today = new Date().toISOString().slice(0, 10);
       let updatedUser = { ...user };
+
+      // تحضير التحديثات — دايماً نحدث last_seen و last_login_date
+      const profileUpdates = {
+        last_seen: new Date().toISOString(),
+        last_login_date: today
+      };
+
+      // reset الاستهلاك بس لو يوم جديد فعلاً
       if (isNewDay(user.last_reset_date)) {
-        const today = new Date().toISOString().slice(0, 10);
-        await supabase
-          .from('profiles')
-          .update({ used_today: 0, last_reset_date: today })
-          .eq('id', user.id);
+        profileUpdates.used_today = 0;
+        profileUpdates.last_reset_date = today;
         updatedUser.used_today = 0;
         updatedUser.last_reset_date = today;
       }
 
-      const today = new Date().toISOString().slice(0, 10);
       await supabase
         .from('profiles')
-        .update({ 
-          last_seen: new Date().toISOString(),
-          last_login_date: today 
-        })
+        .update(profileUpdates)
         .eq('id', user.id);
-      
+
       updatedUser.last_login_date = today;
 
       localStorage.setItem("black-user", JSON.stringify(updatedUser));
