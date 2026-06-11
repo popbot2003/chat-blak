@@ -1,5 +1,5 @@
 // ============================================
-// Login.jsx
+// Login.jsx — Supabase Auth (آمن ✅)
 // ============================================
 
 import { useState } from "react";
@@ -7,37 +7,27 @@ import { supabase } from '../lib/supabase';
 import { validateEmail, validatePassword } from '../utils/validators';
 
 export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPassword }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail]               = useState("");
+  const [password, setPassword]         = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError]               = useState("");
+  const [loading, setLoading]           = useState(false);
 
   async function handleLogin(e) {
     e.preventDefault();
     setError("");
 
     const emailCheck = validateEmail(email);
-    if (!emailCheck.valid) {
-      setError("❌ " + emailCheck.error);
-      return;
-    }
+    if (!emailCheck.valid) { setError("❌ " + emailCheck.error); return; }
 
     const passwordCheck = validatePassword(password);
-    if (!passwordCheck.valid) {
-      setError("❌ " + passwordCheck.error);
-      return;
-    }
+    if (!passwordCheck.valid) { setError("❌ " + passwordCheck.error); return; }
 
     setLoading(true);
 
     try {
-      // 1. تسجيل الدخول عبر Supabase Auth — الباسورد يتحقق منه Supabase مش إحنا
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      // 1. تسجيل الدخول عبر Supabase Auth — الباسورد يتحقق منه Supabase
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password });
       if (authError) throw new Error("البريد أو كلمة المرور غير صحيحة");
 
       // 2. جلب بيانات الـ profile
@@ -47,12 +37,21 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         .eq("id", data.user.id)
         .single();
 
-      if (profileError || !profile) throw new Error("حدث خطأ في جلب البيانات");
-      if (profile.is_blocked) throw new Error("هذا الحساب محظور");
+      if (profileError || !profile) throw new Error("حدث خطأ في جلب البيانات، تواصل مع الدعم");
+      if (profile.is_blocked)       throw new Error("هذا الحساب محظور");
 
-      // 3. حفظ المستخدم وتسجيل الدخول
-      localStorage.setItem("black-user", JSON.stringify(profile));
-      onLogin(profile);
+      // 3. تحديث last_seen و last_login_date
+      const today = new Date().toISOString().slice(0, 10);
+      await supabase
+        .from("profiles")
+        .update({ last_seen: new Date().toISOString(), last_login_date: today })
+        .eq("id", profile.id);
+
+      const updatedProfile = { ...profile, last_login_date: today };
+
+      // 4. حفظ المستخدم محلياً والدخول
+      localStorage.setItem("black-user", JSON.stringify(updatedProfile));
+      onLogin(updatedProfile);
 
     } catch (err) {
       setError("❌ " + err.message);
@@ -111,7 +110,8 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
               color: "#e0e0e0",
               fontSize: "16px",
               outline: "none",
-              direction: "ltr"
+              direction: "ltr",
+              boxSizing: "border-box"
             }}
             required
           />
@@ -132,7 +132,8 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
                 color: "#e0e0e0",
                 fontSize: "16px",
                 outline: "none",
-                direction: "ltr"
+                direction: "ltr",
+                boxSizing: "border-box"
               }}
               required
             />
@@ -166,7 +167,7 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
               borderRadius: "12px",
               fontSize: "16px",
               fontWeight: "bold",
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.6 : 1,
               marginBottom: "20px"
             }}>
