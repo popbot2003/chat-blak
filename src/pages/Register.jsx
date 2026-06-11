@@ -48,6 +48,13 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: undefined, // من غير redirect
+          data: {
+            name: name.trim() || email.split("@")[0],
+            gender: gender,
+          }
+        }
       });
 
       if (signUpError) throw signUpError;
@@ -57,9 +64,9 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         .from("profiles")
         .insert({
           id: data.user.id,
-          email,
+          email: email,
           name: name.trim() || email.split("@")[0],
-          gender,
+          gender: gender,
           role: "user",
           is_blocked: false,
           daily_limit: DEFAULT_USER_DAILY_LIMIT,
@@ -67,6 +74,7 @@ export default function Register({ onRegister, onSwitchToLogin }) {
           last_reset_date: new Date().toISOString().slice(0, 10),
           created_at: new Date().toISOString(),
           last_seen: new Date().toISOString(),
+          personality: "blak"
         });
 
       if (profileError) throw profileError;
@@ -74,15 +82,17 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       // 3. إرسال البيانات للتطبيق
       onRegister({
         id: data.user.id,
-        email,
+        email: email,
         name: name.trim() || email.split("@")[0],
         role: "user",
-        gender,
+        gender: gender,
         daily_limit: DEFAULT_USER_DAILY_LIMIT,
         used_today: 0,
+        personality: "blak"
       });
 
     } catch (err) {
+      console.error("Registration error:", err);
       setError("❌ " + err.message);
     } finally {
       setLoading(false);
