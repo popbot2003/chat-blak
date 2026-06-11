@@ -129,60 +129,62 @@ export async function validateAllKeys(onProgress, onComplete) {
 }
 
 /**
- * بدء الفحص التلقائي الدوري
- * @param {number} intervalMinutes - الفاصل الزمني بالدقائق
- * @param {Function} onInvalidFound - دالة عند اكتشاف مفاتيح غير صالحة
- * @returns {number} معرف الـ interval
+ * فحص جميع المفاتيح (بما فيها غير النشطة) - للاستخدام اليدوي المتقدم
+ * @param {Function} onProgress - دالة لتحديث التقدم
+ * @param {Function} onComplete - دالة عند الانتهاء
+ * @returns {Promise<Array>} نتائج الفحص
  */
-export function startAutoValidation(intervalMinutes = 60, onInvalidFound) {
-  // فحص فوري عند التشغيل (بعد 5 ثواني)
-  const initialTimeout = setTimeout(() => {
-    validateAllKeys(
-      (current, total, name, result) => {
-        console.log(`🔍 فحص ${name}: ${result.valid ? '✅' : '❌'}`);
-      },
-      (results) => {
-        const invalid = results.filter(r => !r.valid);
-        if (invalid.length > 0 && onInvalidFound) {
-          onInvalidFound(invalid);
-        }
-      }
-    );
-  }, 5000);
+export async function validateAllKeysIncludingInactive(onProgress, onComplete) {
+  const { data: keys, error } = await supabase
+    .from('api_keys')
+    .select('*');
 
-  // فحص دوري
-  const interval = setInterval(() => {
-    validateAllKeys(
-      (current, total, name, result) => {
-        console.log(`🔍 فحص دوري ${current}/${total}: ${name}`);
-      },
-      (results) => {
-        const invalid = results.filter(r => !r.valid);
-        if (invalid.length > 0 && onInvalidFound) {
-          onInvalidFound(invalid);
-        }
-      }
-    );
-  }, intervalMinutes * 60 * 1000);
-
-  // حفظ كلا المعرفين للتنظيف
-  const intervalId = setInterval(() => {}, 0);
-  intervalId._timeout = initialTimeout;
-  intervalId._interval = interval;
-  
-  return intervalId;
-}
-
-/**
- * إيقاف الفحص التلقائي
- * @param {number} intervalId - معرف الـ interval
- */
-export function stopAutoValidation(intervalId) {
-  if (intervalId) {
-    if (intervalId._timeout) clearTimeout(intervalId._timeout);
-    if (intervalId._interval) clearInterval(intervalId._interval);
-    clearInterval(intervalId);
+  if (error) {
+    console.error('خطأ في جلب المفاتيح:', error);
+    return [];
   }
+
+  const results = [];
+  
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    const result = await validateGroqKey(key.key_value);
+    
+    const updateData = {
+      last_checked_at: new Date().toISOString(),
+      is_valid: result.valid,
+      invalid_reason: result.valid ? null : result.reason,
+    };
+
+    if (!result.valid && key.is_active) {
+      updateData.is_active = false;
+    }
+
+    await supabase
+      .from('api_keys')
+      .update(updateData)
+      .eq('id', key.id);
+
+    results.push({
+      id: key.id,
+      name: key.key_name || 'مفتاح بدون اسم',
+      value: key.key_value?.slice(0, 15) + '...',
+      active: key.is_active,
+      valid: result.valid,
+      reason: result.reason,
+      message: result.message
+    });
+
+    if (onProgress) {
+      onProgress(i + 1, keys.length, key.key_name, result);
+    }
+  }
+
+  if (onComplete) {
+    onComplete(results);
+  }
+
+  return results;
 }
 
 /**
@@ -205,4 +207,75 @@ export async function testSingleKeyAndUpdate(keyId, keyValue) {
     .eq('id', keyId);
   
   return result;
+}
+
+/**
+ * بدء الفحص التلقائي الدوري
+ * @param {number} intervalMinutes - الفاصل الزمني بالدقائق
+ * @param {Function} onInvalidFound - دالة عند اكتشاف مفاتيح غير صالحة
+ * @returns {Object} { intervalId, timeoutId, stop: function }
+ */
+export function startAutoValidation(intervalMinutes = 60, onInvalidFound) {
+  let timeoutId = null;
+  let intervalId = null;
+  let isRunning = true;
+
+  const runValidation = async () => {
+    if (!isRunning) return;
+    
+    const results = await validateAllKeys(
+      (current, total, name, result) => {
+        console.log(`🔍 فحص ${name}: ${result.valid ? '✅' : '❌'}`);
+      },
+      (results) => {
+        const invalid = results.filter(r => !r.valid);
+        if (invalid.length > 0 && onInvalidFound) {
+          onInvalidFound(invalid);
+        }
+      }
+    );
+    
+    return results;
+  };
+
+  // فحص فوري بعد 5 ثواني
+  timeoutId = setTimeout(() => {
+    runValidation();
+    
+    // ثم فحص دوري
+    intervalId = setInterval(() => {
+      runValidation();
+    }, intervalMinutes * 60 * 1000);
+  }, 5000);
+
+  // دالة لإيقاف الفحص
+  const stop = () => {
+    isRunning = false;
+    if (timeoutId) clearTimeout(timeoutId);
+    if (intervalId) clearInterval(intervalId);
+  };
+
+  return { stop, intervalId, timeoutId };
+}
+
+/**
+ * الحصول على حالة المفتاح النصية مع اللون المناسب
+ * @param {Object} key - كائن المفتاح من قاعدة البيانات
+ * @returns {{text: string, color: string, bg: string}}
+ */
+export function getKeyStatusBadge(key) {
+  if (!key.is_active) {
+    return { text: 'معطل', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
+  }
+  if (key.is_valid === false) {
+    return { text: 'غير صالح', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
+  }
+  const percent = (key.used_today || 0) / (key.daily_limit || 1) * 100;
+  if (percent >= 90) {
+    return { text: '⚠️ حرج', color: '#f97316', bg: 'rgba(249,115,22,0.15)' };
+  }
+  if (percent >= 70) {
+    return { text: '🟡 استهلاك عالي', color: '#facc15', bg: 'rgba(250,204,21,0.15)' };
+  }
+  return { text: '✅ صالح', color: '#4ade80', bg: 'rgba(74,222,128,0.15)' };
 }
