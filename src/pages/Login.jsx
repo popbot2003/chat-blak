@@ -32,48 +32,27 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
     setLoading(true);
 
     try {
-      const { data: user, error: userError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('email', email)
+      // 1. تسجيل الدخول عبر Supabase Auth — الباسورد يتحقق منه Supabase مش إحنا
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) throw new Error("البريد أو كلمة المرور غير صحيحة");
+
+      // 2. جلب بيانات الـ profile
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", data.user.id)
         .single();
 
-      if (userError || !user) {
-        throw new Error("البريد أو كلمة المرور غير صحيحة");
-      }
+      if (profileError || !profile) throw new Error("حدث خطأ في جلب البيانات");
+      if (profile.is_blocked) throw new Error("هذا الحساب محظور");
 
-      if (user.password !== password) {
-        throw new Error("البريد أو كلمة المرور غير صحيحة");
-      }
-
-      if (!user.is_verified) {
-        throw new Error("❌ لم يتم تأكيد البريد الإلكتروني. تحقق من بريدك.");
-      }
-
-      if (user.is_blocked) {
-        throw new Error("هذا الحساب محظور");
-      }
-
-      // ✅ جلب أحدث بيانات الاستهلاك من قاعدة البيانات مباشرة
-      // الـ reset بيحصل في قاعدة البيانات تلقائياً عبر increment_user_usage
-      // فبس نجيب البيانات الحالية بدون أي تعديل من جهة الـ client
-      const today = new Date().toISOString().slice(0, 10);
-
-      await supabase
-        .from('profiles')
-        .update({
-          last_seen: new Date().toISOString(),
-          last_login_date: today
-        })
-        .eq('id', user.id);
-
-      const updatedUser = {
-        ...user,
-        last_login_date: today
-      };
-
-      localStorage.setItem("black-user", JSON.stringify(updatedUser));
-      onLogin(updatedUser);
+      // 3. حفظ المستخدم وتسجيل الدخول
+      localStorage.setItem("black-user", JSON.stringify(profile));
+      onLogin(profile);
 
     } catch (err) {
       setError("❌ " + err.message);
@@ -83,78 +62,79 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
   }
 
   return (
-    <div style={{ 
-      height: "100dvh", 
-      display: "flex", 
-      alignItems: "center", 
-      justifyContent: "center", 
-      background: "#0f0f1a", 
-      fontFamily: "system-ui, sans-serif" 
+    <div style={{
+      height: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0f0f1a",
+      fontFamily: "system-ui, sans-serif"
     }}>
-      <div style={{ 
-        background: "#1a1a2e", 
-        padding: "40px", 
-        borderRadius: "20px", 
-        width: "100%", 
-        maxWidth: "400px", 
-        textAlign: "center" 
+      <div style={{
+        background: "#1a1a2e",
+        padding: "40px",
+        borderRadius: "20px",
+        width: "100%",
+        maxWidth: "380px",
+        textAlign: "center"
       }}>
-        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🖤</div>
-        <h2 style={{ color: "#e0e0e0", marginBottom: "30px" }}>تسجيل الدخول</h2>
+        <div style={{ fontSize: "50px", marginBottom: "10px" }}>🖤</div>
+        <h2 style={{ color: "#e0e0e0", marginBottom: "8px" }}>بلاك</h2>
+        <p style={{ color: "rgba(255,255,255,0.4)", fontSize: "14px", marginBottom: "30px" }}>سجل دخولك</p>
 
         {error && (
-          <div style={{ 
-            background: "rgba(248,113,113,0.1)", 
-            color: "#f87171", 
-            padding: "12px", 
-            borderRadius: "10px", 
-            marginBottom: "20px", 
-            fontSize: "14px" 
+          <div style={{
+            background: "rgba(248,113,113,0.1)",
+            color: "#f87171",
+            padding: "12px",
+            borderRadius: "10px",
+            marginBottom: "20px",
+            fontSize: "14px"
           }}>
             {error}
           </div>
         )}
 
         <form onSubmit={handleLogin}>
-          <input 
-            type="email" 
-            placeholder="البريد الإلكتروني" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)} 
-            style={{ 
-              width: "100%", 
-              padding: "14px", 
-              marginBottom: "15px", 
-              borderRadius: "12px", 
-              border: "1px solid rgba(255,255,255,0.1)", 
-              background: "rgba(255,255,255,0.05)", 
-              color: "#e0e0e0", 
-              fontSize: "16px", 
-              outline: "none", 
-              direction: "ltr" 
-            }} 
-            required 
+          <input
+            type="email"
+            placeholder="البريد الإلكتروني"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "14px",
+              marginBottom: "15px",
+              borderRadius: "12px",
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "rgba(255,255,255,0.05)",
+              color: "#e0e0e0",
+              fontSize: "16px",
+              outline: "none",
+              direction: "ltr"
+            }}
+            required
           />
-          
+
           <div style={{ position: "relative", marginBottom: "20px" }}>
-            <input 
-              type={showPassword ? "text" : "password"} 
-              placeholder="كلمة المرور" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="كلمة المرور"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "14px",
                 paddingLeft: "50px",
-                borderRadius: "12px", 
-                border: "1px solid rgba(255,255,255,0.1)", 
-                background: "rgba(255,255,255,0.05)", 
-                color: "#e0e0e0", 
-                fontSize: "16px", 
-                outline: "none", 
-                direction: "ltr" 
-              }} 
-              required 
+                borderRadius: "12px",
+                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.05)",
+                color: "#e0e0e0",
+                fontSize: "16px",
+                outline: "none",
+                direction: "ltr"
+              }}
+              required
             />
             <button
               type="button"
@@ -168,60 +148,56 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
                 border: "none",
                 cursor: "pointer",
                 fontSize: "20px",
-                padding: "8px",
                 color: "#a29bfe"
-              }}
-            >
+              }}>
               {showPassword ? "🙈" : "👁️"}
             </button>
           </div>
-          
-          <button 
-            type="submit" 
+
+          <button
+            type="submit"
             disabled={loading}
-            style={{ 
-              width: "100%", 
-              padding: "14px", 
-              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", 
-              color: "#fff", 
-              border: "none", 
-              borderRadius: "12px", 
-              fontSize: "16px", 
-              fontWeight: "bold", 
-              cursor: "pointer", 
-              opacity: loading ? 0.6 : 1, 
-              marginBottom: "15px" 
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              opacity: loading ? 0.6 : 1,
+              marginBottom: "20px"
             }}>
-            {loading ? "جاري الدخول..." : "دخول"}
+            {loading ? "جاري الدخول..." : "دخول 🖤"}
           </button>
         </form>
 
-        <button 
-          onClick={onSwitchToForgotPassword} 
-          style={{ 
-            background: "transparent", 
-            border: "none", 
-            color: "rgba(255,255,255,0.4)", 
-            cursor: "pointer", 
-            fontSize: "13px", 
-            marginBottom: "10px", 
-            display: "block", 
-            width: "100%" 
-          }}>
-          نسيت كلمة المرور؟
-        </button>
-        
-        <button 
-          onClick={onSwitchToRegister} 
-          style={{ 
-            background: "transparent", 
-            border: "none", 
-            color: "#a29bfe", 
-            cursor: "pointer", 
-            fontSize: "14px" 
-          }}>
-          ليس لديك حساب؟ إنشاء حساب جديد
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <button
+            onClick={onSwitchToRegister}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "#a29bfe",
+              cursor: "pointer",
+              fontSize: "14px"
+            }}>
+            مش عندك حساب؟ سجل دلوقتي
+          </button>
+          <button
+            onClick={onSwitchToForgotPassword}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "rgba(255,255,255,0.3)",
+              cursor: "pointer",
+              fontSize: "13px"
+            }}>
+            نسيت كلمة المرور؟
+          </button>
+        </div>
       </div>
     </div>
   );
