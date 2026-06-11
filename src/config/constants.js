@@ -10,7 +10,7 @@ export const DEFAULT_USER_DAILY_LIMIT = 30000;
 export const DEFAULT_KEY_DAILY_LIMIT = 1000000;
 
 // إعدادات Groq API
-export const GROQ_MODEL = "llama-3.3-70b-versatile";
+export const GROQ_MODEL = "deepseek-r1-distill-llama-70b";
 export const GROQ_MAX_TOKENS = 2000;
 export const GROQ_TEMPERATURE = 0.3;
 
