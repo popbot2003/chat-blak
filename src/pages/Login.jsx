@@ -1,12 +1,10 @@
 // ============================================
 // Login.jsx
-// صفحة تسجيل الدخول مع التحقق من تأكيد البريد
 // ============================================
 
 import { useState } from "react";
 import { supabase } from '../lib/supabase';
 import { validateEmail, validatePassword } from '../utils/validators';
-import { isNewDay } from '../utils/helpers';
 
 export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPassword }) {
   const [email, setEmail] = useState("");
@@ -56,29 +54,23 @@ export default function Login({ onLogin, onSwitchToRegister, onSwitchToForgotPas
         throw new Error("هذا الحساب محظور");
       }
 
+      // ✅ جلب أحدث بيانات الاستهلاك من قاعدة البيانات مباشرة
+      // الـ reset بيحصل في قاعدة البيانات تلقائياً عبر increment_user_usage
+      // فبس نجيب البيانات الحالية بدون أي تعديل من جهة الـ client
       const today = new Date().toISOString().slice(0, 10);
-      let updatedUser = { ...user };
-
-      // تحضير التحديثات — دايماً نحدث last_seen و last_login_date
-      const profileUpdates = {
-        last_seen: new Date().toISOString(),
-        last_login_date: today
-      };
-
-      // reset الاستهلاك بس لو يوم جديد فعلاً
-      if (isNewDay(user.last_reset_date)) {
-        profileUpdates.used_today = 0;
-        profileUpdates.last_reset_date = today;
-        updatedUser.used_today = 0;
-        updatedUser.last_reset_date = today;
-      }
 
       await supabase
         .from('profiles')
-        .update(profileUpdates)
+        .update({
+          last_seen: new Date().toISOString(),
+          last_login_date: today
+        })
         .eq('id', user.id);
 
-      updatedUser.last_login_date = today;
+      const updatedUser = {
+        ...user,
+        last_login_date: today
+      };
 
       localStorage.setItem("black-user", JSON.stringify(updatedUser));
       onLogin(updatedUser);
