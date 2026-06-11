@@ -109,6 +109,17 @@ export default function App() {
   }
 
   if (user.role === "admin") {
+    // ✅ التحقق: إذا فتحنا النافذة بمعامل ?chat في الرابط، نعرض الشات بدلاً من لوحة التحكم
+    const isChatWindow = window.location.search === "?chat";
+    
+    if (isChatWindow) {
+      return (
+        <ErrorBoundary>
+          <Chat user={user} onLogout={handleLogout} />
+        </ErrorBoundary>
+      );
+    }
+    
     return (
       <ErrorBoundary>
         <Admin user={user} onLogout={handleLogout} />
