@@ -97,7 +97,7 @@ export default function Admin({ user, onLogout }) {
       })
       .subscribe();
 
-    // ✅ قناة Realtime للمفاتيح
+    // ✅ قناة Realtime للمفاتيح - مدمجة بدل قناة منفصلة
     const apiKeysChannel = supabase
       .channel('api-keys-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'api_keys' }, () => {
@@ -138,8 +138,9 @@ export default function Admin({ user, onLogout }) {
 
   // ✅ تفعيل الفحص التلقائي
   useEffect(() => {
+    let interval = null;
     if (autoValidate) {
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         handleValidateKeys(true);
       }, 60 * 60 * 1000);
       setValidationInterval(interval);
@@ -149,17 +150,16 @@ export default function Admin({ user, onLogout }) {
         setValidationInterval(null);
       }
     }
-    
     return () => {
-      if (validationInterval) clearInterval(validationInterval);
+      if (interval) clearInterval(interval);
     };
   }, [autoValidate]);
 
   // ✅ دالة التحقق من حالة الاتصال
   function isUserOnline(userId) {
     return Object.keys(onlineUsers).some(key => {
-      const users = onlineUsers[key];
-      return users && users.some(u => u.user_id === userId);
+      const usersInKey = onlineUsers[key];
+      return usersInKey && usersInKey.some(u => u.user_id === userId);
     });
   }
 
@@ -371,12 +371,13 @@ export default function Admin({ user, onLogout }) {
         loadApiKeys();
         
         const invalidCount = results.filter(r => !r.valid).length;
-        if (invalidCount > 0 && !silent) {
-          showToast(`⚠️ تم العثور على ${invalidCount} مفتاح/m غير صالح`, 'error');
+        if (invalidCount > 0) {
+          showToast(`⚠️ تم العثور على ${invalidCount} مفتاح غير صالح`, 'error');
         } else if (invalidCount === 0 && !silent) {
           showToast(`✅ جميع المفاتيح (${results.length}) صالحة`, 'success');
         }
         
+        // تسجيل الفحص في السجل
         supabase.from('key_check_logs').insert({
           check_type: silent ? 'auto' : 'manual',
           total_keys: results.length,
@@ -443,11 +444,11 @@ export default function Admin({ user, onLogout }) {
   function toggleAutoValidate() {
     const newValue = !autoValidate;
     setAutoValidate(newValue);
-    localStorage.setItem('auto_validate_keys', newValue);
+    localStorage.setItem('auto_validate_keys', String(newValue));
     showToast(newValue ? '✅ تم تفعيل الفحص التلقائي كل ساعة' : '⏹️ تم إيقاف الفحص التلقائي', 'info');
   }
   
-  // ===== دوال المفاتيح المعدلة =====
+  // ===== دوال المفاتيح =====
   
   async function addApiKey() {
     if (!newKeyValue.trim()) { 
@@ -623,7 +624,6 @@ export default function Admin({ user, onLogout }) {
           </div>
         </div>
         
-        {/* زر القائمة المنسدلة */}
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowMenu(!showMenu)}
@@ -694,7 +694,7 @@ export default function Admin({ user, onLogout }) {
       }}>
         {[
           { id: 'users', label: `👥 المستخدمين (${users.length})` },
-          { id: 'keys', label: `🔑 المفاتيح (${apiKeys.filter(k => k.is_active && k.is_valid !== false).length}/${apiKeys.length})` },
+          { id: 'keys', label: `🔑 المفاتيح (${apiKeys.filter(k => k.is_active).length}/${apiKeys.length})` },
           { id: 'chats', label: `💬 المحادثات (${filteredChats.length}/${allChats.length})` },
         ].map(tab => (
           <button
@@ -748,14 +748,14 @@ export default function Admin({ user, onLogout }) {
               </div>
             </div>
 
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', WebkitOverflowScrolling: 'touch', maxHeight: '70vh' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '650px' }}>
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
                     {['المستخدم', 'الاستهلاك', 'الشخصية', 'الحالة', 'الاتصال', 'الإجراءات'].map(h => (
                       <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
-                  </table>
+                  </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.length === 0 ? (
@@ -775,7 +775,7 @@ export default function Admin({ user, onLogout }) {
                             <strong style={{ fontSize: '17px' }}>{u.name || "مستخدم"}</strong>
                             <br />
                             <span style={{ fontFamily: 'monospace', fontSize: '13px', opacity: 0.5 }}>{u.email}</span>
-                           </td>
+                          </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ minWidth: '140px' }}>
                               <div style={{ fontSize: '14px', marginBottom: '4px' }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div>
@@ -784,31 +784,31 @@ export default function Admin({ user, onLogout }) {
                               </div>
                               <div style={{ fontSize: '13px', opacity: 0.6, marginTop: '2px' }}>{percent.toFixed(0)}%</div>
                             </div>
-                           </td>
+                          </td>
                           <td style={{ padding: '12px 10px' }}>
                             <select value={u.personality || DEFAULT_PERSONALITY} onChange={e => changePersonality(u.id, e.target.value)} style={{ background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '6px 10px', fontSize: '14px', cursor: 'pointer' }}>
                               {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (<option key={key} value={key} style={{ background: theme.surface }}>{label}</option>))}
                             </select>
-                           </td>
+                          </td>
                           <td style={{ padding: '12px 10px' }}>
                             <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '14px', background: u.is_blocked ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)', color: u.is_blocked ? '#f87171' : '#4ade80' }}>
                               {u.is_blocked ? "محظور" : "نشط"}
                             </span>
-                           </td>
+                          </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: online ? '#4ade80' : '#6b7280', boxShadow: online ? '0 0 5px #4ade80' : 'none' }} />
                               <span style={{ fontSize: '14px' }}>{online ? '🟢 متصل' : '⚫ غير متصل'}</span>
                             </div>
-                           </td>
+                          </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>⚙️</button>
                               <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ background: u.is_blocked ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', color: u.is_blocked ? '#4ade80' : '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
                               <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
                             </div>
-                           </td>
-                         </tr>
+                          </td>
+                        </tr>
                       );
                     })
                   )}
@@ -838,62 +838,28 @@ export default function Admin({ user, onLogout }) {
               <button 
                 onClick={() => handleValidateKeys(false)} 
                 disabled={validating}
-                style={{
-                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
-                  color: '#fff',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  cursor: validating ? 'not-allowed' : 'pointer',
-                  fontSize: '14px',
-                  fontWeight: 'bold',
-                  opacity: validating ? 0.6 : 1
-                }}
+                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: validating ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold', opacity: validating ? 0.6 : 1 }}
               >
                 {validating ? '⏳ جاري الفحص...' : '🔍 فحص جميع المفاتيح'}
               </button>
               
               <button 
                 onClick={toggleAutoValidate}
-                style={{
-                  background: autoValidate ? 'rgba(74,222,128,0.2)' : theme.inputBg,
-                  color: autoValidate ? '#4ade80' : theme.text,
-                  border: `1px solid ${autoValidate ? '#4ade80' : theme.border}`,
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
+                style={{ background: autoValidate ? 'rgba(74,222,128,0.2)' : theme.inputBg, color: autoValidate ? '#4ade80' : theme.text, border: `1px solid ${autoValidate ? '#4ade80' : theme.border}`, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
               >
                 {autoValidate ? '🟢 الفحص التلقائي مفعل' : '⚫ تفعيل الفحص التلقائي'}
               </button>
               
               <button 
                 onClick={() => { loadValidationLogs(); setShowLogsModal(true); }}
-                style={{
-                  background: 'rgba(108,92,231,0.2)',
-                  color: '#a29bfe',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
+                style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
               >
                 📋 سجل الفحوصات
               </button>
               
               <button 
                 onClick={exportKeysToCSV}
-                style={{
-                  background: 'rgba(34,197,94,0.2)',
-                  color: '#22c55e',
-                  border: 'none',
-                  padding: '8px 16px',
-                  borderRadius: '8px',
-                  cursor: 'pointer',
-                  fontSize: '14px'
-                }}
+                style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
               >
                 📥 تصدير CSV
               </button>
@@ -912,9 +878,9 @@ export default function Admin({ user, onLogout }) {
               </div>
             )}
             
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', WebkitOverflowScrolling: 'touch', maxHeight: '70vh' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
                     {['الاسم', 'المفتاح', 'الاستهلاك', 'الحد', 'الحالة', 'الإجراءات'].map(h => (
                       <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7' }}>{h}</th>
@@ -930,13 +896,13 @@ export default function Admin({ user, onLogout }) {
                       <tr key={key.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
                         <td style={{ padding: '12px 10px', fontSize: '15px' }}>{key.key_name || "مفتاح Groq"}</td>
                         <td style={{ padding: '12px 10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <span style={{ fontFamily: 'monospace', fontSize: '13px', wordBreak: 'break-all' }}>
-                              {showFullKey[key.id] ? key.key_value : key.key_value?.slice(0, 25) + '...'}
+                              {showFullKey[key.id] ? key.key_value : (key.key_value?.slice(0, 25) + '...')}
                             </span>
                             <button 
                               onClick={() => setShowFullKey(prev => ({ ...prev, [key.id]: !prev[key.id] }))}
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', flexShrink: 0 }}
                             >
                               {showFullKey[key.id] ? '🙈' : '👁️'}
                             </button>
@@ -954,25 +920,12 @@ export default function Admin({ user, onLogout }) {
                         <td style={{ padding: '12px 10px', fontSize: '14px' }}>{(key.daily_limit || 0).toLocaleString()}</td>
                         <td style={{ padding: '12px 10px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <button onClick={() => toggleKeyStatus(key.id, key.is_active)} style={{ 
-                              padding: '4px 12px', borderRadius: '20px', fontSize: '13px', border: 'none', cursor: 'pointer', 
-                              background: key.is_active ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)', 
-                              color: key.is_active ? '#4ade80' : '#f87171' 
-                            }}>
+                            <button onClick={() => toggleKeyStatus(key.id, key.is_active)} style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '13px', border: 'none', cursor: 'pointer', background: key.is_active ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)', color: key.is_active ? '#4ade80' : '#f87171' }}>
                               {key.is_active ? "نشط" : "معطل"}
                             </button>
-                            
-                            <span style={{ 
-                              fontSize: '11px', 
-                              padding: '2px 8px', 
-                              borderRadius: '12px',
-                              background: isValid ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
-                              color: isValid ? '#4ade80' : '#f87171',
-                              textAlign: 'center'
-                            }}>
+                            <span style={{ fontSize: '11px', padding: '2px 8px', borderRadius: '12px', background: isValid ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)', color: isValid ? '#4ade80' : '#f87171', textAlign: 'center' }}>
                               {isValid ? '✅ صالح' : `❌ ${key.invalid_reason || 'غير صالح'}`}
                             </span>
-                            
                             {key.last_checked_at && (
                               <span style={{ fontSize: '10px', opacity: 0.5, textAlign: 'center' }}>
                                 آخر فحص: {formatDate(key.last_checked_at)}
@@ -982,24 +935,12 @@ export default function Admin({ user, onLogout }) {
                         </td>
                         <td style={{ padding: '12px 10px' }}>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <button onClick={() => testSingleKey(key)} style={{ 
-                              background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', 
-                              padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
-                            }} title="اختبار المفتاح">🔍</button>
-                            <button onClick={() => resetKeyUsage(key.id)} style={{ 
-                              background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', 
-                              padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
-                            }} title="تصفير الاستهلاك">🔄</button>
+                            <button onClick={() => testSingleKey(key)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }} title="اختبار المفتاح">🔍</button>
+                            <button onClick={() => resetKeyUsage(key.id)} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }} title="تصفير الاستهلاك">🔄</button>
                             {!isValid && !key.is_active && (
-                              <button onClick={() => reactivateKey(key.id)} style={{ 
-                                background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: 'none', 
-                                padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
-                              }} title="إعادة تفعيل">🔄 تفعيل</button>
+                              <button onClick={() => reactivateKey(key.id)} style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }} title="إعادة تفعيل">🔄 تفعيل</button>
                             )}
-                            <button onClick={() => deleteKey(key.id)} style={{ 
-                              background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', 
-                              padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
-                            }} title="حذف">🗑️</button>
+                            <button onClick={() => deleteKey(key.id)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }} title="حذف">🗑️</button>
                           </div>
                         </td>
                       </tr>
@@ -1035,9 +976,9 @@ export default function Admin({ user, onLogout }) {
                 <button onClick={deleteAllChatsConfirm} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>🗑️ حذف الكل</button>
               </div>
             </div>
-            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <div style={{ overflowX: 'auto', overflowY: 'auto', WebkitOverflowScrolling: 'touch', maxHeight: '70vh' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '550px' }}>
-                <thead>
+                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
                     {['المستخدم', 'العنوان', 'الرسائل', 'آخر تحديث', 'الإجراءات'].map(h => (
                       <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7' }}>{h}</th>
@@ -1087,7 +1028,9 @@ export default function Admin({ user, onLogout }) {
             <input style={{ ...modalInputStyle, fontFamily: 'monospace' }} type="text" placeholder="gsk_xxxxxxxxxxxx" value={newKeyValue} onChange={e => setNewKeyValue(e.target.value)} />
             <input style={modalInputStyle} type="number" placeholder="الحد اليومي" value={newKeyLimit} onChange={e => setNewKeyLimit(parseInt(e.target.value) || 0)} />
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={addApiKey} disabled={validating} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15px', opacity: validating ? 0.6 : 1 }}>✅ إضافة</button>
+              <button onClick={addApiKey} disabled={validating} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15px', opacity: validating ? 0.6 : 1 }}>
+                {validating ? '⏳ جاري التحقق...' : '✅ إضافة'}
+              </button>
               <button onClick={() => setShowAddKeyModal(false)} style={{ flex: 1, padding: '10px', background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '15px' }}>إلغاء</button>
             </div>
           </div>
@@ -1102,22 +1045,12 @@ export default function Admin({ user, onLogout }) {
               <h3>🔍 نتائج فحص المفاتيح</h3>
               <button onClick={() => setShowValidationModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '22px', cursor: 'pointer', color: theme.text }}>✕</button>
             </div>
-            
             <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '4px 12px', borderRadius: '20px' }}>
-                ✅ صالح: {validationResults.filter(r => r.valid).length}
-              </span>
-              <span style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', padding: '4px 12px', borderRadius: '20px' }}>
-                ❌ غير صالح: {validationResults.filter(r => !r.valid).length}
-              </span>
+              <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '4px 12px', borderRadius: '20px' }}>✅ صالح: {validationResults.filter(r => r.valid).length}</span>
+              <span style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', padding: '4px 12px', borderRadius: '20px' }}>❌ غير صالح: {validationResults.filter(r => !r.valid).length}</span>
             </div>
-            
             {validationResults.map((result, idx) => (
-              <div key={idx} style={{ 
-                background: result.valid ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', 
-                padding: '10px', borderRadius: '8px', marginBottom: '8px',
-                borderRight: `3px solid ${result.valid ? '#4ade80' : '#f87171'}`
-              }}>
+              <div key={idx} style={{ background: result.valid ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', padding: '10px', borderRadius: '8px', marginBottom: '8px', borderRight: `3px solid ${result.valid ? '#4ade80' : '#f87171'}` }}>
                 <div style={{ fontWeight: 'bold' }}>{result.name}</div>
                 <div style={{ fontSize: '12px', opacity: 0.7 }}>{result.value}</div>
                 <div style={{ fontSize: '12px', marginTop: '4px', color: result.valid ? '#4ade80' : '#f87171' }}>
@@ -1125,7 +1058,6 @@ export default function Admin({ user, onLogout }) {
                 </div>
               </div>
             ))}
-            
             <button onClick={() => setShowValidationModal(false)} style={{ width: '100%', padding: '10px', marginTop: '16px', background: theme.inputBg, borderRadius: '8px', border: `1px solid ${theme.border}`, cursor: 'pointer', color: theme.text }}>إغلاق</button>
           </div>
         </div>
@@ -1139,7 +1071,6 @@ export default function Admin({ user, onLogout }) {
               <h3>📋 سجل فحوصات المفاتيح</h3>
               <button onClick={() => setShowLogsModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '22px', cursor: 'pointer', color: theme.text }}>✕</button>
             </div>
-            
             {validationLogs.length === 0 ? (
               <p style={{ textAlign: 'center', opacity: 0.5 }}>لا توجد سجلات</p>
             ) : (
@@ -1157,7 +1088,6 @@ export default function Admin({ user, onLogout }) {
                 </div>
               ))
             )}
-            
             <button onClick={() => setShowLogsModal(false)} style={{ width: '100%', padding: '10px', marginTop: '16px', background: theme.inputBg, borderRadius: '8px', border: `1px solid ${theme.border}`, cursor: 'pointer', color: theme.text }}>إغلاق</button>
           </div>
         </div>
