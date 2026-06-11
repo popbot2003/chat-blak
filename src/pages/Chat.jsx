@@ -10,7 +10,7 @@ import MessageContent from "../components/MessageContent";
 import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
 import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TEMPERATURE, CHAT_HISTORY_LIMIT, SAVE_CHAT_DELAY_MS } from '../config/constants';
-import { PERSONALITIES, DEFAULT_PERSONALITY } from '../config/personalities';
+import { getPersonalityPrompt, DEFAULT_PERSONALITY } from '../config/personalities';
 import { formatDate, copyToClipboard, getUsagePercent, getUsageColor, isNewDay, debounce } from '../utils/helpers';
 import { checkUserDailyLimit } from '../utils/validators';
 
@@ -590,7 +590,7 @@ export default function Chat({ user, onLogout }) {
         body: JSON.stringify({ 
           model: GROQ_MODEL, 
           messages: [
-            { role: "system", content: PERSONALITIES[currentUserRef.current?.personality] || PERSONALITIES[DEFAULT_PERSONALITY] },
+            { role: "system", content: getPersonalityPrompt(currentUserRef.current?.personality || DEFAULT_PERSONALITY, currentUserRef.current?.gender || 'ولد') },
             ...chatMessages.slice(-CHAT_HISTORY_LIMIT), 
             { role: "user", content: enhancedText }
           ], 
