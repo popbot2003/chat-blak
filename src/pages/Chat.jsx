@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - نسخة محدثة مع نظام فحص المفاتيح والتوزيع الذكي
+// Chat.jsx - نسخة معدلة (تم إزالة التصفير التلقائي للاستهلاك)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -296,15 +296,13 @@ export default function Chat({ user, onLogout }) {
       const keys  = [];
 
       for (const key of data ?? []) {
-        // reset يومي
-        if (key.last_reset_date !== today) {
-          await supabase
-            .from("api_keys")
-            .update({ used_today: 0, last_reset_date: today })
-            .eq("id", key.id);
-          key.used_today      = 0;
-          key.last_reset_date = today;
-        }
+        // ✅ تم إزالة التصفير التلقائي للاستهلاك هنا
+        // الكود ده كان بيسبب مشكلة تصفير الاستهلاك
+        // if (key.last_reset_date !== today) {
+        //   await supabase.from("api_keys").update({ used_today: 0, last_reset_date: today }).eq("id", key.id);
+        //   key.used_today = 0;
+        //   key.last_reset_date = today;
+        // }
 
         const dailyLimit = key.daily_limit || 1_000_000;
         keys.push({
@@ -312,7 +310,6 @@ export default function Chat({ user, onLogout }) {
           key:          key.key_value,
           used:         key.used_today || 0,
           dailyLimit,
-          // نتحاشى القسمة على صفر
           usagePercent: dailyLimit > 0 ? ((key.used_today || 0) / dailyLimit) * 100 : 0,
         });
       }
@@ -511,13 +508,27 @@ export default function Chat({ user, onLogout }) {
         user_id:     user.id,
         tokens_used: tokens,
       });
+      // تحديث الحالة المحلية
       setCurrentUser((prev) => ({ ...prev, used_today: (prev?.used_today || 0) + tokens }));
-    } catch {
+      // تحديث الـ ref
+      if (currentUserRef.current) {
+        currentUserRef.current.used_today = (currentUserRef.current.used_today || 0) + tokens;
+      }
+      // تحديث الـ localStorage
+      const stored = localStorage.getItem("black-user");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.used_today = (parsed.used_today || 0) + tokens;
+        localStorage.setItem("black-user", JSON.stringify(parsed));
+      }
+    } catch (err) {
+      console.error("[Chat] خطأ في تحديث استهلاك المستخدم:", err.message);
       // fallback مباشر
       try {
         const newUsed = (currentUserRef.current?.used_today || 0) + tokens;
         await supabase.from("profiles").update({ used_today: newUsed }).eq("id", user.id);
         setCurrentUser((prev) => ({ ...prev, used_today: newUsed }));
+        if (currentUserRef.current) currentUserRef.current.used_today = newUsed;
       } catch (fallbackErr) {
         console.error("[Chat] fallback تحديث الاستهلاك فشل:", fallbackErr.message);
       }
