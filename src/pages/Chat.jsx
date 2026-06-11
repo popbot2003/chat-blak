@@ -2,7 +2,7 @@
 // Chat.jsx - نسخة محدثة مع Presence
 // التعديلات: إصلاح readFileAsText، debounce، beforeunload،
 //            race condition في updateUserUsage، حد الملفات الكبيرة
-//            + إضافة Presence لحالة الاتصال الفورية
+//            + إضافة Presence لحالة الاتصال الفورية (قناة موحدة)
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -36,7 +36,7 @@ async function searchDuckDuckGo(query) {
 function cleanResponse(text) { 
   if (!text) return ""; 
   return text
-    .replace(/<think>[\s\S]*?<\/think>/gi, "") // فلترة تفكير deepseek
+    .replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/[ \t]+/g, ' ')
     .trim(); 
 }
@@ -179,12 +179,12 @@ export default function Chat({ user, onLogout }) {
     return () => chatsDeleteChannel.unsubscribe();
   }, [user.id]);
 
-  // ✅ إضافة Presence - حالة الاتصال الفورية
+  // ✅ إضافة Presence - حالة الاتصال الفورية (قناة موحدة)
   useEffect(() => {
     let presenceChannel = null;
 
     const setupPresence = async () => {
-      presenceChannel = supabase.channel(`presence:${user.id}`, {
+      presenceChannel = supabase.channel('online-users', {
         config: { presence: { key: user.id } }
       });
 
@@ -452,7 +452,6 @@ export default function Chat({ user, onLogout }) {
 
   async function updateKeyUsage(keyId, tokens) {
     try {
-      // استخدام increment لتجنب race condition
       await supabase.rpc('increment_key_usage', { key_id: String(keyId), tokens_used: tokens });
       setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: k.used + tokens } : k));
     } catch (err) {
@@ -462,12 +461,10 @@ export default function Chat({ user, onLogout }) {
 
   async function updateUserUsage(tokens) {
     try {
-      // استخدام RPC للـ atomic increment لتجنب race condition
       await supabase.rpc('increment_user_usage', { user_id: user.id, tokens_used: tokens });
       setCurrentUser(prev => ({ ...prev, used_today: (prev?.used_today || 0) + tokens }));
     } catch (err) {
       console.error("خطأ في تحديث استهلاك المستخدم:", err);
-      // fallback لو الـ RPC مش موجود بعد
       try {
         const newUsed = (currentUserRef.current?.used_today || 0) + tokens;
         await supabase.from('profiles').update({ used_today: newUsed }).eq('id', user.id);
@@ -576,7 +573,6 @@ export default function Chat({ user, onLogout }) {
         return;
       }
     } catch (err) {
-      // لو في مشكلة في الاتصال نكمل عادي ومنطردش المستخدم بالغلط
       console.warn("تحذير: تعذر التحقق من حالة المستخدم:", err.message);
     }
 
@@ -646,7 +642,6 @@ export default function Chat({ user, onLogout }) {
 
       if (!res.ok) {
         if (data.error?.code === "rate_limit_exceeded") {
-          // نعلم المفتاح كممتلئ بدون ما نحرقه بالكامل
           setApiKeys(prev => prev.map(k => k.id === key.id ? { ...k, used: k.dailyLimit } : k));
           if (!isRetry) {
             setTimeout(() => executeRequest(text, true), 1500);
@@ -694,7 +689,6 @@ export default function Chat({ user, onLogout }) {
     const text = (overrideText || input).trim();
     if (!text && attachedFiles.length === 0 && !isRetry) return;
     
-    // الحد الأقصى لمحتوى الملف — 3000 حرف لكل ملف لتجنب تجاوز حد التوكنز
     const MAX_FILE_CHARS = 3000;
     
     let finalText = text;
