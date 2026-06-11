@@ -7,8 +7,6 @@ import { supabase } from '../lib/supabase';
 
 /**
  * التحقق من صحة مفتاح Groq API عن طريق الاتصال الفعلي بـ Groq
- * @param {string} apiKey - مفتاح Groq API
- * @returns {Promise<{valid: boolean, reason?: string, message?: string}>}
  */
 export async function validateGroqKey(apiKey) {
   if (!apiKey || !apiKey.startsWith('gsk_')) {
@@ -19,7 +17,6 @@ export async function validateGroqKey(apiKey) {
   }
 
   try {
-    // استخدام endpoint /models للتحقق (لا يستهلك توكنات)
     const response = await fetch('https://api.groq.com/openai/v1/models', {
       method: 'GET',
       headers: {
@@ -67,9 +64,6 @@ export async function validateGroqKey(apiKey) {
 
 /**
  * فحص جميع المفاتيح النشطة في قاعدة البيانات
- * @param {Function} onProgress - دالة لتحديث التقدم (current, total, name, result)
- * @param {Function} onComplete - دالة عند الانتهاء (results)
- * @returns {Promise<Array>} نتائج الفحص
  */
 export async function validateAllKeys(onProgress, onComplete) {
   const { data: keys, error } = await supabase
@@ -88,14 +82,12 @@ export async function validateAllKeys(onProgress, onComplete) {
     const key = keys[i];
     const result = await validateGroqKey(key.key_value);
     
-    // تحديث قاعدة البيانات بنتيجة الفحص
     const updateData = {
       last_checked_at: new Date().toISOString(),
       is_valid: result.valid,
       invalid_reason: result.valid ? null : result.reason,
     };
 
-    // إذا كان المفتاح غير صالح، نعطله تلقائياً
     if (!result.valid) {
       updateData.is_active = false;
     }
@@ -114,13 +106,11 @@ export async function validateAllKeys(onProgress, onComplete) {
       message: result.message
     });
 
-    // تحديث التقدم
     if (onProgress) {
       onProgress(i + 1, keys.length, key.key_name, result);
     }
   }
 
-  // استدعاء دالة الانتهاء
   if (onComplete) {
     onComplete(results);
   }
@@ -129,10 +119,7 @@ export async function validateAllKeys(onProgress, onComplete) {
 }
 
 /**
- * فحص جميع المفاتيح (بما فيها غير النشطة) - للاستخدام اليدوي المتقدم
- * @param {Function} onProgress - دالة لتحديث التقدم
- * @param {Function} onComplete - دالة عند الانتهاء
- * @returns {Promise<Array>} نتائج الفحص
+ * فحص جميع المفاتيح بما فيها غير النشطة
  */
 export async function validateAllKeysIncludingInactive(onProgress, onComplete) {
   const { data: keys, error } = await supabase
@@ -188,10 +175,7 @@ export async function validateAllKeysIncludingInactive(onProgress, onComplete) {
 }
 
 /**
- * اختبار سريع لمفتاح واحد (مع تحديث قاعدة البيانات)
- * @param {string} keyId - معرف المفتاح
- * @param {string} keyValue - قيمة المفتاح
- * @returns {Promise<{valid: boolean, reason?: string}>}
+ * اختبار سريع لمفتاح واحد مع تحديث قاعدة البيانات
  */
 export async function testSingleKeyAndUpdate(keyId, keyValue) {
   const result = await validateGroqKey(keyValue);
@@ -210,58 +194,7 @@ export async function testSingleKeyAndUpdate(keyId, keyValue) {
 }
 
 /**
- * بدء الفحص التلقائي الدوري
- * @param {number} intervalMinutes - الفاصل الزمني بالدقائق
- * @param {Function} onInvalidFound - دالة عند اكتشاف مفاتيح غير صالحة
- * @returns {Object} { intervalId, timeoutId, stop: function }
- */
-export function startAutoValidation(intervalMinutes = 60, onInvalidFound) {
-  let timeoutId = null;
-  let intervalId = null;
-  let isRunning = true;
-
-  const runValidation = async () => {
-    if (!isRunning) return;
-    
-    const results = await validateAllKeys(
-      (current, total, name, result) => {
-        console.log(`🔍 فحص ${name}: ${result.valid ? '✅' : '❌'}`);
-      },
-      (results) => {
-        const invalid = results.filter(r => !r.valid);
-        if (invalid.length > 0 && onInvalidFound) {
-          onInvalidFound(invalid);
-        }
-      }
-    );
-    
-    return results;
-  };
-
-  // فحص فوري بعد 5 ثواني
-  timeoutId = setTimeout(() => {
-    runValidation();
-    
-    // ثم فحص دوري
-    intervalId = setInterval(() => {
-      runValidation();
-    }, intervalMinutes * 60 * 1000);
-  }, 5000);
-
-  // دالة لإيقاف الفحص
-  const stop = () => {
-    isRunning = false;
-    if (timeoutId) clearTimeout(timeoutId);
-    if (intervalId) clearInterval(intervalId);
-  };
-
-  return { stop, intervalId, timeoutId };
-}
-
-/**
  * الحصول على حالة المفتاح النصية مع اللون المناسب
- * @param {Object} key - كائن المفتاح من قاعدة البيانات
- * @returns {{text: string, color: string, bg: string}}
  */
 export function getKeyStatusBadge(key) {
   if (!key.is_active) {
