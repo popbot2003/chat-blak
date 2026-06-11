@@ -1,7 +1,8 @@
 // ============================================
-// Chat.jsx - نسخة محدثة
+// Chat.jsx - نسخة محدثة مع Presence
 // التعديلات: إصلاح readFileAsText، debounce، beforeunload،
 //            race condition في updateUserUsage، حد الملفات الكبيرة
+//            + إضافة Presence لحالة الاتصال الفورية
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -176,6 +177,47 @@ export default function Chat({ user, onLogout }) {
       .subscribe();
 
     return () => chatsDeleteChannel.unsubscribe();
+  }, [user.id]);
+
+  // ✅ إضافة Presence - حالة الاتصال الفورية
+  useEffect(() => {
+    let presenceChannel = null;
+
+    const setupPresence = async () => {
+      presenceChannel = supabase.channel(`presence:${user.id}`, {
+        config: { presence: { key: user.id } }
+      });
+
+      presenceChannel.on('presence', { event: 'join' }, ({ newPresences }) => {
+        console.log('🟢 مستخدم دخل:', newPresences);
+      });
+
+      presenceChannel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
+        console.log('🔴 مستخدم خرج:', leftPresences);
+      });
+
+      await presenceChannel.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({
+            user_id: user.id,
+            user_name: user.name || user.email,
+            user_email: user.email,
+            online_at: new Date().toISOString(),
+            personality: user.personality || 'blak'
+          });
+          console.log('✅ تم تسجيل الحضور للمستخدم:', user.id);
+        }
+      });
+    };
+
+    setupPresence();
+
+    return () => {
+      if (presenceChannel) {
+        presenceChannel.untrack();
+        presenceChannel.unsubscribe();
+      }
+    };
   }, [user.id]);
 
   useEffect(() => { 
