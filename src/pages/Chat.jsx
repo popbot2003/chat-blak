@@ -408,7 +408,7 @@ export default function Chat({ user, onLogout }) {
   async function updateKeyUsage(keyId, tokens) {
     try {
       // استخدام increment لتجنب race condition
-      await supabase.rpc('increment_key_usage', { key_id: keyId, tokens_used: tokens });
+      await supabase.rpc('increment_key_usage', { key_id: String(keyId), tokens_used: tokens });
       setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: k.used + tokens } : k));
     } catch (err) {
       console.error("خطأ في تحديث استهلاك المفتاح:", err);
