@@ -536,7 +536,7 @@ export default function Admin({ user, onLogout }) {
       {/* ===== محتوى التبويبات ===== */}
       <div style={{ padding: '12px' }}>
 
-        {/* ===== تبويبة المستخدمين (بدون عمود المحادثات) ===== */}
+        {/* ===== تبويبة المستخدمين ===== */}
         {activeTab === "users" && (
           <div style={{ background: theme.surface, borderRadius: '16px', padding: '12px', border: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
@@ -568,61 +568,63 @@ export default function Admin({ user, onLogout }) {
                     {['المستخدم', 'الاستهلاك', 'الشخصية', 'الحالة', 'الاتصال', 'الإجراءات'].map(h => (
                       <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
-                   </>
+                  </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.length === 0 ? (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', padding: '40px', opacity: 0.5, fontSize: '15px' }}>لا توجد نتائج</td>
                     </tr>
-                  ) : filteredUsers.map(u => {
-                    const used = u.used_today || 0;
-                    const limit = u.daily_limit || 5000;
-                    const percent = getUsagePercent(used, limit);
-                    const color = getUsageColor(percent);
-                    const online = isUserOnline(u.id);
-                    return (
-                      <tr key={u.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
-                        <td style={{ padding: '12px 10px' }}>
-                          <strong style={{ fontSize: '17px' }}>{u.name || "مستخدم"}</strong>
-                          <br />
-                          <span style={{ fontFamily: 'monospace', fontSize: '13px', opacity: 0.5 }}>{u.email}</span>
-                        </td>
-                        <td style={{ padding: '12px 10px' }}>
-                          <div style={{ minWidth: '140px' }}>
-                            <div style={{ fontSize: '14px', marginBottom: '4px' }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div>
-                            <div style={{ width: '100%', height: '4px', background: theme.barBg, borderRadius: '2px', overflow: 'hidden' }}>
-                              <div style={{ width: percent + '%', height: '100%', background: color, transition: 'width 0.3s' }} />
+                  ) : (
+                    filteredUsers.map(u => {
+                      const used = u.used_today || 0;
+                      const limit = u.daily_limit || 5000;
+                      const percent = getUsagePercent(used, limit);
+                      const color = getUsageColor(percent);
+                      const online = isUserOnline(u.id);
+                      return (
+                        <tr key={u.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
+                          <td style={{ padding: '12px 10px' }}>
+                            <strong style={{ fontSize: '17px' }}>{u.name || "مستخدم"}</strong>
+                            <br />
+                            <span style={{ fontFamily: 'monospace', fontSize: '13px', opacity: 0.5 }}>{u.email}</span>
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <div style={{ minWidth: '140px' }}>
+                              <div style={{ fontSize: '14px', marginBottom: '4px' }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div>
+                              <div style={{ width: '100%', height: '4px', background: theme.barBg, borderRadius: '2px', overflow: 'hidden' }}>
+                                <div style={{ width: percent + '%', height: '100%', background: color, transition: 'width 0.3s' }} />
+                              </div>
+                              <div style={{ fontSize: '13px', opacity: 0.6, marginTop: '2px' }}>{percent.toFixed(0)}%</div>
                             </div>
-                            <div style={{ fontSize: '13px', opacity: 0.6, marginTop: '2px' }}>{percent.toFixed(0)}%</div>
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 10px' }}>
-                          <select value={u.personality || DEFAULT_PERSONALITY} onChange={e => changePersonality(u.id, e.target.value)} style={{ background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '6px 10px', fontSize: '14px', cursor: 'pointer' }}>
-                            {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (<option key={key} value={key} style={{ background: theme.surface }}>{label}</option>))}
-                          </select>
-                        </td>
-                        <td style={{ padding: '12px 10px' }}>
-                          <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '14px', background: u.is_blocked ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)', color: u.is_blocked ? '#f87171' : '#4ade80' }}>
-                            {u.is_blocked ? "محظور" : "نشط"}
-                          </span>
-                        </td>
-                        <td style={{ padding: '12px 10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: online ? '#4ade80' : '#6b7280', boxShadow: online ? '0 0 5px #4ade80' : 'none' }} />
-                            <span style={{ fontSize: '14px' }}>{online ? '🟢 متصل' : '⚫ غير متصل'}</span>
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 10px' }}>
-                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>⚙️</button>
-                            <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ background: u.is_blocked ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', color: u.is_blocked ? '#4ade80' : '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
-                            <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <select value={u.personality || DEFAULT_PERSONALITY} onChange={e => changePersonality(u.id, e.target.value)} style={{ background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '6px 10px', fontSize: '14px', cursor: 'pointer' }}>
+                              {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (<option key={key} value={key} style={{ background: theme.surface }}>{label}</option>))}
+                            </select>
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '14px', background: u.is_blocked ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)', color: u.is_blocked ? '#f87171' : '#4ade80' }}>
+                              {u.is_blocked ? "محظور" : "نشط"}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: online ? '#4ade80' : '#6b7280', boxShadow: online ? '0 0 5px #4ade80' : 'none' }} />
+                              <span style={{ fontSize: '14px' }}>{online ? '🟢 متصل' : '⚫ غير متصل'}</span>
+                            </div>
+                          </td>
+                          <td style={{ padding: '12px 10px' }}>
+                            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>⚙️</button>
+                              <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ background: u.is_blocked ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', color: u.is_blocked ? '#4ade80' : '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
+                              <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
@@ -645,7 +647,9 @@ export default function Admin({ user, onLogout }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '550px' }}>
                 <thead>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
-                    {['الاسم', 'المفتاح', 'الاستهلاك', 'الحد', 'الحالة', 'الإجراءات'].map(h => (<th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7' }}>{h}</th>))}
+                    {['الاسم', 'المفتاح', 'الاستهلاك', 'الحد', 'الحالة', 'الإجراءات'].map(h => (
+                      <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7' }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -714,7 +718,9 @@ export default function Admin({ user, onLogout }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '550px' }}>
                 <thead>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
-                    {['المستخدم', 'العنوان', 'الرسائل', 'آخر تحديث', 'الإجراءات'].map(h => (<th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7' }}>{h}</th>))}
+                    {['المستخدم', 'العنوان', 'الرسائل', 'آخر تحديث', 'الإجراءات'].map(h => (
+                      <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7' }}>{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -751,7 +757,7 @@ export default function Admin({ user, onLogout }) {
 
       </div>
 
-      {/* ===== باقي المودالات ===== */}
+      {/* ===== مودال إضافة مفتاح ===== */}
       {showAddKeyModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '450px' }}>
@@ -767,6 +773,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
+      {/* ===== مودال تعديل المستخدم ===== */}
       {showEditUserModal && selectedUser && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '380px' }}>
@@ -781,6 +788,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
+      {/* ===== مودال تصدير البيانات ===== */}
       {showExportModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '360px' }}>
@@ -801,6 +809,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
+      {/* ===== مودال محادثات المستخدم ===== */}
       {showUserChatsModal && selectedUserForChats && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '650px', maxHeight: '80vh', overflowY: 'auto' }}>
@@ -832,6 +841,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
+      {/* ===== مودال عرض المحادثة ===== */}
       {showChatModal && selectedChat && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '650px', maxHeight: '80vh', overflowY: 'auto' }}>
