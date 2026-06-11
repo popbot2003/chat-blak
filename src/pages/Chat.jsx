@@ -1,1203 +1,293 @@
 // ============================================
-// Chat.jsx - نسخة محدثة مع نظام فحص المفاتيح والتوزيع الذكي
+// groqValidator.js
+// نظام التحقق من صحة مفاتيح Groq API
 // ============================================
 
-import { useState, useRef, useEffect } from "react";
-import "../App.css";
-import MessageContent from "../components/MessageContent";
-import TypingDots from "../components/TypingDots";
 import { supabase } from '../lib/supabase';
-import { GROQ_MODEL, GROQ_MAX_TOKENS, GROQ_TEMPERATURE, CHAT_HISTORY_LIMIT, SAVE_CHAT_DELAY_MS } from '../config/constants';
-import { getPersonalityPrompt, DEFAULT_PERSONALITY } from '../config/personalities';
-import { formatDate, copyToClipboard, getUsagePercent, getUsageColor, isNewDay, debounce } from '../utils/helpers';
-import { checkUserDailyLimit } from '../utils/validators';
 
-async function searchDuckDuckGo(query) {
+// ──────────────────────────────────────────
+// ثوابت
+// ──────────────────────────────────────────
+
+/** أقصى عدد مفاتيح تُفحص بشكل متوازٍ في نفس الوقت */
+const CONCURRENCY_LIMIT = 5;
+
+/** عدد محاولات إعادة التحديث في Supabase عند فشل الشبكة */
+const DB_RETRY_ATTEMPTS = 3;
+
+/** وقت الانتظار (ms) بين محاولات Supabase */
+const DB_RETRY_DELAY_MS = 500;
+
+// ──────────────────────────────────────────
+// دوال مساعدة داخلية
+// ──────────────────────────────────────────
+
+/**
+ * إخفاء المفتاح بشكل آمن للعرض فقط
+ * مثال: gsk_AbCd...xYzW
+ */
+function maskKey(keyValue) {
+  if (!keyValue || keyValue.length < 12) return '***';
+  return keyValue.slice(0, 8) + '...' + keyValue.slice(-4);
+}
+
+/**
+ * تحديث Supabase مع إعادة المحاولة عند فشل الشبكة
+ */
+async function updateKeyInDB(keyId, updateData, attempt = 1) {
+  const { error } = await supabase
+    .from('api_keys')
+    .update(updateData)
+    .eq('id', keyId);
+
+  if (error) {
+    if (attempt < DB_RETRY_ATTEMPTS) {
+      await new Promise(res => setTimeout(res, DB_RETRY_DELAY_MS * attempt));
+      return updateKeyInDB(keyId, updateData, attempt + 1);
+    }
+    // تسجيل الخطأ بدون بيانات حساسة
+    console.error(`[groqValidator] فشل تحديث المفتاح id=${keyId} بعد ${attempt} محاولات:`, error.message);
+  }
+}
+
+/**
+ * تشغيل مجموعة من الـ promises بشكل متوازٍ مع تحديد حد أقصى
+ */
+async function runWithConcurrency(tasks, limit) {
+  const results = new Array(tasks.length);
+  let index = 0;
+
+  async function worker() {
+    while (index < tasks.length) {
+      const current = index++;
+      results[current] = await tasks[current]();
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(limit, tasks.length) }, worker);
+  await Promise.all(workers);
+  return results;
+}
+
+// ──────────────────────────────────────────
+// التحقق من مفتاح واحد
+// ──────────────────────────────────────────
+
+/**
+ * التحقق من صحة مفتاح Groq API عن طريق الاتصال الفعلي بـ Groq.
+ * لا يُسجَّل المفتاح نفسه في أي مكان.
+ *
+ * @param {string} apiKey
+ * @returns {{ valid: boolean, reason?: string, message?: string, models?: string[], isTemporary?: boolean }}
+ */
+export async function validateGroqKey(apiKey) {
+  if (!apiKey || typeof apiKey !== 'string' || !apiKey.startsWith('gsk_')) {
+    return {
+      valid: false,
+      reason: 'مفتاح غير صالح (يجب أن يبدأ بـ gsk_)',
+    };
+  }
+
   try {
-    const res = await fetch(`https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&kl=ar-ar&t=h_`);
-    const data = await res.json();
-    const results = [];
-    if (data.Abstract) results.push(data.Abstract);
-    if (data.Answer) results.unshift(data.Answer);
-    if (data.RelatedTopics) {
-      data.RelatedTopics.slice(0, 3).forEach(function(t) { 
-        if (t.Text) results.push(t.Text); 
-      });
+    const response = await fetch('https://api.groq.com/openai/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    switch (response.status) {
+      case 200: {
+        const data = await response.json();
+        return {
+          valid: true,
+          message: '✅ المفتاح صالح',
+          models: data.data?.map(m => m.id) ?? [],
+        };
+      }
+      case 401:
+        return {
+          valid: false,
+          isTemporary: false,
+          reason: '❌ مفتاح غير صحيح أو محذوف من Groq',
+        };
+      case 429:
+        // خطأ مؤقت — لا يعني أن المفتاح نفسه غير صالح
+        return {
+          valid: false,
+          isTemporary: true,
+          reason: '⚠️ تم تجاوز حد المعدل - حاول لاحقاً',
+        };
+      default:
+        return {
+          valid: false,
+          isTemporary: false,
+          reason: `❌ خطأ غير متوقع: ${response.status}`,
+        };
     }
-    return results.length > 0 ? results.join("\n") : null;
-  } catch (err) { 
-    return null; 
+  } catch (error) {
+    // تسجيل رسالة الخطأ فقط — بدون أي إشارة للمفتاح
+    console.error('[groqValidator] فشل الاتصال بـ Groq:', error.message);
+    return {
+      valid: false,
+      isTemporary: true,
+      reason: `❌ فشل الاتصال: ${error.message}`,
+    };
   }
 }
 
-function cleanResponse(text) { 
-  if (!text) return ""; 
-  return text
-    .replace(/<think>[\s\S]*?<\/think>/gi, "")
-    .replace(/[ \t]+/g, ' ')
-    .trim(); 
-}
+// ──────────────────────────────────────────
+// دالة الفحص الشاملة (داخلية)
+// ──────────────────────────────────────────
 
-async function readFileAsText(file) {
-  return new Promise(function(resolve) {
-    const reader = new FileReader();
-    reader.onerror = function() { resolve("❌ خطأ في قراءة الملف"); };
-    if (file.type.startsWith("image/")) {
-      reader.onload = function() { resolve("🖼️ صورة: " + file.name); };
-      reader.readAsDataURL(file);
-      return;
+/**
+ * @param {{ includeInactive?: boolean }} options
+ * @param {(done: number, total: number, keyName: string, result: object) => void} [onProgress]
+ * @param {(results: object[]) => void} [onComplete]
+ */
+async function _validateKeys({ includeInactive = false } = {}, onProgress, onComplete) {
+  let query = supabase.from('api_keys').select('*');
+  if (!includeInactive) {
+    query = query.eq('is_active', true);
+  }
+
+  const { data: keys, error } = await query;
+
+  if (error) {
+    console.error('[groqValidator] خطأ في جلب المفاتيح:', error.message);
+    return [];
+  }
+
+  if (!keys?.length) return [];
+
+  let done = 0;
+  const results = [];
+
+  const tasks = keys.map((key, _i) => async () => {
+    const result = await validateGroqKey(key.key_value);
+
+    const updateData = {
+      last_checked_at: new Date().toISOString(),
+      is_valid: result.valid,
+      invalid_reason: result.valid ? null : result.reason,
+    };
+
+    // تعطيل المفتاح فقط إذا كان الفشل دائماً (ليس مؤقتاً كـ rate limit)
+    if (!result.valid && !result.isTemporary && key.is_active) {
+      updateData.is_active = false;
     }
-    if (file.type === "application/pdf") {
-      reader.onload = function() { resolve("📄 PDF: " + file.name); };
-      reader.readAsArrayBuffer(file);
-      return;
-    }
-    reader.onload = function() { resolve(reader.result); };
-    reader.readAsText(file);
+
+    await updateKeyInDB(key.id, updateData);
+
+    const resultEntry = {
+      id: key.id,
+      name: key.key_name || 'مفتاح بدون اسم',
+      value: maskKey(key.key_value),        // ← آمن
+      active: key.is_active,
+      valid: result.valid,
+      isTemporary: result.isTemporary ?? false,
+      reason: result.reason,
+      message: result.message,
+    };
+
+    results.push(resultEntry);
+
+    done++;
+    onProgress?.(done, keys.length, key.key_name, result);
+
+    return resultEntry;
   });
+
+  await runWithConcurrency(tasks, CONCURRENCY_LIMIT);
+
+  onComplete?.(results);
+  return results;
 }
 
-function getFileIcon(file) {
-  if (file.type.startsWith("image/")) return "🖼️";
-  if (file.type === "application/pdf") return "📄";
-  if (file.type.includes("javascript") || file.name.endsWith(".js") || file.name.endsWith(".jsx")) return "💛";
-  if (file.type.includes("python") || file.name.endsWith(".py")) return "🐍";
-  if (file.type.includes("html") || file.name.endsWith(".html")) return "🌐";
-  if (file.type.includes("css") || file.name.endsWith(".css")) return "🎨";
-  if (file.name.endsWith(".json")) return "📋";
-  if (file.name.endsWith(".csv")) return "📊";
-  if (file.name.endsWith(".md")) return "📝";
-  return "📎";
+// ──────────────────────────────────────────
+// الواجهات العامة
+// ──────────────────────────────────────────
+
+/**
+ * فحص المفاتيح النشطة فقط
+ */
+export async function validateAllKeys(onProgress, onComplete) {
+  return _validateKeys({ includeInactive: false }, onProgress, onComplete);
 }
 
-export default function Chat({ user, onLogout }) {
-  const [apiKeys, setApiKeys] = useState([]);
-  const [allChats, setAllChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(Date.now().toString());
-  const [showHistory, setShowHistory] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
-  const [messages, setMessages] = useState([{ 
-    role: "assistant", 
-    content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎", 
-    id: Date.now() 
-  }]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [copiedId, setCopiedId] = useState(null);
-  const [theme, setTheme] = useState("dark");
-  const [attachedFiles, setAttachedFiles] = useState([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [currentUser, setCurrentUser] = useState(user);
-  
-  const [showSettings, setShowSettings] = useState(false);
-  const [editName, setEditName] = useState(user?.name || "");
-  const [editNewPassword, setEditNewPassword] = useState("");
-  const [editConfirmPassword, setEditConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [settingsLoading, setSettingsLoading] = useState(false);
-  const [settingsError, setSettingsError] = useState("");
-  
-  const bottomRef = useRef(null);
-  const inputRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const apiKeysRef = useRef(apiKeys);
-  const messagesRef = useRef(messages);
-  const currentChatIdRef = useRef(currentChatId);
-  const currentUserRef = useRef(currentUser);
-  const debouncedSaveRef = useRef(null);
+/**
+ * فحص جميع المفاتيح بما فيها غير النشطة
+ */
+export async function validateAllKeysIncludingInactive(onProgress, onComplete) {
+  return _validateKeys({ includeInactive: true }, onProgress, onComplete);
+}
 
-  useEffect(() => { apiKeysRef.current = apiKeys; }, [apiKeys]);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-  useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
-  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+/**
+ * اختبار مفتاح واحد وتحديث قاعدة البيانات.
+ *
+ * @param {string} keyId
+ * @param {string} keyValue
+ * @param {{ forceActivate?: boolean }} options
+ *   forceActivate: إذا كانت true يُعاد تفعيل المفتاح عند النجاح.
+ *                  افتراضياً false لتجنب إعادة تفعيل مفاتيح مُعطَّلة يدوياً.
+ */
+export async function testSingleKeyAndUpdate(keyId, keyValue, { forceActivate = false } = {}) {
+  const result = await validateGroqKey(keyValue);
 
-  // الاستماع لتغيرات بيانات المستخدم
-  useEffect(() => {
-    const userChannel = supabase
-      .channel('user-updates')
-      .on('postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
-        (payload) => {
-          console.log("🔄 تحديث بيانات المستخدم:", payload.new);
-          setCurrentUser(payload.new);
-          localStorage.setItem("black-user", JSON.stringify(payload.new));
-        }
-      )
-      .subscribe();
+  const updateData = {
+    last_checked_at: new Date().toISOString(),
+    is_valid: result.valid,
+    invalid_reason: result.valid ? null : result.reason,
+  };
 
-    return () => userChannel.unsubscribe();
-  }, [user.id]);
-
-  // الاستماع لحذف الحساب
-  useEffect(() => {
-    const deleteChannel = supabase
-      .channel('profile-delete')
-      .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'profiles' },
-        (payload) => {
-          if (payload.old.id === user.id) {
-            alert("⚠️ تم حذف حسابك بواسطة المدير. سيتم تسجيل خروجك.");
-            localStorage.removeItem("black-user");
-            window.location.reload();
-          }
-        }
-      )
-      .subscribe();
-
-    return () => deleteChannel.unsubscribe();
-  }, [user.id]);
-
-  // الاستماع لحذف المحادثات
-  useEffect(() => {
-    const chatsDeleteChannel = supabase
-      .channel('chats-delete-' + user.id)
-      .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'chats', filter: `user_id=eq.${user.id}` },
-        (payload) => {
-          const deletedChatId = payload.old.id;
-          setAllChats(prev => prev.filter(c => c.id !== deletedChatId));
-          if (currentChatIdRef.current === deletedChatId) {
-            const newId = Date.now().toString();
-            setCurrentChatId(newId);
-            setMessages([{ 
-              role: "assistant", 
-              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.", 
-              id: Date.now() 
-            }]);
-          }
-        }
-      )
-      .subscribe();
-
-    return () => chatsDeleteChannel.unsubscribe();
-  }, [user.id]);
-
-  // ✅ إضافة Presence
-  useEffect(() => {
-    let presenceChannel = null;
-
-    const setupPresence = async () => {
-      presenceChannel = supabase.channel('online-users', {
-        config: { presence: { key: user.id } }
-      });
-
-      presenceChannel.on('presence', { event: 'join' }, ({ newPresences }) => {
-        console.log('🟢 مستخدم دخل:', newPresences);
-      });
-
-      presenceChannel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
-        console.log('🔴 مستخدم خرج:', leftPresences);
-      });
-
-      await presenceChannel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({
-            user_id: user.id,
-            user_name: user.name || user.email,
-            user_email: user.email,
-            online_at: new Date().toISOString(),
-            personality: user.personality || 'blak'
-          });
-          console.log('✅ تم تسجيل الحضور للمستخدم:', user.id);
-        }
-      });
-    };
-
-    setupPresence();
-
-    return () => {
-      if (presenceChannel) {
-        presenceChannel.untrack();
-        presenceChannel.unsubscribe();
-      }
-    };
-  }, [user.id]);
-
-  useEffect(() => { 
-    loadAllData(); 
-    inputRef.current?.focus(); 
-  }, []);
-
-  useEffect(() => { 
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" }); 
-  }, [messages, streamingText]);
-
-  useEffect(() => {
-    if (!isLoaded || messages.length <= 1) return;
-    if (!debouncedSaveRef.current) {
-      debouncedSaveRef.current = debounce(() => saveChatToSupabase(), SAVE_CHAT_DELAY_MS);
-    }
-    debouncedSaveRef.current();
-  }, [messages, isLoaded]);
-
-  useEffect(() => {
-    function handleBeforeUnload() { saveChatToSupabase(); }
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [isLoaded]);
-
-  async function loadAllData() { 
-    await loadApiKeys(); 
-    await loadChatsFromSupabase();
-    await refreshUserData();
-    await checkAndShowWelcome();
-    setIsLoaded(true); 
+  // تعطيل فقط عند الفشل الدائم
+  if (!result.valid && !result.isTemporary) {
+    updateData.is_active = false;
   }
 
-  async function loadApiKeys() {
-    try {
-      // ✅ جلب المفاتيح النشطة والصالحة فقط
-      const { data } = await supabase
-        .from('api_keys')
-        .select('*')
-        .eq('is_active', true)
-        .eq('is_valid', true);
-      
-      const keys = [];
-      const today = new Date().toISOString().slice(0, 10);
-
-      if (data && data.length > 0) {
-        for (const key of data) {
-          // reset تلقائي للمفتاح لو يوم جديد
-          if (key.last_reset_date !== today) {
-            await supabase
-              .from('api_keys')
-              .update({ used_today: 0, last_reset_date: today })
-              .eq('id', key.id);
-            key.used_today = 0;
-            key.last_reset_date = today;
-          }
-          keys.push({ 
-            id: key.id, 
-            key: key.key_value, 
-            used: key.used_today || 0, 
-            dailyLimit: key.daily_limit || 1000000,
-            usagePercent: ((key.used_today || 0) / (key.daily_limit || 1)) * 100
-          });
-        }
-      }
-      
-      // ✅ ترتيب المفاتيح حسب نسبة الاستخدام (الأقل أولاً) - توزيع ذكي
-      keys.sort((a, b) => a.usagePercent - b.usagePercent);
-      setApiKeys(keys);
-    } catch (err) {
-      console.error("خطأ في تحميل المفاتيح:", err);
-    }
+  // إعادة التفعيل تحتاج قراراً صريحاً من المستدعي
+  if (result.valid && forceActivate) {
+    updateData.is_active = true;
   }
 
-  async function refreshUserData() {
-    try {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
-      
-      if (data) {
-        setCurrentUser(data);
-        localStorage.setItem("black-user", JSON.stringify(data));
-      }
-    } catch (err) {
-      console.error("خطأ في تحديث بيانات المستخدم:", err);
-    }
+  await updateKeyInDB(keyId, updateData);
+  return result;
+}
+
+// ──────────────────────────────────────────
+// Badge الحالة
+// ──────────────────────────────────────────
+
+/**
+ * إرجاع بيانات الشارة المناسبة لمفتاح معين.
+ *
+ * @param {{ is_active: boolean, is_valid: boolean, used_today?: number, daily_limit?: number }} key
+ * @returns {{ text: string, color: string, bg: string }}
+ */
+export function getKeyStatusBadge(key) {
+  if (!key.is_active) {
+    return { text: 'معطل', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
+  }
+  if (key.is_valid === false) {
+    return { text: 'غير صالح', color: '#f87171', bg: 'rgba(248,113,113,0.15)' };
   }
 
-  async function loadChatsFromSupabase() {
-    try {
-      const { data: chats } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(50);
-      
-      setAllChats((chats || []).map(c => ({ 
-        id: c.id, 
-        title: c.title || "محادثة", 
-        date: c.updated_at, 
-        messageCount: c.messages?.length || 0 
-      })));
-    } catch (err) {
-      console.error("خطأ في تحميل المحادثات:", err);
-    }
+  const usedToday  = key.used_today  ?? 0;
+  const dailyLimit = key.daily_limit ?? 0;
+
+  // إذا لم يُحدَّد حد يومي أو كان صفراً → نعرض "صالح" مباشرةً بدون نسبة مضللة
+  if (dailyLimit <= 0) {
+    return { text: '✅ صالح', color: '#4ade80', bg: 'rgba(74,222,128,0.15)' };
   }
 
-  async function saveChatToSupabase() {
-    const currentMessages = messagesRef.current;
-    if (!currentMessages || currentMessages.length <= 1) return;
-    
-    const title = currentMessages.find(m => m.role === "user")?.content?.slice(0, 50) || "محادثة";
-    const chatId = currentChatIdRef.current;
-    const now = new Date().toISOString();
+  const percent = (usedToday / dailyLimit) * 100;
 
-    try {
-      await supabase.from('chats').upsert({ 
-        id: chatId, 
-        user_id: user.id, 
-        title: title, 
-        messages: currentMessages.slice(-CHAT_HISTORY_LIMIT), 
-        updated_at: now
-      });
-
-      setAllChats(prev => {
-        const exists = prev.find(c => c.id === chatId);
-        const updated = { id: chatId, title, date: now, messageCount: currentMessages.length };
-        if (exists) {
-          return [updated, ...prev.filter(c => c.id !== chatId)];
-        }
-        return [updated, ...prev];
-      });
-    } catch (err) {
-      console.error("خطأ في حفظ المحادثة:", err);
-    }
+  if (percent >= 90) {
+    return { text: '⚠️ حرج',            color: '#f97316', bg: 'rgba(249,115,22,0.15)'  };
   }
-
-  function getTimeBasedGreeting() {
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 12) return "صباح الخير";
-    if (hour >= 12 && hour < 17) return "نهارك سعيد";
-    if (hour >= 17 && hour < 22) return "مساء الخير";
-    return "يا سلاام";
+  if (percent >= 70) {
+    return { text: '🟡 استهلاك عالي',   color: '#facc15', bg: 'rgba(250,204,21,0.15)'  };
   }
-
-  function getWelcomeMessage(lastLoginDate, userName, usedToday, dailyLimit, chatCount) {
-    const today = new Date().toISOString().slice(0, 10);
-    const isFirstTimeToday = lastLoginDate !== today;
-    const percentLeft = ((dailyLimit - usedToday) / dailyLimit) * 100;
-    const greeting = getTimeBasedGreeting();
-    const name = userName || "صاحبي";
-    
-    if (isFirstTimeToday) {
-      let message = `${greeting} يا ${name} 🖤\n\nياهلا بيك في يوم جديد.\n\n📊 النهاردة:\n`;
-      message += `- متبقي: ${(dailyLimit - usedToday).toLocaleString()} / ${dailyLimit.toLocaleString()} توكن (${Math.floor(percentLeft)}%)\n`;
-      if (chatCount > 0) {
-        message += `- عدد محادثاتك: ${chatCount} محادثة\n`;
-      }
-      message += `\nجهز نفسك، النهاردة هنتكلم كتير 🚀`;
-      return message;
-    } else {
-      const messagesList = [
-        `أهلاً بعودتك يا ${name} 🖤\n\nفاتك حاجة ولا إيه؟ تعالا نكمل.`,
-        `مرحباً مرة تانية يا ${name} 🖤\n\nوحشتني بجد. احكلي إيه الأخبار.`,
-        `يا ${name}.. رجعت! 🖤\n\nكنت مستنيك. يلا احكيلي.`,
-        `هلا والله يا ${name} 🖤\n\nعودتك تسعدني. إيه اللي جابك؟`
-      ];
-      return messagesList[Math.floor(Math.random() * messagesList.length)];
-    }
-  }
-
-  async function checkAndShowWelcome() {
-    if (!currentUser) return;
-    
-    const today = new Date().toISOString().slice(0, 10);
-    const lastLogin = currentUser.last_login_date;
-    const chatCount = allChats.length;
-
-    const isNewUser = !lastLogin;
-    const isFirstTimeToday = lastLogin !== today;
-    
-    const welcomeMessage = isNewUser
-      ? `أهلاً وسهلاً يا ${currentUser.name || "صاحبي"} 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(currentUser.daily_limit || 5000).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`
-      : getWelcomeMessage(lastLogin, currentUser.name, currentUser.used_today || 0, currentUser.daily_limit || 5000, chatCount);
-
-    if (isNewUser || isFirstTimeToday || messages.length === 1) {
-      if (messages.length === 1 && messages[0].content.includes("أهلاً.. أنا بلاك")) {
-        setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
-      } else if (messages.length === 1) {
-        setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
-      }
-    }
-    
-    if (lastLogin !== today) {
-      await supabase
-        .from('profiles')
-        .update({ last_login_date: today })
-        .eq('id', user.id);
-      
-      setCurrentUser(prev => ({ ...prev, last_login_date: today }));
-    }
-  }
-
-  // ✅ التوزيع الذكي للمفاتيح (اختيار أفضل مفتاح)
-  function pickBestKey() {
-    const available = apiKeysRef.current.filter(k => k.used < k.dailyLimit);
-    
-    if (available.length === 0) return null;
-    
-    // ترتيب حسب نسبة الاستخدام (الأقل أولاً) ثم Round Robin للمفاتيح المتساوية
-    available.sort((a, b) => {
-      const percentA = (a.used / a.dailyLimit) * 100;
-      const percentB = (b.used / b.dailyLimit) * 100;
-      return percentA - percentB;
-    });
-    
-    // اختيار المفتاح الأقل استخداماً
-    return available[0];
-  }
-
-  // ✅ تعطيل مفتاح غير صالح فوراً
-  async function deactivateKey(keyId, reason) {
-    try {
-      await supabase
-        .from('api_keys')
-        .update({ 
-          is_active: false, 
-          is_valid: false, 
-          invalid_reason: reason,
-          last_checked_at: new Date().toISOString()
-        })
-        .eq('id', keyId);
-      
-      console.log(`🔑 تم تعطيل المفتاح ${keyId}: ${reason}`);
-      
-      // تحديث القائمة المحلية
-      setApiKeys(prev => prev.filter(k => k.id !== keyId));
-      
-    } catch (err) {
-      console.error("خطأ في تعطيل المفتاح:", err);
-    }
-  }
-
-  async function updateKeyUsage(keyId, tokens) {
-    try {
-      await supabase.rpc('increment_key_usage', { key_id: String(keyId), tokens_used: tokens });
-      setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: k.used + tokens, usagePercent: ((k.used + tokens) / k.dailyLimit) * 100 } : k));
-    } catch (err) {
-      console.error("خطأ في تحديث استهلاك المفتاح:", err);
-    }
-  }
-
-  async function updateUserUsage(tokens) {
-    try {
-      await supabase.rpc('increment_user_usage', { user_id: user.id, tokens_used: tokens });
-      setCurrentUser(prev => ({ ...prev, used_today: (prev?.used_today || 0) + tokens }));
-    } catch (err) {
-      console.error("خطأ في تحديث استهلاك المستخدم:", err);
-      try {
-        const newUsed = (currentUserRef.current?.used_today || 0) + tokens;
-        await supabase.from('profiles').update({ used_today: newUsed }).eq('id', user.id);
-        setCurrentUser(prev => ({ ...prev, used_today: newUsed }));
-      } catch (fallbackErr) {
-        console.error("خطأ في fallback تحديث الاستهلاك:", fallbackErr);
-      }
-    }
-  }
-
-  async function updateUserSettings() {
-    setSettingsError("");
-    
-    if (editNewPassword !== editConfirmPassword) {
-      setSettingsError("❌ كلمة المرور الجديدة غير متطابقة");
-      return;
-    }
-    
-    if (editNewPassword && editNewPassword.length < 6) {
-      setSettingsError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
-      return;
-    }
-    
-    setSettingsLoading(true);
-    
-    try {
-      const updates = {};
-      if (editName && editName !== currentUser?.name) {
-        updates.name = editName;
-      }
-      if (editNewPassword) {
-        updates.password = editNewPassword;
-      }
-      
-      if (Object.keys(updates).length === 0) {
-        setSettingsError("❌ لا توجد تغييرات للحفظ");
-        setSettingsLoading(false);
-        return;
-      }
-      
-      const { error } = await supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', user.id);
-      
-      if (error) throw error;
-      
-      const updatedUser = { ...currentUser, ...updates };
-      setCurrentUser(updatedUser);
-      localStorage.setItem("black-user", JSON.stringify(updatedUser));
-      
-      setEditNewPassword("");
-      setEditConfirmPassword("");
-      setSettingsError("");
-      setShowSettings(false);
-      
-      alert("✅ تم تحديث الإعدادات بنجاح");
-      
-    } catch (err) {
-      setSettingsError("❌ خطأ: " + err.message);
-    } finally {
-      setSettingsLoading(false);
-    }
-  }
-
-  async function deleteAccount() {
-    const confirmDelete = window.confirm(
-      "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
-    );
-    
-    if (!confirmDelete) return;
-    
-    setSettingsLoading(true);
-    
-    try {
-      await supabase.from('chats').delete().eq('user_id', user.id);
-      await supabase.from('profiles').delete().eq('id', user.id);
-      localStorage.removeItem("black-user");
-      window.location.reload();
-      
-    } catch (err) {
-      setSettingsError("❌ خطأ في حذف الحساب: " + err.message);
-      setSettingsLoading(false);
-    }
-  }
-
-  async function executeRequest(text, isRetry = false) {
-    // ✅ تحقق إن المستخدم لسه موجود وغير محظور
-    try {
-      const { data: freshUser, error: userCheckError } = await supabase
-        .from('profiles')
-        .select('id, is_blocked')
-        .eq('id', user.id)
-        .single();
-
-      if (userCheckError || !freshUser) {
-        localStorage.removeItem("black-user");
-        window.location.reload();
-        return;
-      }
-
-      if (freshUser.is_blocked) {
-        alert("⚠️ تم حظر حسابك بواسطة المدير.");
-        localStorage.removeItem("black-user");
-        window.location.reload();
-        return;
-      }
-    } catch (err) {
-      console.warn("تحذير: تعذر التحقق من حالة المستخدم:", err.message);
-    }
-
-    const limitCheck = checkUserDailyLimit(currentUserRef.current);
-    if (!limitCheck.canChat) {
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: limitCheck.reason, 
-        id: Date.now() 
-      }]);
-      setLoading(false);
-      return;
-    }
-
-    const key = pickBestKey();
-    if (!key) {
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "🚫 جميع المفاتيح العامة وصلت للحد اليومي أو غير صالحة. راجع المدير 🖤", 
-        id: Date.now() 
-      }]);
-      setLoading(false);
-      return;
-    }
-
-    const userMessage = { role: "user", content: text, id: Date.now() };
-    const updatedMessages = isRetry ? messagesRef.current : [...messagesRef.current, userMessage];
-    
-    if (!isRetry) {
-      setMessages(updatedMessages);
-      setInput("");
-      setAttachedFiles([]);
-    }
-    
-    setLoading(true);
-    setStreamingText("");
-
-    try {
-      let enhancedText = text;
-      const searchResult = await searchDuckDuckGo(text);
-      if (searchResult) {
-        enhancedText = text + "\n\n[نتائج البحث]:\n" + searchResult + "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
-      }
-
-      const chatMessages = updatedMessages.map(m => ({ role: m.role, content: m.content }));
-      
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json", 
-          "Authorization": "Bearer " + key.key 
-        },
-        body: JSON.stringify({ 
-          model: GROQ_MODEL, 
-          messages: [
-            { role: "system", content: getPersonalityPrompt(currentUserRef.current?.personality || DEFAULT_PERSONALITY, currentUserRef.current?.gender || 'ولد') },
-            ...chatMessages.slice(-CHAT_HISTORY_LIMIT), 
-            { role: "user", content: enhancedText }
-          ], 
-          temperature: GROQ_TEMPERATURE, 
-          max_tokens: GROQ_MAX_TOKENS, 
-          stream: false 
-        }),
-      });
-
-      const data = await res.json();
-
-      // ✅ معالجة أخطاء المفتاح
-      if (!res.ok) {
-        if (res.status === 401) {
-          // مفتاح غير صالح - نعطله فوراً
-          await deactivateKey(key.id, "مفتاح غير صالح أو محذوف من Groq");
-          
-          if (!isRetry) {
-            showToast("⚠️ تم تبديل المفتاح تلقائياً", "info");
-            setTimeout(() => executeRequest(text, true), 500);
-            return;
-          }
-        } else if (res.status === 429) {
-          // Rate limit - نجرب مفتاح آخر
-          if (!isRetry) {
-            setTimeout(() => executeRequest(text, true), 1500);
-            return;
-          }
-        } else if (data.error?.code === "rate_limit_exceeded") {
-          if (!isRetry) {
-            setTimeout(() => executeRequest(text, true), 1500);
-            return;
-          }
-        }
-        throw new Error(data.error?.message || "خطأ في الاستجابة");
-      }
-
-      const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-      const tokensUsed = data.usage?.total_tokens || 500;
-
-      await updateKeyUsage(key.id, tokensUsed);
-      await updateUserUsage(tokensUsed);
-
-      let i = 0;
-      function type() {
-        if (i <= reply.length) {
-          setStreamingText(reply.slice(0, i));
-          i++;
-          setTimeout(type, 15);
-        } else {
-          setStreamingText("");
-          setMessages(prev => [...prev, { role: "assistant", content: reply, id: Date.now() }]);
-          setLoading(false);
-          setTimeout(() => inputRef.current?.focus(), 100);
-        }
-      }
-      type();
-
-    } catch (err) {
-      console.error("خطأ في executeRequest:", err);
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "❌ حدث خطأ: " + err.message, 
-        id: Date.now() 
-      }]);
-      setLoading(false);
-    }
-  }
-
-  function showToast(message, type = "success") {
-    // Simple toast implementation
-    const toastDiv = document.createElement('div');
-    toastDiv.style.cssText = `
-      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
-      background: ${type === 'error' ? '#ef4444' : type === 'info' ? '#3b82f6' : '#10b981'};
-      color: white; padding: 8px 16px; border-radius: 10px; z-index: 9999;
-      font-size: 14px; animation: fadeInUp 0.3s ease;
-    `;
-    toastDiv.textContent = message;
-    document.body.appendChild(toastDiv);
-    setTimeout(() => toastDiv.remove(), 3000);
-  }
-
-  async function sendMessage(overrideText, isRetry = false) {
-    if (loading && !isRetry) return;
-    
-    const text = (overrideText || input).trim();
-    if (!text && attachedFiles.length === 0 && !isRetry) return;
-    
-    const MAX_FILE_CHARS = 3000;
-    
-    let finalText = text;
-    if (attachedFiles.length > 0) {
-      const filesText = attachedFiles.map(f => {
-        const content = f.content || "";
-        const isTruncated = content.length > MAX_FILE_CHARS;
-        const truncatedContent = isTruncated ? content.slice(0, MAX_FILE_CHARS) + "\n\n... [تم اقتصار الملف، الحجم كبير]" : content;
-        return "\n\n📎 " + f.name + (isTruncated ? " ⚠️ (تم اقتصاره)" : "") + "\n```\n" + truncatedContent + "\n```";
-      }).join("");
-      finalText = (text || "الملفات المرفقة:") + filesText;
-    }
-    
-    executeRequest(finalText, isRetry);
-  }
-
-  async function newChat() {
-    await saveChatToSupabase();
-    const newId = Date.now().toString();
-    setCurrentChatId(newId);
-    setMessages([{ 
-      role: "assistant", 
-      content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.", 
-      id: Date.now() 
-    }]);
-    setShowMenu(false);
-    setShowHistory(false);
-    setInput("");
-    setAttachedFiles([]);
-    inputRef.current?.focus();
-  }
-
-  async function openChat(chatId) {
-    await saveChatToSupabase();
-    const { data } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('id', chatId)
-      .single();
-    
-    if (data?.messages) {
-      setCurrentChatId(chatId);
-      setMessages(data.messages.slice(-CHAT_HISTORY_LIMIT));
-    }
-    setShowHistory(false);
-    setShowMenu(false);
-    setInput("");
-    setAttachedFiles([]);
-    inputRef.current?.focus();
-  }
-
-  function copyMessage(content, id) {
-    copyToClipboard(content, () => {
-      setCopiedId(id);
-      setTimeout(() => setCopiedId(null), 2000);
-    });
-  }
-
-  async function handleFileUpload(e) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    
-    setLoading(true);
-    const newFiles = [];
-    
-    for (const file of files) {
-      try {
-        newFiles.push({
-          id: Date.now() + Math.random(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          icon: getFileIcon(file),
-          content: await readFileAsText(file)
-        });
-      } catch (err) {
-        newFiles.push({
-          id: Date.now() + Math.random(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          icon: "❌",
-          content: "خطأ"
-        });
-      }
-    }
-    
-    setAttachedFiles(prev => [...prev, ...newFiles]);
-    setLoading(false);
-    inputRef.current?.focus();
-  }
-
-  function removeFile(fileId) {
-    setAttachedFiles(prev => prev.filter(f => f.id !== fileId));
-  }
-
-  function handleKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-  
-  const totalLimit = apiKeys.reduce((sum, k) => sum + k.dailyLimit, 0);
-  const totalUsed = apiKeys.reduce((sum, k) => sum + k.used, 0);
-  const tokenPercent = totalLimit > 0 ? (totalUsed / totalLimit) * 100 : 0;
-  const tokenColor = getUsageColor(tokenPercent);
-  const isDark = theme === "dark";
-  const userPercent = getUsagePercent(currentUser?.used_today || 0, currentUser?.daily_limit || 5000);
-  const userColor = getUsageColor(userPercent);
-  const remainingTokens = (currentUser?.daily_limit || 5000) - (currentUser?.used_today || 0);
-
-  // ✅ التحقق من وجود مفاتيح صالحة
-  const hasValidKeys = apiKeys.length > 0;
-
-  if (!isLoaded) {
-    return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}>🖤 جاري التحميل...</div>;
-  }
-
-  if (isLoaded && !hasValidKeys) {
-    return (
-      <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui, sans-serif", textAlign: "center", padding: "20px" }}>
-        <div>
-          <div style={{ fontSize: "80px", marginBottom: "20px" }}>🔑</div>
-          <h2>لا توجد مفاتيح API صالحة</h2>
-          <p style={{ marginBottom: "20px" }}>جميع المفاتيح غير صالحة أو وصلت للحد اليومي</p>
-          <p style={{ marginBottom: "20px", fontSize: "14px", opacity: 0.7 }}>يرجى إضافة مفاتيح جديدة في لوحة التحكم</p>
-          <button onClick={loadApiKeys} style={{ padding: "14px 40px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "16px", fontWeight: "bold", margin: "15px auto", display: "block" }}>🔄 تحديث</button>
-          <button onClick={onLogout} style={{ padding: "10px 25px", background: "transparent", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>🚪 خروج</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`container ${isDark ? "dark" : "light"}`}>
-      <div className="header">
-        <div className="header-left">
-          <div className="avatar">🖤</div>
-          <div>
-            <div className="header-name">بلاك</div>
-            <div className="header-status">
-              <span className="status-dot" />
-              {loading ? "بيكتب..." : "متصل"}
-            </div>
-          </div>
-        </div>
-        <div className="header-right">
-          <button onClick={newChat} className="header-btn" style={{ fontSize: "20px" }}>➕</button>
-          <button onClick={() => setShowMenu(!showMenu)} className="header-btn" style={{ fontSize: "22px" }}>
-            {showMenu ? "✕" : "☰"}
-          </button>
-        </div>
-        
-        {showMenu && (
-          <>
-            <div onClick={() => setShowMenu(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, background: "rgba(0,0,0,0.5)" }} />
-            <div style={{ position: "absolute", top: "60px", right: "10px", background: isDark ? "#1a1a2e" : "#fff", borderRadius: "16px", padding: "8px", zIndex: 201, display: "flex", flexDirection: "column", gap: "2px", minWidth: "220px", boxShadow: "0 10px 40px rgba(0,0,0,0.3)" }}>
-              
-              <div style={{ padding: "12px", margin: "4px", background: "rgba(108,92,231,0.1)", borderRadius: "12px", border: "1px solid rgba(108,92,231,0.2)" }}>
-                <div style={{ fontSize: "13px", fontWeight: "bold", marginBottom: "8px" }}>📊 استهلاك اليوم</div>
-                <div style={{ fontSize: "12px", marginBottom: "4px" }}>
-                  استهلكت: <strong>{currentUser?.used_today?.toLocaleString() || 0}</strong> / {currentUser?.daily_limit?.toLocaleString() || 5000} توكن
-                </div>
-                <div style={{ fontSize: "12px", marginBottom: "8px" }}>
-                  متبقي: <strong style={{ color: remainingTokens < 1000 ? "#f87171" : "#4ade80" }}>{remainingTokens.toLocaleString()}</strong> توكن ({Math.floor(100 - userPercent)}%)
-                </div>
-                <div style={{ width: "100%", height: "6px", background: "rgba(255,255,255,0.1)", borderRadius: "3px", overflow: "hidden" }}>
-                  <div style={{ width: userPercent + "%", height: "100%", background: userColor, transition: "width 0.3s" }} />
-                </div>
-                <div style={{ fontSize: "10px", opacity: 0.5, marginTop: "6px" }}>
-                  🔄 يتجدد كل يوم الساعة 12 صباحاً
-                </div>
-              </div>
-              
-              <button 
-                onClick={() => {
-                  setEditName(currentUser?.name || "");
-                  setEditNewPassword("");
-                  setEditConfirmPassword("");
-                  setSettingsError("");
-                  setShowSettings(true);
-                  setShowMenu(false);
-                }} 
-                className="menu-item"
-              >
-                ⚙️ الإعدادات
-              </button>
-              
-              <button onClick={() => { setShowHistory(!showHistory); setShowMenu(false); }} className="menu-item">💬 سجل المحادثات</button>
-              <button onClick={() => setTheme(t => t === "dark" ? "light" : "dark")} className="menu-item">{isDark ? "☀️ النهاري" : "🌙 الليلي"}</button>
-              <button onClick={onLogout} className="menu-item" style={{ color: "#f87171" }}>🚪 خروج</button>
-            </div>
-          </>
-        )}
-      </div>
-      
-      <div className="token-bar">
-        <div className="token-info">
-          <span>📊 {currentUser?.used_today?.toLocaleString() || 0} / {currentUser?.daily_limit?.toLocaleString() || 5000} توكن</span>
-          <span style={{ color: userColor }}>{userPercent.toFixed(0)}%</span>
-        </div>
-        <div className="token-track">
-          <div className="token-fill" style={{ width: userPercent + "%", background: userColor }} />
-        </div>
-        {currentUser?.used_today >= currentUser?.daily_limit && (
-          <div style={{ fontSize: "11px", color: "#f87171", marginTop: "4px" }}>
-            ⚠️ وصلت للحد النهاردة! بكره هتقدر تكمل.
-          </div>
-        )}
-      </div>
-      
-      {showHistory && (
-        <>
-          <div onClick={() => setShowHistory(false)} style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: 300, background: "rgba(0,0,0,0.5)" }} />
-          <div className="history-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "320px", maxWidth: "90vw", zIndex: 301, display: "flex", flexDirection: "column", background: "inherit" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", borderBottom: "1px solid rgba(255,255,255,0.08)", flexShrink: 0 }}>
-              <strong style={{ fontSize: "16px" }}>📝 السجل ({allChats.length})</strong>
-              <button onClick={() => setShowHistory(false)} className="close-btn">✕</button>
-            </div>
-            <div style={{ flex: 1, overflowY: "auto", padding: "8px", display: "flex", flexDirection: "column", gap: "6px" }}>
-              {allChats.length === 0 ? (
-                <div style={{ textAlign: "center", opacity: 0.6, padding: "20px" }}>مفيش محادثات</div>
-              ) : (
-                allChats.map(c => (
-                  <div key={c.id} onClick={() => openChat(c.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", borderRadius: "12px", cursor: "pointer", background: c.id === currentChatId ? "rgba(108,92,231,0.2)" : "rgba(255,255,255,0.03)", border: c.id === currentChatId ? "1px solid rgba(108,92,231,0.3)" : "1px solid transparent" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "14px", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.title}</div>
-                      <div style={{ fontSize: "11px", opacity: 0.5, marginTop: "2px" }}>{formatDate(c.date)} · {c.messageCount} رسالة</div>
-                    </div>
-                    <button onClick={(e) => { 
-                      e.stopPropagation(); 
-                      if (!confirm("حذف هذه المحادثة؟")) return;
-                      supabase.from('chats').delete().eq('id', c.id).then(() => {
-                        setAllChats(prev => prev.filter(chat => chat.id !== c.id));
-                        if (c.id === currentChatId) newChat();
-                      });
-                    }} style={{ background: "transparent", border: "none", color: "inherit", fontSize: "16px", cursor: "pointer", opacity: 0.5, flexShrink: 0, marginRight: "4px" }}>🗑️</button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </>
-      )}
-      
-      <div className="messages">
-        {messages.map(msg => (
-          <div key={msg.id} className={`msg-row ${msg.role === "user" ? "msg-row-user" : "msg-row-ai"}`}>
-            {msg.role === "assistant" && <div className="avatar-small">🖤</div>}
-            <div className="msg-content-wrapper">
-              <div className={`bubble ${msg.role === "user" ? "bubble-user" : isDark ? "bubble-ai" : "bubble-ai-light"}`}>
-                <MessageContent content={msg.content} />
-              </div>
-              {msg.role === "assistant" && (
-                <button onClick={() => copyMessage(msg.content, msg.id)} className="copy-msg-btn">
-                  {copiedId === msg.id ? "✓" : "📋"}
-                </button>
-              )}
-            </div>
-            {msg.role === "user" && <div className="avatar-small avatar-user">👤</div>}
-          </div>
-        ))}
-        {streamingText && (
-          <div className="msg-row msg-row-ai">
-            <div className="avatar-small">🖤</div>
-            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}>
-              <MessageContent content={streamingText} />
-            </div>
-          </div>
-        )}
-        {loading && !streamingText && (
-          <div className="msg-row msg-row-ai">
-            <div className="avatar-small">🖤</div>
-            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}>
-              <TypingDots />
-            </div>
-          </div>
-        )}
-        <div ref={bottomRef} />
-      </div>
-      
-      {attachedFiles.length > 0 && (
-        <div style={{ display: "flex", gap: "8px", padding: "8px 20px", flexWrap: "wrap" }}>
-          {attachedFiles.map(f => (
-            <div key={f.id} style={{ display: "flex", alignItems: "center", gap: "6px", background: "rgba(108,92,231,0.15)", borderRadius: "10px", padding: "6px 10px", fontSize: "12px" }}>
-              <span>{f.icon}</span>
-              <span style={{ maxWidth: "120px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{f.name}</span>
-              <button onClick={() => removeFile(f.id)} style={{ background: "transparent", border: "none", color: "inherit", cursor: "pointer" }}>✕</button>
-            </div>
-          ))}
-        </div>
-      )}
-      
-      <div className="input-area">
-        <button onClick={() => fileInputRef.current?.click()} className="header-btn" style={{ fontSize: "20px", padding: "8px" }}>📎</button>
-        <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple style={{ display: "none" }} accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*" />
-        <textarea 
-          ref={inputRef} 
-          value={input} 
-          onChange={e => setInput(e.target.value)} 
-          onKeyDown={handleKeyDown} 
-          placeholder={loading ? "بلاك بيكتب..." : attachedFiles.length > 0 ? "اكتب سؤالك عن الملفات..." : "اكتب لبلاك..."} 
-          rows={1} 
-          className="textarea" 
-          disabled={loading && !streamingText} 
-        />
-        <button 
-          onClick={() => sendMessage()} 
-          className="send-btn" 
-          style={{ 
-            opacity: (!input.trim() && attachedFiles.length === 0) || loading ? 0.4 : 1, 
-            background: loading ? "#f87171" : "" 
-          }}
-        >
-          {loading ? "⏳" : "↑"}
-        </button>
-      </div>
-      
-      {showSettings && (
-        <div className="admin-modal">
-          <div className="admin-modal-content" style={{ maxWidth: "400px" }}>
-            <div className="admin-modal-head">
-              <h3>⚙️ إعدادات المستخدم</h3>
-              <button onClick={() => setShowSettings(false)} className="close-btn">✕</button>
-            </div>
-            
-            {settingsError && (
-              <div style={{ background: "rgba(248,113,113,0.1)", color: "#f87171", padding: "10px", borderRadius: "8px", marginBottom: "15px", fontSize: "13px" }}>
-                {settingsError}
-              </div>
-            )}
-            
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>📧 البريد الإلكتروني</label>
-              <div style={{ 
-                padding: "12px", 
-                background: "rgba(255,255,255,0.05)", 
-                borderRadius: "10px", 
-                fontSize: "14px",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "#a29bfe"
-              }}>
-                {currentUser?.email}
-              </div>
-              <div style={{ fontSize: "10px", opacity: 0.5, marginTop: "4px" }}>لا يمكن تغيير البريد الإلكتروني</div>
-            </div>
-            
-            <div style={{ marginBottom: "15px" }}>
-              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>👤 الاسم</label>
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="الاسم"
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "#e0e0e0",
-                  fontSize: "14px",
-                  outline: "none"
-                }}
-              />
-            </div>
-            
-            <div style={{ position: "relative", marginBottom: "15px" }}>
-              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>🔑 كلمة المرور الجديدة (اختياري)</label>
-              <input
-                type={showNewPassword ? "text" : "password"}
-                value={editNewPassword}
-                onChange={(e) => setEditNewPassword(e.target.value)}
-                placeholder="********"
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  paddingLeft: "45px",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "#e0e0e0",
-                  fontSize: "14px",
-                  outline: "none"
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowNewPassword(!showNewPassword)}
-                style={{
-                  position: "absolute",
-                  left: "10px",
-                  bottom: "8px",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "18px",
-                  color: "#a29bfe"
-                }}
-              >
-                {showNewPassword ? "🙈" : "👁️"}
-              </button>
-            </div>
-            
-            <div style={{ position: "relative", marginBottom: "20px" }}>
-              <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>✓ تأكيد كلمة المرور الجديدة</label>
-              <input
-                type={showConfirmPassword ? "text" : "password"}
-                value={editConfirmPassword}
-                onChange={(e) => setEditConfirmPassword(e.target.value)}
-                placeholder="********"
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  paddingLeft: "45px",
-                  borderRadius: "10px",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "#e0e0e0",
-                  fontSize: "14px",
-                  outline: "none"
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                style={{
-                  position: "absolute",
-                  left: "10px",
-                  bottom: "8px",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "18px",
-                  color: "#a29bfe"
-                }}
-              >
-                {showConfirmPassword ? "🙈" : "👁️"}
-              </button>
-            </div>
-            
-            <div className="admin-modal-actions" style={{ gap: "10px", marginBottom: "15px" }}>
-              <button onClick={updateUserSettings} className="admin-modal-save-btn" disabled={settingsLoading}>
-                {settingsLoading ? "جاري الحفظ..." : "💾 حفظ التغييرات"}
-              </button>
-              <button onClick={() => setShowSettings(false)} className="admin-modal-cancel-btn">إلغاء</button>
-            </div>
-            
-            <button
-              onClick={deleteAccount}
-              disabled={settingsLoading}
-              style={{
-                width: "100%",
-                padding: "12px",
-                background: "rgba(248,113,113,0.15)",
-                color: "#f87171",
-                border: "1px solid rgba(248,113,113,0.3)",
-                borderRadius: "10px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "bold",
-                marginTop: "10px"
-              }}
-            >
-              🗑️ حذف الحساب (نهائياً)
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+  return   { text: '✅ صالح',            color: '#4ade80', bg: 'rgba(74,222,128,0.15)'  };
 }
