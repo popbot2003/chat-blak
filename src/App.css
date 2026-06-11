@@ -23,11 +23,28 @@ html, body {
   padding: 0;
 }
 
+/* ===== إصلاحات الـ Scroll للـ Admin ===== */
+
 /* لما يكون فيه admin-page جوا الـ root */
 #root:has(.admin-root) {
   align-items: flex-start;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* تحسين التمرير على الهواتف */
+@media (max-width: 767px) {
+  #root:has(.admin-root) {
+    overflow-y: auto;
+    height: auto;
+    min-height: 100vh;
+  }
+  
+  body {
+    overflow-y: auto;
+    height: auto;
+    min-height: 100vh;
+  }
 }
 
 /* ========== Chat Container ========== */
@@ -552,6 +569,59 @@ html, body {
   font-size: 15px;
 }
 
+/* ========== Admin Panel Scroll Fixes ========== */
+
+/* تحسين التمرير لجدول المفاتيح */
+.admin-keys-table-container {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+/* تحسين التمرير لجدول المستخدمين */
+.admin-users-table-container {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+/* تحسين التمرير لجدول المحادثات */
+.admin-chats-table-container {
+  overflow-x: auto;
+  overflow-y: visible;
+  -webkit-overflow-scrolling: touch;
+  width: 100%;
+}
+
+/* ضمان ظهور جميع الأعمدة على الهواتف */
+@media (max-width: 767px) {
+  .admin-keys-table-container table,
+  .admin-users-table-container table,
+  .admin-chats-table-container table {
+    min-width: 650px;
+  }
+  
+  /* تحسين عرض حالة المفتاح على الهواتف */
+  .key-status-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
+  
+  /* تحسين أزرار الإجراءات */
+  .action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  
+  .action-buttons button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+}
+
 /* ========== أنيميشن Toast للـ Admin ========== */
 @keyframes adminSlideDown {
   from {
@@ -586,6 +656,12 @@ html, body {
   .bubble { padding: 12px 18px; font-size: 17px; }
   .msg-content-wrapper { max-width: 80%; }
   .input-area { padding: 16px 20px; }
+  
+  /* Admin panel scroll fixes على ديسكتوب */
+  #root:has(.admin-root) {
+    overflow-y: auto;
+    height: 100vh;
+  }
 }
 
 /* ========== موبايل ========== */
@@ -595,4 +671,32 @@ html, body {
   .avatar-small { width: 28px; height: 28px; font-size: 13px; }
   .token-info { font-size: 13px; }
   .code-content { font-size: 13px; }
+  
+  /* Admin panel scroll fixes على الموبايل */
+  #root:has(.admin-root) {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh;
+  }
+  
+  body:has(#root .admin-root) {
+    overflow-y: auto !important;
+    height: auto !important;
+    min-height: 100vh;
+  }
+  
+  /* تحسين عرض المودالات على الموبايل */
+  .admin-modal-content {
+    max-width: 95%;
+    padding: 16px;
+  }
+  
+  /* تحسين عرض الجداول */
+  table {
+    font-size: 13px;
+  }
+  
+  th, td {
+    padding: 8px 6px !important;
+  }
 }
