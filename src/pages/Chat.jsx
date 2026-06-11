@@ -34,7 +34,10 @@ async function searchDuckDuckGo(query) {
 
 function cleanResponse(text) { 
   if (!text) return ""; 
-  return text.replace(/[ \t]+/g, ' ').trim(); 
+  return text
+    .replace(/<think>[\s\S]*?<\/think>/gi, "") // فلترة تفكير deepseek
+    .replace(/[ \t]+/g, ' ')
+    .trim(); 
 }
 
 async function readFileAsText(file) {
