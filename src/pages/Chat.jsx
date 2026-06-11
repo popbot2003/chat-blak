@@ -1,8 +1,5 @@
 // ============================================
-// Chat.jsx - نسخة محدثة مع Presence
-// التعديلات: إصلاح readFileAsText، debounce، beforeunload،
-//            race condition في updateUserUsage، حد الملفات الكبيرة
-//            + إضافة Presence لحالة الاتصال الفورية (قناة موحدة)
+// Chat.jsx - نسخة محدثة مع نظام فحص المفاتيح والتوزيع الذكي
 // ============================================
 
 import { useState, useRef, useEffect } from "react";
@@ -106,7 +103,6 @@ export default function Chat({ user, onLogout }) {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const apiKeysRef = useRef(apiKeys);
-  const keyIndexRef = useRef(0);
   const messagesRef = useRef(messages);
   const currentChatIdRef = useRef(currentChatId);
   const currentUserRef = useRef(currentUser);
@@ -117,7 +113,7 @@ export default function Chat({ user, onLogout }) {
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-  // الاستماع لتغيرات بيانات المستخدم (تحديث تلقائي للاستهلاك)
+  // الاستماع لتغيرات بيانات المستخدم
   useEffect(() => {
     const userChannel = supabase
       .channel('user-updates')
@@ -134,7 +130,7 @@ export default function Chat({ user, onLogout }) {
     return () => userChannel.unsubscribe();
   }, [user.id]);
 
-  // ✅ الاستماع لحذف الحساب من المدير (طرد المستخدم فوراً)
+  // الاستماع لحذف الحساب
   useEffect(() => {
     const deleteChannel = supabase
       .channel('profile-delete')
@@ -153,7 +149,7 @@ export default function Chat({ user, onLogout }) {
     return () => deleteChannel.unsubscribe();
   }, [user.id]);
 
-  // ✅ الاستماع لحذف المحادثات من المدير (تحديث فوري عند المستخدم)
+  // الاستماع لحذف المحادثات
   useEffect(() => {
     const chatsDeleteChannel = supabase
       .channel('chats-delete-' + user.id)
@@ -162,7 +158,6 @@ export default function Chat({ user, onLogout }) {
         (payload) => {
           const deletedChatId = payload.old.id;
           setAllChats(prev => prev.filter(c => c.id !== deletedChatId));
-          // لو المحادثة الحالية هي اللي اتحذفت، افتح محادثة جديدة
           if (currentChatIdRef.current === deletedChatId) {
             const newId = Date.now().toString();
             setCurrentChatId(newId);
@@ -179,7 +174,7 @@ export default function Chat({ user, onLogout }) {
     return () => chatsDeleteChannel.unsubscribe();
   }, [user.id]);
 
-  // ✅ إضافة Presence - حالة الاتصال الفورية (قناة موحدة)
+  // ✅ إضافة Presence
   useEffect(() => {
     let presenceChannel = null;
 
@@ -251,31 +246,14 @@ export default function Chat({ user, onLogout }) {
     setIsLoaded(true); 
   }
 
-  async function loadLastChat() {
-    const { data } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('updated_at', { ascending: false })
-      .limit(1);
-    
-    if (data && data.length > 0) {
-      const lastChat = data[0];
-      if (lastChat.messages && lastChat.messages.length > 1) {
-        setCurrentChatId(lastChat.id);
-        setMessages(lastChat.messages);
-        return true;
-      }
-    }
-    return false;
-  }
-
   async function loadApiKeys() {
     try {
+      // ✅ جلب المفاتيح النشطة والصالحة فقط
       const { data } = await supabase
         .from('api_keys')
         .select('*')
-        .eq('is_active', true);
+        .eq('is_active', true)
+        .eq('is_valid', true);
       
       const keys = [];
       const today = new Date().toISOString().slice(0, 10);
@@ -295,10 +273,14 @@ export default function Chat({ user, onLogout }) {
             id: key.id, 
             key: key.key_value, 
             used: key.used_today || 0, 
-            dailyLimit: key.daily_limit || 1000000 
+            dailyLimit: key.daily_limit || 1000000,
+            usagePercent: ((key.used_today || 0) / (key.daily_limit || 1)) * 100
           });
         }
       }
+      
+      // ✅ ترتيب المفاتيح حسب نسبة الاستخدام (الأقل أولاً) - توزيع ذكي
+      keys.sort((a, b) => a.usagePercent - b.usagePercent);
       setApiKeys(keys);
     } catch (err) {
       console.error("خطأ في تحميل المفاتيح:", err);
@@ -359,7 +341,6 @@ export default function Chat({ user, onLogout }) {
         updated_at: now
       });
 
-      // تحديث السجل في الـ state مباشرة بدون كول جديد
       setAllChats(prev => {
         const exists = prev.find(c => c.id === chatId);
         const updated = { id: chatId, title, date: now, messageCount: currentMessages.length };
@@ -414,7 +395,6 @@ export default function Chat({ user, onLogout }) {
     const lastLogin = currentUser.last_login_date;
     const chatCount = allChats.length;
 
-    // مستخدم جديد خالص - last_login_date = null
     const isNewUser = !lastLogin;
     const isFirstTimeToday = lastLogin !== today;
     
@@ -440,20 +420,50 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
+  // ✅ التوزيع الذكي للمفاتيح (اختيار أفضل مفتاح)
   function pickBestKey() {
     const available = apiKeysRef.current.filter(k => k.used < k.dailyLimit);
+    
     if (available.length === 0) return null;
-    // Round Robin — توزيع متساوي على كل المفاتيح
-    keyIndexRef.current = keyIndexRef.current % available.length;
-    const key = available[keyIndexRef.current];
-    keyIndexRef.current++;
-    return key;
+    
+    // ترتيب حسب نسبة الاستخدام (الأقل أولاً) ثم Round Robin للمفاتيح المتساوية
+    available.sort((a, b) => {
+      const percentA = (a.used / a.dailyLimit) * 100;
+      const percentB = (b.used / b.dailyLimit) * 100;
+      return percentA - percentB;
+    });
+    
+    // اختيار المفتاح الأقل استخداماً
+    return available[0];
+  }
+
+  // ✅ تعطيل مفتاح غير صالح فوراً
+  async function deactivateKey(keyId, reason) {
+    try {
+      await supabase
+        .from('api_keys')
+        .update({ 
+          is_active: false, 
+          is_valid: false, 
+          invalid_reason: reason,
+          last_checked_at: new Date().toISOString()
+        })
+        .eq('id', keyId);
+      
+      console.log(`🔑 تم تعطيل المفتاح ${keyId}: ${reason}`);
+      
+      // تحديث القائمة المحلية
+      setApiKeys(prev => prev.filter(k => k.id !== keyId));
+      
+    } catch (err) {
+      console.error("خطأ في تعطيل المفتاح:", err);
+    }
   }
 
   async function updateKeyUsage(keyId, tokens) {
     try {
       await supabase.rpc('increment_key_usage', { key_id: String(keyId), tokens_used: tokens });
-      setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: k.used + tokens } : k));
+      setApiKeys(prev => prev.map(k => k.id === keyId ? { ...k, used: k.used + tokens, usagePercent: ((k.used + tokens) / k.dailyLimit) * 100 } : k));
     } catch (err) {
       console.error("خطأ في تحديث استهلاك المفتاح:", err);
     }
@@ -552,7 +562,7 @@ export default function Chat({ user, onLogout }) {
   }
 
   async function executeRequest(text, isRetry = false) {
-    // ✅ تحقق إن المستخدم لسه موجود وغير محظور قبل أي حاجة
+    // ✅ تحقق إن المستخدم لسه موجود وغير محظور
     try {
       const { data: freshUser, error: userCheckError } = await supabase
         .from('profiles')
@@ -591,7 +601,7 @@ export default function Chat({ user, onLogout }) {
     if (!key) {
       setMessages(prev => [...prev, { 
         role: "assistant", 
-        content: "🚫 جميع المفاتيح العامة وصلت للحد اليومي. راجع المدير 🖤", 
+        content: "🚫 جميع المفاتيح العامة وصلت للحد اليومي أو غير صالحة. راجع المدير 🖤", 
         id: Date.now() 
       }]);
       setLoading(false);
@@ -640,9 +650,24 @@ export default function Chat({ user, onLogout }) {
 
       const data = await res.json();
 
+      // ✅ معالجة أخطاء المفتاح
       if (!res.ok) {
-        if (data.error?.code === "rate_limit_exceeded") {
-          setApiKeys(prev => prev.map(k => k.id === key.id ? { ...k, used: k.dailyLimit } : k));
+        if (res.status === 401) {
+          // مفتاح غير صالح - نعطله فوراً
+          await deactivateKey(key.id, "مفتاح غير صالح أو محذوف من Groq");
+          
+          if (!isRetry) {
+            showToast("⚠️ تم تبديل المفتاح تلقائياً", "info");
+            setTimeout(() => executeRequest(text, true), 500);
+            return;
+          }
+        } else if (res.status === 429) {
+          // Rate limit - نجرب مفتاح آخر
+          if (!isRetry) {
+            setTimeout(() => executeRequest(text, true), 1500);
+            return;
+          }
+        } else if (data.error?.code === "rate_limit_exceeded") {
           if (!isRetry) {
             setTimeout(() => executeRequest(text, true), 1500);
             return;
@@ -681,6 +706,20 @@ export default function Chat({ user, onLogout }) {
       }]);
       setLoading(false);
     }
+  }
+
+  function showToast(message, type = "success") {
+    // Simple toast implementation
+    const toastDiv = document.createElement('div');
+    toastDiv.style.cssText = `
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+      background: ${type === 'error' ? '#ef4444' : type === 'info' ? '#3b82f6' : '#10b981'};
+      color: white; padding: 8px 16px; border-radius: 10px; z-index: 9999;
+      font-size: 14px; animation: fadeInUp 0.3s ease;
+    `;
+    toastDiv.textContent = message;
+    document.body.appendChild(toastDiv);
+    setTimeout(() => toastDiv.remove(), 3000);
   }
 
   async function sendMessage(overrideText, isRetry = false) {
@@ -801,17 +840,21 @@ export default function Chat({ user, onLogout }) {
   const userColor = getUsageColor(userPercent);
   const remainingTokens = (currentUser?.daily_limit || 5000) - (currentUser?.used_today || 0);
 
+  // ✅ التحقق من وجود مفاتيح صالحة
+  const hasValidKeys = apiKeys.length > 0;
+
   if (!isLoaded) {
     return <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}>🖤 جاري التحميل...</div>;
   }
 
-  if (isLoaded && apiKeys.length === 0) {
+  if (isLoaded && !hasValidKeys) {
     return (
       <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui, sans-serif", textAlign: "center", padding: "20px" }}>
         <div>
           <div style={{ fontSize: "80px", marginBottom: "20px" }}>🔑</div>
-          <h2>لا توجد مفاتيح API عامة</h2>
-          <p style={{ marginBottom: "20px" }}>يرجى إضافة مفاتيح في لوحة التحكم</p>
+          <h2>لا توجد مفاتيح API صالحة</h2>
+          <p style={{ marginBottom: "20px" }}>جميع المفاتيح غير صالحة أو وصلت للحد اليومي</p>
+          <p style={{ marginBottom: "20px", fontSize: "14px", opacity: 0.7 }}>يرجى إضافة مفاتيح جديدة في لوحة التحكم</p>
           <button onClick={loadApiKeys} style={{ padding: "14px 40px", background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "16px", fontWeight: "bold", margin: "15px auto", display: "block" }}>🔄 تحديث</button>
           <button onClick={onLogout} style={{ padding: "10px 25px", background: "transparent", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>🚪 خروج</button>
         </div>
