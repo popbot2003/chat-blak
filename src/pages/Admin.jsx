@@ -7,7 +7,7 @@ import { validateGroqKey, validateAllKeys } from '../utils/groqValidator';
 
 export default function Admin({ user, onLogout }) {
   // ===== States الموجودة =====
-  const [users, setUsers] useState([]);
+  const [users, setUsers] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [allChats, setAllChats] = useState([]);
   const [activeTab, setActiveTab] = useState("users");
@@ -140,8 +140,8 @@ export default function Admin({ user, onLogout }) {
   useEffect(() => {
     if (autoValidate) {
       const interval = setInterval(() => {
-        handleValidateKeys(true); // فحص صامت
-      }, 60 * 60 * 1000); // كل ساعة
+        handleValidateKeys(true);
+      }, 60 * 60 * 1000);
       setValidationInterval(interval);
     } else {
       if (validationInterval) {
@@ -377,7 +377,6 @@ export default function Admin({ user, onLogout }) {
           showToast(`✅ جميع المفاتيح (${results.length}) صالحة`, 'success');
         }
         
-        // تسجيل الفحص في السجل
         supabase.from('key_check_logs').insert({
           check_type: silent ? 'auto' : 'manual',
           total_keys: results.length,
@@ -695,7 +694,7 @@ export default function Admin({ user, onLogout }) {
       }}>
         {[
           { id: 'users', label: `👥 المستخدمين (${users.length})` },
-          { id: 'keys', label: `🔑 المفاتيح (${apiKeys.filter(k => k.is_active).length}/${apiKeys.length})` },
+          { id: 'keys', label: `🔑 المفاتيح (${apiKeys.filter(k => k.is_active && k.is_valid !== false).length}/${apiKeys.length})` },
           { id: 'chats', label: `💬 المحادثات (${filteredChats.length}/${allChats.length})` },
         ].map(tab => (
           <button
@@ -756,7 +755,7 @@ export default function Admin({ user, onLogout }) {
                     {['المستخدم', 'الاستهلاك', 'الشخصية', 'الحالة', 'الاتصال', 'الإجراءات'].map(h => (
                       <th key={h} style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: darkMode ? '#c4b5fd' : '#6c5ce7', whiteSpace: 'nowrap' }}>{h}</th>
                     ))}
-                  </tr>
+                  </table>
                 </thead>
                 <tbody>
                   {filteredUsers.length === 0 ? (
@@ -776,7 +775,7 @@ export default function Admin({ user, onLogout }) {
                             <strong style={{ fontSize: '17px' }}>{u.name || "مستخدم"}</strong>
                             <br />
                             <span style={{ fontFamily: 'monospace', fontSize: '13px', opacity: 0.5 }}>{u.email}</span>
-                          </td>
+                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ minWidth: '140px' }}>
                               <div style={{ fontSize: '14px', marginBottom: '4px' }}>{used.toLocaleString()} / {limit.toLocaleString()} توكن</div>
@@ -809,7 +808,7 @@ export default function Admin({ user, onLogout }) {
                               <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
                             </div>
                            </td>
-                        </tr>
+                         </tr>
                       );
                     })
                   )}
@@ -931,7 +930,7 @@ export default function Admin({ user, onLogout }) {
                       <tr key={key.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
                         <td style={{ padding: '12px 10px', fontSize: '15px' }}>{key.key_name || "مفتاح Groq"}</td>
                         <td style={{ padding: '12px 10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                             <span style={{ fontFamily: 'monospace', fontSize: '13px', wordBreak: 'break-all' }}>
                               {showFullKey[key.id] ? key.key_value : key.key_value?.slice(0, 25) + '...'}
                             </span>
