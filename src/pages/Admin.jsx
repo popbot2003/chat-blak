@@ -3,10 +3,11 @@ import { supabase } from '../lib/supabase';
 import MessageContent from "../components/MessageContent";
 import { formatDate, getUsagePercent, getUsageColor, truncate } from '../utils/helpers';
 import { PERSONALITY_LABELS, DEFAULT_PERSONALITY } from '../config/personalities';
+import { validateGroqKey, validateAllKeys } from '../utils/groqValidator';
 
 export default function Admin({ user, onLogout }) {
   // ===== States الموجودة =====
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [allChats, setAllChats] = useState([]);
   const [activeTab, setActiveTab] = useState("users");
@@ -39,6 +40,19 @@ export default function Admin({ user, onLogout }) {
   const [exportType, setExportType] = useState("users");
   const [toast, setToast] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
+  
+  // ✅ نظام فحص المفاتيح
+  const [validating, setValidating] = useState(false);
+  const [validationProgress, setValidationProgress] = useState({ current: 0, total: 0, name: '', status: '' });
+  const [validationResults, setValidationResults] = useState([]);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationLogs, setValidationLogs] = useState([]);
+  const [showLogsModal, setShowLogsModal] = useState(false);
+  const [autoValidate, setAutoValidate] = useState(() => {
+    return localStorage.getItem('auto_validate_keys') === 'true';
+  });
+  const [validationInterval, setValidationInterval] = useState(null);
+  const [showFullKey, setShowFullKey] = useState({});
   
   // ✅ جديد: حالة المتصلين (Presence)
   const [onlineUsers, setOnlineUsers] = useState({});
@@ -83,9 +97,18 @@ export default function Admin({ user, onLogout }) {
       })
       .subscribe();
 
+    // ✅ قناة Realtime للمفاتيح
+    const apiKeysChannel = supabase
+      .channel('api-keys-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'api_keys' }, () => {
+        loadApiKeys();
+      })
+      .subscribe();
+
     return () => {
       profilesChannel.unsubscribe();
       chatsChannel.unsubscribe();
+      apiKeysChannel.unsubscribe();
     };
   }, []);
 
@@ -112,6 +135,25 @@ export default function Admin({ user, onLogout }) {
       presenceChannel.unsubscribe();
     };
   }, []);
+
+  // ✅ تفعيل الفحص التلقائي
+  useEffect(() => {
+    if (autoValidate) {
+      const interval = setInterval(() => {
+        handleValidateKeys(true); // فحص صامت
+      }, 60 * 60 * 1000); // كل ساعة
+      setValidationInterval(interval);
+    } else {
+      if (validationInterval) {
+        clearInterval(validationInterval);
+        setValidationInterval(null);
+      }
+    }
+    
+    return () => {
+      if (validationInterval) clearInterval(validationInterval);
+    };
+  }, [autoValidate]);
 
   // ✅ دالة التحقق من حالة الاتصال
   function isUserOnline(userId) {
@@ -241,7 +283,9 @@ export default function Admin({ user, onLogout }) {
           'الاستهلاك اليومي': k.used_today || 0,
           'الحد اليومي': k.daily_limit || 1000000,
           'نسبة الاستخدام': `${((k.used_today || 0) / (k.daily_limit || 1) * 100).toFixed(2)}%`,
-          'الحالة': k.is_active ? 'نشط' : 'معطل'
+          'الحالة': k.is_active ? 'نشط' : 'معطل',
+          'صحة المفتاح': k.is_valid ? 'صالح' : (k.invalid_reason || 'غير صالح'),
+          'آخر فحص': k.last_checked_at ? new Date(k.last_checked_at).toLocaleString('ar-EG') : 'لم يفحص'
         }));
       case 'chats':
         return filteredChats.map(c => ({
@@ -282,21 +326,162 @@ export default function Admin({ user, onLogout }) {
     setShowChatModal(true);
   }
   
+  // ===== دوال فحص المفاتيح =====
+  
+  async function validateNewKeyBeforeAdd(keyValue) {
+    setValidating(true);
+    const result = await validateGroqKey(keyValue);
+    setValidating(false);
+    
+    if (!result.valid) {
+      showToast(`❌ المفتاح غير صالح: ${result.reason}`, 'error');
+      return false;
+    }
+    
+    showToast('✅ المفتاح صالح', 'success');
+    return true;
+  }
+  
+  async function checkDuplicateKey(keyValue) {
+    const exists = apiKeys.some(k => k.key_value === keyValue);
+    if (exists) {
+      showToast('❌ هذا المفتاح موجود بالفعل', 'error');
+      return true;
+    }
+    return false;
+  }
+  
+  async function handleValidateKeys(silent = false) {
+    if (!silent) setValidating(true);
+    setValidationResults([]);
+    
+    await validateAllKeys(
+      (current, total, name, result) => {
+        setValidationProgress({
+          current, total, name,
+          status: result.valid ? '✅ صالح' : '❌ غير صالح'
+        });
+      },
+      (results) => {
+        setValidationResults(results);
+        if (!silent) {
+          setValidating(false);
+          setShowValidationModal(true);
+        }
+        loadApiKeys();
+        
+        const invalidCount = results.filter(r => !r.valid).length;
+        if (invalidCount > 0 && !silent) {
+          showToast(`⚠️ تم العثور على ${invalidCount} مفتاح/m غير صالح`, 'error');
+        } else if (invalidCount === 0 && !silent) {
+          showToast(`✅ جميع المفاتيح (${results.length}) صالحة`, 'success');
+        }
+        
+        // تسجيل الفحص في السجل
+        supabase.from('key_check_logs').insert({
+          check_type: silent ? 'auto' : 'manual',
+          total_keys: results.length,
+          valid_keys: results.filter(r => r.valid).length,
+          invalid_keys: results.filter(r => !r.valid).length,
+          details: results
+        }).then(() => loadValidationLogs());
+      }
+    );
+  }
+  
+  async function testSingleKey(key) {
+    setValidating(true);
+    const result = await validateGroqKey(key.key_value);
+    
+    await supabase.from('api_keys').update({
+      last_checked_at: new Date().toISOString(),
+      is_valid: result.valid,
+      invalid_reason: result.valid ? null : result.reason,
+      is_active: result.valid ? key.is_active : false
+    }).eq('id', key.id);
+    
+    loadApiKeys();
+    showToast(result.valid ? '✅ المفتاح صالح' : `❌ ${result.reason}`, result.valid ? 'success' : 'error');
+    setValidating(false);
+  }
+  
+  async function reactivateKey(keyId) {
+    await supabase.from('api_keys').update({
+      is_active: true,
+      is_valid: true,
+      invalid_reason: null
+    }).eq('id', keyId);
+    
+    loadApiKeys();
+    showToast('✅ تم إعادة تفعيل المفتاح', 'success');
+  }
+  
+  function exportKeysToCSV() {
+    const exportData = apiKeys.map(k => ({
+      'الاسم': k.key_name || '',
+      'المفتاح': k.key_value || '',
+      'الحد اليومي': k.daily_limit || 1000000,
+      'الاستهلاك اليومي': k.used_today || 0,
+      'نسبة الاستخدام': `${((k.used_today || 0) / (k.daily_limit || 1) * 100).toFixed(2)}%`,
+      'الحالة': k.is_active ? 'نشط' : 'معطل',
+      'صحة المفتاح': k.is_valid ? 'صالح' : (k.invalid_reason || 'غير صالح'),
+      'آخر فحص': k.last_checked_at ? new Date(k.last_checked_at).toLocaleString('ar-EG') : 'لم يفحص'
+    }));
+    
+    exportToCSV(exportData, 'api_keys_export');
+  }
+  
+  async function loadValidationLogs() {
+    const { data } = await supabase
+      .from('key_check_logs')
+      .select('*')
+      .order('checked_at', { ascending: false })
+      .limit(50);
+    
+    if (data) setValidationLogs(data);
+  }
+  
+  function toggleAutoValidate() {
+    const newValue = !autoValidate;
+    setAutoValidate(newValue);
+    localStorage.setItem('auto_validate_keys', newValue);
+    showToast(newValue ? '✅ تم تفعيل الفحص التلقائي كل ساعة' : '⏹️ تم إيقاف الفحص التلقائي', 'info');
+  }
+  
+  // ===== دوال المفاتيح المعدلة =====
+  
   async function addApiKey() {
-    if (!newKeyValue.trim()) { showToast("أدخل قيمة المفتاح", "error"); return; }
+    if (!newKeyValue.trim()) { 
+      showToast("أدخل قيمة المفتاح", "error"); 
+      return; 
+    }
+    
+    // التحقق من التكرار
+    const isDuplicate = await checkDuplicateKey(newKeyValue.trim());
+    if (isDuplicate) return;
+    
+    // التحقق من صحة المفتاح مع Groq
+    const isValid = await validateNewKeyBeforeAdd(newKeyValue.trim());
+    if (!isValid) return;
+    
     const { error } = await supabase.from('api_keys').insert({
       key_value: newKeyValue.trim(),
       key_name: newKeyName.trim() || "مفتاح Groq",
       daily_limit: newKeyLimit,
       used_today: 0,
-      is_active: true
+      is_active: true,
+      is_valid: true,
+      last_checked_at: new Date().toISOString()
     });
+    
     if (error) {
       showToast("خطأ: " + error.message, "error");
     } else {
-      showToast("تم إضافة المفتاح");
+      showToast("✅ تم إضافة المفتاح بنجاح");
       setShowAddKeyModal(false);
-      setNewKeyValue(""); setNewKeyName(""); setNewKeyLimit(1000000);
+      setNewKeyValue(""); 
+      setNewKeyName(""); 
+      setNewKeyLimit(1000000);
       loadApiKeys();
     }
   }
@@ -483,6 +668,9 @@ export default function Admin({ user, onLogout }) {
                 <button onClick={() => { setExportType('users'); setShowExportModal(true); setShowMenu(false); }} style={{ width: '100%', textAlign: 'right', background: 'transparent', border: 'none', color: theme.text, padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   📥 تصدير البيانات
                 </button>
+                <button onClick={exportKeysToCSV} style={{ width: '100%', textAlign: 'right', background: 'transparent', border: 'none', color: theme.text, padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  🔑 تصدير المفاتيح
+                </button>
                 <div style={{ height: '1px', background: theme.border, margin: '6px 0' }} />
                 <button onClick={() => { onLogout(); setShowMenu(false); }} style={{ width: '100%', textAlign: 'right', background: 'transparent', border: 'none', color: '#f87171', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   🚪 خروج
@@ -597,30 +785,30 @@ export default function Admin({ user, onLogout }) {
                               </div>
                               <div style={{ fontSize: '13px', opacity: 0.6, marginTop: '2px' }}>{percent.toFixed(0)}%</div>
                             </div>
-                          </td>
+                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <select value={u.personality || DEFAULT_PERSONALITY} onChange={e => changePersonality(u.id, e.target.value)} style={{ background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '6px', padding: '6px 10px', fontSize: '14px', cursor: 'pointer' }}>
                               {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (<option key={key} value={key} style={{ background: theme.surface }}>{label}</option>))}
                             </select>
-                          </td>
+                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <span style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '14px', background: u.is_blocked ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.15)', color: u.is_blocked ? '#f87171' : '#4ade80' }}>
                               {u.is_blocked ? "محظور" : "نشط"}
                             </span>
-                          </td>
+                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                               <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: online ? '#4ade80' : '#6b7280', boxShadow: online ? '0 0 5px #4ade80' : 'none' }} />
                               <span style={{ fontSize: '14px' }}>{online ? '🟢 متصل' : '⚫ غير متصل'}</span>
                             </div>
-                          </td>
+                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                               <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>⚙️</button>
                               <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ background: u.is_blocked ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', color: u.is_blocked ? '#4ade80' : '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
                               <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
                             </div>
-                          </td>
+                           </td>
                         </tr>
                       );
                     })
@@ -638,13 +826,95 @@ export default function Admin({ user, onLogout }) {
               <div>
                 <h2 style={{ margin: 0, fontSize: '20px' }}>🔑 مفاتيح API العامة</h2>
                 <div style={{ fontSize: '14px', opacity: 0.6, marginTop: '2px' }}>
-                  إجمالي: {apiKeys.length} | ✅ نشط: {apiKeys.filter(k => k.is_active).length} | ⚠️ معطل: {apiKeys.filter(k => !k.is_active).length}
+                  إجمالي: {apiKeys.length} | ✅ نشط: {apiKeys.filter(k => k.is_active && k.is_valid !== false).length} | ⚠️ معطل: {apiKeys.filter(k => !k.is_active || k.is_valid === false).length}
                 </div>
               </div>
-              <button onClick={() => setShowAddKeyModal(true)} style={{ background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>➕ إضافة مفتاح</button>
+              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                <button onClick={() => setShowAddKeyModal(true)} style={{ background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: 'bold' }}>➕ إضافة مفتاح</button>
+              </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '550px' }}>
+            
+            {/* أزرار الفحص */}
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
+              <button 
+                onClick={() => handleValidateKeys(false)} 
+                disabled={validating}
+                style={{
+                  background: 'linear-gradient(135deg, #f59e0b, #d97706)',
+                  color: '#fff',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  cursor: validating ? 'not-allowed' : 'pointer',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  opacity: validating ? 0.6 : 1
+                }}
+              >
+                {validating ? '⏳ جاري الفحص...' : '🔍 فحص جميع المفاتيح'}
+              </button>
+              
+              <button 
+                onClick={toggleAutoValidate}
+                style={{
+                  background: autoValidate ? 'rgba(74,222,128,0.2)' : theme.inputBg,
+                  color: autoValidate ? '#4ade80' : theme.text,
+                  border: `1px solid ${autoValidate ? '#4ade80' : theme.border}`,
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                {autoValidate ? '🟢 الفحص التلقائي مفعل' : '⚫ تفعيل الفحص التلقائي'}
+              </button>
+              
+              <button 
+                onClick={() => { loadValidationLogs(); setShowLogsModal(true); }}
+                style={{
+                  background: 'rgba(108,92,231,0.2)',
+                  color: '#a29bfe',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                📋 سجل الفحوصات
+              </button>
+              
+              <button 
+                onClick={exportKeysToCSV}
+                style={{
+                  background: 'rgba(34,197,94,0.2)',
+                  color: '#22c55e',
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '14px'
+                }}
+              >
+                📥 تصدير CSV
+              </button>
+            </div>
+
+            {/* شريط التقدم أثناء الفحص */}
+            {validating && validationProgress.total > 0 && (
+              <div style={{ marginBottom: '16px', padding: '12px', background: theme.inputBg, borderRadius: '8px' }}>
+                <div style={{ fontSize: '13px', marginBottom: '6px' }}>
+                  🔍 فحص {validationProgress.current}/{validationProgress.total}: {validationProgress.name}
+                  <span style={{ marginRight: '10px' }}>{validationProgress.status}</span>
+                </div>
+                <div style={{ width: '100%', height: '6px', background: theme.barBg, borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ width: `${(validationProgress.current / validationProgress.total) * 100}%`, height: '100%', background: 'linear-gradient(135deg, #f59e0b, #d97706)', transition: 'width 0.3s' }} />
+                </div>
+              </div>
+            )}
+            
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '700px' }}>
                 <thead>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
                     {['الاسم', 'المفتاح', 'الاستهلاك', 'الحد', 'الحالة', 'الإجراءات'].map(h => (
@@ -656,10 +926,23 @@ export default function Admin({ user, onLogout }) {
                   {apiKeys.map(key => {
                     const percent = getUsagePercent(key.used_today || 0, key.daily_limit || 1000000);
                     const color = getUsageColor(percent);
+                    const isValid = key.is_valid !== false;
                     return (
                       <tr key={key.id} style={{ borderBottom: `1px solid ${theme.border}` }}>
                         <td style={{ padding: '12px 10px', fontSize: '15px' }}>{key.key_name || "مفتاح Groq"}</td>
-                        <td style={{ padding: '12px 10px' }}><span style={{ fontFamily: 'monospace', fontSize: '13px', opacity: 0.6 }}>{key.key_value?.slice(0, 20)}...</span></td>
+                        <td style={{ padding: '12px 10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: '13px', wordBreak: 'break-all' }}>
+                              {showFullKey[key.id] ? key.key_value : key.key_value?.slice(0, 25) + '...'}
+                            </span>
+                            <button 
+                              onClick={() => setShowFullKey(prev => ({ ...prev, [key.id]: !prev[key.id] }))}
+                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px' }}
+                            >
+                              {showFullKey[key.id] ? '🙈' : '👁️'}
+                            </button>
+                          </div>
+                        </td>
                         <td style={{ padding: '12px 10px' }}>
                           <div style={{ minWidth: '140px' }}>
                             <div style={{ fontSize: '14px' }}>{(key.used_today || 0).toLocaleString()} / {(key.daily_limit || 0).toLocaleString()}</div>
@@ -671,14 +954,53 @@ export default function Admin({ user, onLogout }) {
                         </td>
                         <td style={{ padding: '12px 10px', fontSize: '14px' }}>{(key.daily_limit || 0).toLocaleString()}</td>
                         <td style={{ padding: '12px 10px' }}>
-                          <button onClick={() => toggleKeyStatus(key.id, key.is_active)} style={{ padding: '4px 12px', borderRadius: '20px', fontSize: '13px', border: 'none', cursor: 'pointer', background: key.is_active ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)', color: key.is_active ? '#4ade80' : '#f87171' }}>
-                            {key.is_active ? "نشط" : "معطل"}
-                          </button>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <button onClick={() => toggleKeyStatus(key.id, key.is_active)} style={{ 
+                              padding: '4px 12px', borderRadius: '20px', fontSize: '13px', border: 'none', cursor: 'pointer', 
+                              background: key.is_active ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)', 
+                              color: key.is_active ? '#4ade80' : '#f87171' 
+                            }}>
+                              {key.is_active ? "نشط" : "معطل"}
+                            </button>
+                            
+                            <span style={{ 
+                              fontSize: '11px', 
+                              padding: '2px 8px', 
+                              borderRadius: '12px',
+                              background: isValid ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+                              color: isValid ? '#4ade80' : '#f87171',
+                              textAlign: 'center'
+                            }}>
+                              {isValid ? '✅ صالح' : `❌ ${key.invalid_reason || 'غير صالح'}`}
+                            </span>
+                            
+                            {key.last_checked_at && (
+                              <span style={{ fontSize: '10px', opacity: 0.5, textAlign: 'center' }}>
+                                آخر فحص: {formatDate(key.last_checked_at)}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td style={{ padding: '12px 10px' }}>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => resetKeyUsage(key.id)} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🔄</button>
-                            <button onClick={() => deleteKey(key.id)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={() => testSingleKey(key)} style={{ 
+                              background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', 
+                              padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
+                            }} title="اختبار المفتاح">🔍</button>
+                            <button onClick={() => resetKeyUsage(key.id)} style={{ 
+                              background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', 
+                              padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
+                            }} title="تصفير الاستهلاك">🔄</button>
+                            {!isValid && !key.is_active && (
+                              <button onClick={() => reactivateKey(key.id)} style={{ 
+                                background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: 'none', 
+                                padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
+                              }} title="إعادة تفعيل">🔄 تفعيل</button>
+                            )}
+                            <button onClick={() => deleteKey(key.id)} style={{ 
+                              background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', 
+                              padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' 
+                            }} title="حذف">🗑️</button>
                           </div>
                         </td>
                       </tr>
@@ -714,7 +1036,7 @@ export default function Admin({ user, onLogout }) {
                 <button onClick={deleteAllChatsConfirm} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>🗑️ حذف الكل</button>
               </div>
             </div>
-            <div style={{ overflowX: 'auto' }}>
+            <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '550px' }}>
                 <thead>
                   <tr style={{ background: darkMode ? 'rgba(108,92,231,0.1)' : 'rgba(108,92,231,0.07)' }}>
@@ -766,9 +1088,78 @@ export default function Admin({ user, onLogout }) {
             <input style={{ ...modalInputStyle, fontFamily: 'monospace' }} type="text" placeholder="gsk_xxxxxxxxxxxx" value={newKeyValue} onChange={e => setNewKeyValue(e.target.value)} />
             <input style={modalInputStyle} type="number" placeholder="الحد اليومي" value={newKeyLimit} onChange={e => setNewKeyLimit(parseInt(e.target.value) || 0)} />
             <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={addApiKey} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15px' }}>✅ إضافة</button>
+              <button onClick={addApiKey} disabled={validating} style={{ flex: 1, padding: '10px', background: 'linear-gradient(135deg, #6c5ce7, #8b5cf6)', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '15px', opacity: validating ? 0.6 : 1 }}>✅ إضافة</button>
               <button onClick={() => setShowAddKeyModal(false)} style={{ flex: 1, padding: '10px', background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '15px' }}>إلغاء</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== مودال نتائج الفحص ===== */}
+      {showValidationModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+          <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3>🔍 نتائج فحص المفاتيح</h3>
+              <button onClick={() => setShowValidationModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '22px', cursor: 'pointer', color: theme.text }}>✕</button>
+            </div>
+            
+            <div style={{ marginBottom: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <span style={{ background: 'rgba(74,222,128,0.2)', color: '#4ade80', padding: '4px 12px', borderRadius: '20px' }}>
+                ✅ صالح: {validationResults.filter(r => r.valid).length}
+              </span>
+              <span style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', padding: '4px 12px', borderRadius: '20px' }}>
+                ❌ غير صالح: {validationResults.filter(r => !r.valid).length}
+              </span>
+            </div>
+            
+            {validationResults.map((result, idx) => (
+              <div key={idx} style={{ 
+                background: result.valid ? 'rgba(74,222,128,0.05)' : 'rgba(248,113,113,0.05)', 
+                padding: '10px', borderRadius: '8px', marginBottom: '8px',
+                borderRight: `3px solid ${result.valid ? '#4ade80' : '#f87171'}`
+              }}>
+                <div style={{ fontWeight: 'bold' }}>{result.name}</div>
+                <div style={{ fontSize: '12px', opacity: 0.7 }}>{result.value}</div>
+                <div style={{ fontSize: '12px', marginTop: '4px', color: result.valid ? '#4ade80' : '#f87171' }}>
+                  {result.valid ? '✅ صالح' : `❌ ${result.reason}`}
+                </div>
+              </div>
+            ))}
+            
+            <button onClick={() => setShowValidationModal(false)} style={{ width: '100%', padding: '10px', marginTop: '16px', background: theme.inputBg, borderRadius: '8px', border: `1px solid ${theme.border}`, cursor: 'pointer', color: theme.text }}>إغلاق</button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== مودال سجل الفحوصات ===== */}
+      {showLogsModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
+          <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <h3>📋 سجل فحوصات المفاتيح</h3>
+              <button onClick={() => setShowLogsModal(false)} style={{ background: 'transparent', border: 'none', fontSize: '22px', cursor: 'pointer', color: theme.text }}>✕</button>
+            </div>
+            
+            {validationLogs.length === 0 ? (
+              <p style={{ textAlign: 'center', opacity: 0.5 }}>لا توجد سجلات</p>
+            ) : (
+              validationLogs.map(log => (
+                <div key={log.id} style={{ background: theme.inputBg, padding: '12px', borderRadius: '8px', marginBottom: '10px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
+                    <span style={{ fontWeight: 'bold' }}>{new Date(log.checked_at).toLocaleString('ar-EG')}</span>
+                    <span style={{ fontSize: '12px' }}>نوع: {log.check_type === 'auto' ? 'تلقائي' : 'يدوي'}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', fontSize: '13px', flexWrap: 'wrap' }}>
+                    <span style={{ color: '#4ade80' }}>✅ صالح: {log.valid_keys}</span>
+                    <span style={{ color: '#f87171' }}>❌ غير صالح: {log.invalid_keys}</span>
+                    <span>📊 إجمالي: {log.total_keys}</span>
+                  </div>
+                </div>
+              ))
+            )}
+            
+            <button onClick={() => setShowLogsModal(false)} style={{ width: '100%', padding: '10px', marginTop: '16px', background: theme.inputBg, borderRadius: '8px', border: `1px solid ${theme.border}`, cursor: 'pointer', color: theme.text }}>إغلاق</button>
           </div>
         </div>
       )}
@@ -821,7 +1212,7 @@ export default function Admin({ user, onLogout }) {
               <p style={{ textAlign: 'center', opacity: 0.5, fontSize: '15px' }}>لا توجد محادثات</p>
             ) : (
               userChatsList.map(chat => (
-                <div key={chat.id} style={{ background: theme.rowHover, borderRadius: '10px', padding: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div key={chat.id} style={{ background: theme.rowHover, borderRadius: '10px', padding: '12px', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
                   <div>
                     <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{chat.title || "بدون عنوان"}</div>
                     <div style={{ fontSize: '13px', opacity: 0.5 }}>{formatDate(chat.updated_at)} · {chat.messages?.length || 0} رسالة</div>
@@ -833,7 +1224,7 @@ export default function Admin({ user, onLogout }) {
                 </div>
               ))
             )}
-            <div style={{ marginTop: '16px', display: 'flex', gap: '10px' }}>
+            <div style={{ marginTop: '16px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
               <button onClick={() => deleteAllUserChats(selectedUserForChats.id, selectedUserForChats.name)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: '1px solid rgba(248,113,113,0.3)', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>🗑️ حذف الكل</button>
               <button onClick={() => setShowUserChatsModal(false)} style={{ flex: 1, padding: '8px', background: theme.inputBg, color: theme.text, border: `1px solid ${theme.border}`, borderRadius: '8px', cursor: 'pointer', fontSize: '15px' }}>إغلاق</button>
             </div>
