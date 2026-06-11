@@ -44,50 +44,47 @@ export default function Register({ onRegister, onSwitchToLogin }) {
     }
 
     try {
-      const { data: existingUser } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-
-      if (existingUser) {
-        setError("❌ هذا البريد الإلكتروني مستخدم بالفعل");
-        setLoading(false);
-        return;
-      }
-
-      const newUser = {
-        id: 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+      // 1. تسجيل عبر Supabase Auth — الباسورد يتشفر تلقائياً
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        name: name.trim() || email.split('@')[0],
-        role: 'user',
+      });
+
+      if (signUpError) throw signUpError;
+
+      // 2. إنشاء profile مرتبط بنفس الـ id
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          id: data.user.id,
+          email,
+          name: name.trim() || email.split("@")[0],
+          gender,
+          role: "user",
+          is_blocked: false,
+          daily_limit: DEFAULT_USER_DAILY_LIMIT,
+          used_today: 0,
+          last_reset_date: new Date().toISOString().slice(0, 10),
+          created_at: new Date().toISOString(),
+          last_seen: new Date().toISOString(),
+        });
+
+      if (profileError) throw profileError;
+
+      // 3. إرسال البيانات للتطبيق
+      onRegister({
+        id: data.user.id,
+        email,
+        name: name.trim() || email.split("@")[0],
+        role: "user",
         gender,
-        is_blocked: false,
-        is_verified: true,
         daily_limit: DEFAULT_USER_DAILY_LIMIT,
         used_today: 0,
-        last_reset_date: new Date().toISOString().slice(0, 10),
-        created_at: new Date().toISOString(),
-        last_seen: new Date().toISOString(),
-        last_login_date: null
-      };
-
-      const { error: insertError } = await supabase
-        .from('profiles')
-        .insert(newUser);
-
-      if (insertError) {
-        setError("❌ حدث خطأ أثناء إنشاء الحساب: " + insertError.message);
-        setLoading(false);
-        return;
-      }
-
-      localStorage.setItem("black-user", JSON.stringify(newUser));
-      onRegister(newUser);
+      });
 
     } catch (err) {
-      setError("❌ حدث خطأ: " + err.message);
+      setError("❌ " + err.message);
+    } finally {
       setLoading(false);
     }
   }
