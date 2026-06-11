@@ -154,10 +154,8 @@ export default function Chat({ user, onLogout }) {
     const chatsDeleteChannel = supabase
       .channel('chats-delete-' + user.id)
       .on('postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'chats' },
+        { event: 'DELETE', schema: 'public', table: 'chats', filter: `user_id=eq.${user.id}` },
         (payload) => {
-          // نتحقق يدوياً إن المحادثة المحذوفة خاصة بالمستخدم ده
-          if (payload.old?.user_id !== user.id) return;
           const deletedChatId = payload.old.id;
           setAllChats(prev => prev.filter(c => c.id !== deletedChatId));
           // لو المحادثة الحالية هي اللي اتحذفت، افتح محادثة جديدة
@@ -366,37 +364,33 @@ export default function Chat({ user, onLogout }) {
 
   async function checkAndShowWelcome() {
     if (!currentUser) return;
-
+    
     const today = new Date().toISOString().slice(0, 10);
     const lastLogin = currentUser.last_login_date;
     const chatCount = allChats.length;
 
-    // مستخدم جديد خالص — last_login_date = null
+    // مستخدم جديد خالص - last_login_date = null
     const isNewUser = !lastLogin;
-    // مستخدم بيدخل أول مرة النهارده
     const isFirstTimeToday = lastLogin !== today;
+    
+    const welcomeMessage = isNewUser
+      ? `أهلاً وسهلاً يا ${currentUser.name || "صاحبي"} 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(currentUser.daily_limit || 5000).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`
+      : getWelcomeMessage(lastLogin, currentUser.name, currentUser.used_today || 0, currentUser.daily_limit || 5000, chatCount);
 
-    let welcomeMessage = null;
-
-    if (isNewUser) {
-      // رسالة ترحيب للمستخدم الجديد خالص
-      welcomeMessage = `أهلاً وسهلاً يا ${currentUser.name || "صاحبي"} 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(currentUser.daily_limit || 5000).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`;
-    } else if (isFirstTimeToday) {
-      // رسالة أول دخول في يوم جديد
-      welcomeMessage = getWelcomeMessage(lastLogin, currentUser.name, currentUser.used_today || 0, currentUser.daily_limit || 5000, chatCount);
+    if (isNewUser || isFirstTimeToday || messages.length === 1) {
+      if (messages.length === 1 && messages[0].content.includes("أهلاً.. أنا بلاك")) {
+        setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
+      } else if (messages.length === 1) {
+        setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
+      }
     }
-
-    // نعرض الرسالة بس لو في رسالة ترحيب جديدة
-    if (welcomeMessage) {
-      setMessages([{ role: "assistant", content: welcomeMessage, id: Date.now() }]);
-    }
-
-    // نحدث last_login_date لو لسه مش النهارده
+    
     if (lastLogin !== today) {
       await supabase
         .from('profiles')
         .update({ last_login_date: today })
         .eq('id', user.id);
+      
       setCurrentUser(prev => ({ ...prev, last_login_date: today }));
     }
   }
@@ -516,6 +510,31 @@ export default function Chat({ user, onLogout }) {
   }
 
   async function executeRequest(text, isRetry = false) {
+    // ✅ تحقق إن المستخدم لسه موجود وغير محظور قبل أي حاجة
+    try {
+      const { data: freshUser, error: userCheckError } = await supabase
+        .from('profiles')
+        .select('id, is_blocked')
+        .eq('id', user.id)
+        .single();
+
+      if (userCheckError || !freshUser) {
+        localStorage.removeItem("black-user");
+        window.location.reload();
+        return;
+      }
+
+      if (freshUser.is_blocked) {
+        alert("⚠️ تم حظر حسابك بواسطة المدير.");
+        localStorage.removeItem("black-user");
+        window.location.reload();
+        return;
+      }
+    } catch (err) {
+      // لو في مشكلة في الاتصال نكمل عادي ومنطردش المستخدم بالغلط
+      console.warn("تحذير: تعذر التحقق من حالة المستخدم:", err.message);
+    }
+
     const limitCheck = checkUserDailyLimit(currentUserRef.current);
     if (!limitCheck.canChat) {
       setMessages(prev => [...prev, { 
