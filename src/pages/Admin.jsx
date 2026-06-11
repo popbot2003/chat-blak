@@ -286,13 +286,22 @@ export default function Admin({ user, onLogout }) {
               </thead>
               <tbody>
                 {apiKeys.map(key => {
-                  const percent = (key.used_today / key.daily_limit) * 100;
+                  const percent = getUsagePercent(key.used_today || 0, key.daily_limit || 1000000);
+                  const color = getUsageColor(percent);
                   return (
                     <tr key={key.id}>
                       <td>{key.key_name || "مفتاح Groq"}</td>
                       <td><span className="key-mono">{key.key_value?.slice(0, 25)}...</span></td>
-                      <td>{key.used_today?.toLocaleString()}</td>
-                      <td>{key.daily_limit?.toLocaleString()}</td>
+                      <td>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: "150px" }}>
+                          <div style={{ fontSize: "12px" }}>{(key.used_today || 0).toLocaleString()} / {(key.daily_limit || 0).toLocaleString()} توكن</div>
+                          <div style={{ width: "100%", height: "4px", background: "rgba(255,255,255,0.1)", borderRadius: "2px", overflow: "hidden" }}>
+                            <div style={{ width: percent + "%", height: "100%", background: color, transition: "width 0.3s" }} />
+                          </div>
+                          <div style={{ fontSize: "10px", opacity: 0.6 }}>{percent.toFixed(0)}%</div>
+                        </div>
+                      </td>
+                      <td>{(key.daily_limit || 0).toLocaleString()}</td>
                       <td><button onClick={() => toggleKeyStatus(key.id, key.is_active)} className={`admin-badge ${key.is_active ? "admin-badge-green" : "admin-badge-red"}`}>{key.is_active ? "نشط" : "معطل"}</button></td>
                       <td className="admin-td-actions-tight"><button onClick={() => resetKeyUsage(key.id)} className="admin-btn admin-btn-yellow">🔄</button><button onClick={() => deleteKey(key.id)} className="admin-btn admin-btn-red">🗑️</button></td>
                     </tr>
