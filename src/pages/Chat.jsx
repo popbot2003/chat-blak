@@ -194,31 +194,31 @@ export default function Chat({ user, onLogout }) {
   }, [user.id]);
 
   // ── Realtime: حذف المحادثات (بدون filter عشان يشتغل مع الأدمن كمان) ──
-  useEffect(() => {
-    const ch = supabase
-      .channel("chats-delete-" + user.id)
-      .on("postgres_changes",
-        { event: "DELETE", schema: "public", table: "chats" }, // ✅ بدون filter
-        (payload) => {
-          const deletedId = payload.old.id;
-          // ✅ تأكد إن المحادثة دي بتاعة المستخدم ده
-          if (payload.old.user_id !== user.id) return;
-          setAllChats((prev) => prev.filter((c) => c.id !== deletedId));
-          if (currentChatIdRef.current === deletedId) {
-            const newId = Date.now().toString();
-            setCurrentChatId(newId);
-            setMessages([{
-              role: "assistant",
-              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
-              id: Date.now(),
-            }]);
-          }
-        }
-      )
-      .subscribe();
-    return () => ch.unsubscribe();
-  }, [user.id]);
+ useEffect(() => {
+  const ch = supabase
+    .channel("chats-delete-" + user.id)
+    .on("postgres_changes",
+      { event: "DELETE", schema: "public", table: "chats" },
+      (payload) => {
+        const deletedId = payload.old?.id;
+        if (!deletedId) return;
 
+        setAllChats((prev) => prev.filter((c) => c.id !== deletedId));
+
+        if (currentChatIdRef.current === deletedId) {
+          const newId = Date.now().toString();
+          setCurrentChatId(newId);
+          setMessages([{
+            role: "assistant",
+            content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
+            id: Date.now(),
+          }]);
+        }
+      }
+    )
+    .subscribe();
+  return () => ch.unsubscribe();
+}, [user.id]);
   // ── Presence ─────────────────────────────────────────────
   useEffect(() => {
     let ch = null;
