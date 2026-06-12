@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -28,7 +28,7 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  // ✅ يدعم الآن hash و query params (code, token_hash)
+  // ✅ يدعم hash و query params (code, token_hash)
   const params = new URLSearchParams(window.location.search);
   const isResetPassword =
     window.location.pathname === "/reset-password" ||
