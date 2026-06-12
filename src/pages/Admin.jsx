@@ -56,19 +56,19 @@ export default function Admin({ user, onLogout }) {
 
   // ===== Theme CSS =====
   const theme = {
-    bg: darkMode ? '#1a1a2e' : '#f0f2f5',
+    bg: darkMode ? '#1a1a2e' : '#f4f6fb',
     surface: darkMode ? '#2a2a3e' : '#ffffff',
-    surface2: darkMode ? '#22223a' : '#f8f9fa',
-    border: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
-    borderStrong: darkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.12)',
-    text: darkMode ? '#e8e8e8' : '#2c3e50',
-    textMuted: darkMode ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.55)',
-    inputBg: darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.02)',
-    rowHover: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.01)',
-    barBg: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
-    tabActiveBg: darkMode ? 'rgba(108,92,231,0.15)' : 'rgba(108,92,231,0.08)',
-    tabActiveColor: darkMode ? '#c4b5fd' : '#6c5ce7',
-    tabInactiveColor: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
+    surface2: darkMode ? '#22223a' : '#eef0f7',
+    border: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(99,102,241,0.12)',
+    borderStrong: darkMode ? 'rgba(255,255,255,0.12)' : 'rgba(99,102,241,0.22)',
+    text: darkMode ? '#e8e8e8' : '#1e1b4b',
+    textMuted: darkMode ? 'rgba(255,255,255,0.55)' : '#6b7280',
+    inputBg: darkMode ? 'rgba(255,255,255,0.04)' : '#f9fafb',
+    rowHover: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(99,102,241,0.04)',
+    barBg: darkMode ? 'rgba(255,255,255,0.08)' : '#e5e7f0',
+    tabActiveBg: darkMode ? 'rgba(108,92,231,0.15)' : 'rgba(108,92,231,0.1)',
+    tabActiveColor: darkMode ? '#c4b5fd' : '#5b21b6',
+    tabInactiveColor: darkMode ? 'rgba(255,255,255,0.5)' : '#6b7280',
   };
 
   // ===== Effects =====
@@ -326,6 +326,7 @@ export default function Admin({ user, onLogout }) {
 
   // ===== User functions =====
   const filteredUsers = users.filter(u => {
+    if (u.id === user.id) return false; // استثناء المدير من القائمة
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     return u.name?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term);
@@ -690,7 +691,7 @@ export default function Admin({ user, onLogout }) {
         background: theme.surface,
         borderBottom: `1px solid ${theme.border}`,
         position: 'sticky',
-        top: '54px',
+        top: '72px',
         zIndex: 99,
         flexWrap: 'wrap',
       }}>
@@ -727,12 +728,71 @@ export default function Admin({ user, onLogout }) {
 
         {/* Users Tab */}
         {activeTab === "users" && (
+          <>
+          {/* كارد المدير */}
+          {(() => {
+            const adminUser = users.find(u => u.id === user.id);
+            if (!adminUser) return null;
+            const used = adminUser.used_today || 0;
+            const limit = adminUser.daily_limit || 5000;
+            const percent = getUsagePercent(used, limit);
+            const color = getUsageColor(percent);
+            const online = isUserOnline(adminUser.id);
+            return (
+              <div style={{
+                background: darkMode
+                  ? 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(139,92,246,0.1))'
+                  : 'linear-gradient(135deg, rgba(108,92,231,0.08), rgba(139,92,246,0.05))',
+                border: `2px solid ${darkMode ? 'rgba(108,92,231,0.4)' : 'rgba(108,92,231,0.25)'}`,
+                borderRadius: '16px',
+                padding: '16px 20px',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '12px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <div style={{
+                    width: '52px', height: '52px', borderRadius: '50%',
+                    background: 'linear-gradient(135deg, #6c5ce7, #a29bfe)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '22px', flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(108,92,231,0.4)',
+                  }}>👑</div>
+                  <div>
+                    <div style={{ fontSize: '20px', fontWeight: 'bold' }}>{adminUser.name || 'المدير'}</div>
+                    <div style={{ fontSize: '13px', opacity: 0.6, fontFamily: 'monospace' }}>{adminUser.email}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px' }}>
+                      <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: online ? '#4ade80' : '#6b7280', boxShadow: online ? '0 0 5px #4ade80' : 'none' }} />
+                      <span style={{ fontSize: '13px', color: online ? '#4ade80' : theme.textMuted }}>{online ? 'متصل الآن' : 'غير متصل'}</span>
+                      <span style={{ fontSize: '13px', color: '#a29bfe', fontWeight: 'bold', marginRight: '6px' }}>• مدير النظام</span>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ minWidth: '180px' }}>
+                  <div style={{ fontSize: '13px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>استهلاك اليوم</span>
+                    <span style={{ fontWeight: 'bold' }}>{percent.toFixed(0)}%</span>
+                  </div>
+                  <div style={{ fontSize: '13px', marginBottom: '6px', opacity: 0.7 }}>
+                    {used.toLocaleString()} / {limit.toLocaleString()} توكن
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: theme.barBg, borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: percent + '%', height: '100%', background: color, transition: 'width 0.3s', borderRadius: '3px' }} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ background: theme.surface, borderRadius: '16px', padding: '12px', border: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '20px' }}>👥 قائمة المستخدمين</h2>
                 <div style={{ fontSize: '14px', opacity: 0.6, marginTop: '2px' }}>
-                  إجمالي: {filteredUsers.length} / {users.length}
+                  إجمالي: {filteredUsers.length} / {users.length - 1}
                   {searchTerm && <span style={{ marginRight: '8px', color: '#a29bfe' }}>🔍 نتائج البحث</span>}
                 </div>
               </div>
@@ -805,7 +865,6 @@ export default function Admin({ user, onLogout }) {
                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                              <button onClick={() => openUserChatsModal(u.id, u.name || u.email)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>💬</button>
                               <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>⚙️</button>
                               <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ background: u.is_blocked ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', color: u.is_blocked ? '#4ade80' : '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
                               <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
@@ -819,6 +878,7 @@ export default function Admin({ user, onLogout }) {
               </table>
             </div>
           </div>
+          </>
         )}
 
         {/* Keys Tab */}
