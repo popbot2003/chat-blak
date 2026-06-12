@@ -510,45 +510,53 @@ export default function Chat({ user, onLogout }) {
   // Settings
   // ─────────────────────────────────────────
 
-  async function updateUserSettings() {
-    setSettingsError("");
+ async function updateUserSettings() {
+  setSettingsError("");
 
-    if (editNewPassword !== editConfirmPassword) {
-      setSettingsError("❌ كلمة المرور الجديدة غير متطابقة");
-      return;
-    }
-    if (editNewPassword && editNewPassword.length < 6) {
-      setSettingsError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
-      return;
-    }
-
-    const updates = {};
-    if (editName && editName !== currentUser?.name) updates.name = editName;
-    if (editNewPassword) updates.password = editNewPassword;
-
-    if (!Object.keys(updates).length) {
-      setSettingsError("❌ لا توجد تغييرات للحفظ");
-      return;
-    }
-
-    setSettingsLoading(true);
-    try {
-      const { error } = await supabase.from("profiles").update(updates).eq("id", user.id);
-      if (error) throw error;
-
-      const updatedUser = { ...currentUser, ...updates };
-      setCurrentUser(updatedUser);
-      localStorage.setItem("black-user", JSON.stringify(updatedUser));
-      setEditNewPassword("");
-      setEditConfirmPassword("");
-      setShowSettings(false);
-      showToast("✅ تم تحديث الإعدادات بنجاح");
-    } catch (err) {
-      setSettingsError("❌ خطأ: " + err.message);
-    } finally {
-      setSettingsLoading(false);
-    }
+  if (editNewPassword !== editConfirmPassword) {
+    setSettingsError("❌ كلمة المرور الجديدة غير متطابقة");
+    return;
   }
+  if (editNewPassword && editNewPassword.length < 6) {
+    setSettingsError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
+    return;
+  }
+
+  const profileUpdates = {};
+  if (editName && editName !== currentUser?.name) profileUpdates.name = editName;
+
+  if (!Object.keys(profileUpdates).length && !editNewPassword) {
+    setSettingsError("❌ لا توجد تغييرات للحفظ");
+    return;
+  }
+
+  setSettingsLoading(true);
+  try {
+    // ✅ تحديث الاسم في profiles
+    if (Object.keys(profileUpdates).length) {
+      const { error } = await supabase.from("profiles").update(profileUpdates).eq("id", user.id);
+      if (error) throw error;
+    }
+
+    // ✅ تحديث كلمة المرور في Supabase Auth (مش في profiles)
+    if (editNewPassword) {
+      const { error: authError } = await supabase.auth.updateUser({ password: editNewPassword });
+      if (authError) throw authError;
+    }
+
+    const updatedUser = { ...currentUser, ...profileUpdates };
+    setCurrentUser(updatedUser);
+    localStorage.setItem("black-user", JSON.stringify(updatedUser));
+    setEditNewPassword("");
+    setEditConfirmPassword("");
+    setShowSettings(false);
+    showToast("✅ تم تحديث الإعدادات بنجاح");
+  } catch (err) {
+    setSettingsError("❌ خطأ: " + err.message);
+  } finally {
+    setSettingsLoading(false);
+  }
+}
 
   async function deleteAccount() {
     if (!window.confirm("⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"))
