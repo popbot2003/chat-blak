@@ -54,11 +54,11 @@ html, body {
   display: flex;
   flex-direction: column;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .container.dark { background: #0f0f1a; color: #e0e0e0; }
-.container.light { background: #f5f5f5; color: #1a1a1a; }
+.container.light { background: #f4f6fb; color: #1e1b4b; }
 
 /* ========== الهيدر ========== */
 .header {
@@ -70,13 +70,14 @@ html, body {
   flex-shrink: 0;
   background: #0f0f1a;
   min-height: 56px;
-  position: relative;
-  z-index: 10;
+  position: sticky;
+  top: 0;
+  z-index: 50;
 }
 
 .light .header {
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
+  background: #ffffff;
+  border-bottom: 1px solid rgba(99,102,241,0.15);
 }
 
 .header-left {
@@ -179,8 +180,8 @@ html, body {
 }
 
 .light .token-bar {
-  background: #ffffff;
-  border-bottom: 1px solid #e5e5e5;
+  background: #eef0f7;
+  border-bottom: 1px solid rgba(99,102,241,0.15);
 }
 
 .token-info {
@@ -200,7 +201,7 @@ html, body {
   overflow: hidden;
 }
 
-.light .token-track { background: rgba(0,0,0,0.1); }
+.light .token-track { background: rgba(99,102,241,0.12); }
 
 .token-fill {
   height: 100%;
@@ -220,8 +221,8 @@ html, body {
 }
 
 .light .search-bar {
-  background: #f5f5f5;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
+  background: #ffffff;
+  border-bottom: 1px solid rgba(99,102,241,0.15);
 }
 
 .search-input {
@@ -447,8 +448,8 @@ html, body {
 }
 
 .light .input-area {
-  background: #f5f5f5;
-  border-top: 1px solid rgba(0,0,0,0.1);
+  background: #ffffff;
+  border-top: 1px solid rgba(99,102,241,0.15);
 }
 
 .textarea {
@@ -466,7 +467,7 @@ html, body {
   line-height: 1.5;
 }
 
-.light .textarea { background: #fff; border: 1px solid #ddd; }
+.light .textarea { background: #f9fafb; border: 1px solid rgba(99,102,241,0.2); }
 .textarea:focus { border-color: #6c5ce7; }
 
 .send-btn {
@@ -496,9 +497,9 @@ html, body {
 }
 
 .light .history-panel {
-  background: #f5f5f5;
-  box-shadow: -8px 0 32px rgba(0,0,0,0.15);
-  border-left: 1px solid rgba(0,0,0,0.08);
+  background: #f4f6fb;
+  box-shadow: -8px 0 32px rgba(99,102,241,0.1);
+  border-left: 1px solid rgba(99,102,241,0.15);
 }
 
 .history-panel::-webkit-scrollbar { width: 4px; }
