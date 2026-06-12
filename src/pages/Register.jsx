@@ -1,5 +1,5 @@
 // ============================================
-// Register.jsx
+// Register.jsx — Supabase Auth (آمن ✅)
 // ============================================
 
 import { useState } from "react";
@@ -8,15 +8,15 @@ import { validateEmail, validatePassword } from '../utils/validators';
 import { DEFAULT_USER_DAILY_LIMIT } from '../config/constants';
 
 export default function Register({ onRegister, onSwitchToLogin }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [gender, setGender] = useState("ولد");
-  const [showPassword, setShowPassword] = useState(false);
+  const [name, setName]                         = useState("");
+  const [email, setEmail]                       = useState("");
+  const [password, setPassword]                 = useState("");
+  const [confirmPassword, setConfirmPassword]   = useState("");
+  const [gender, setGender]                     = useState("ولد");
+  const [showPassword, setShowPassword]         = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [error, setError]                       = useState("");
+  const [loading, setLoading]                   = useState(false);
 
   async function handleRegister(e) {
     e.preventDefault();
@@ -44,56 +44,72 @@ export default function Register({ onRegister, onSwitchToLogin }) {
     }
 
     try {
+      const displayName = name.trim() || email.split("@")[0];
+      const today       = new Date().toISOString().slice(0, 10);
+
       // 1. تسجيل عبر Supabase Auth — الباسورد يتشفر تلقائياً
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: undefined, // من غير redirect
-          data: {
-            name: name.trim() || email.split("@")[0],
-            gender: gender,
-          }
+          data: { name: displayName, gender }
         }
       });
 
-      if (signUpError) throw signUpError;
+      if (signUpError) {
+        // رسائل خطأ مفهومة بالعربي
+        if (signUpError.message.includes("already registered") || signUpError.message.includes("already been registered")) {
+          throw new Error("هذا البريد الإلكتروني مستخدم بالفعل");
+        }
+        throw signUpError;
+      }
 
-      // 2. إنشاء profile مرتبط بنفس الـ id
+      if (!data.user) throw new Error("حدث خطأ أثناء التسجيل، حاول مرة أخرى");
+
+      // 2. إنشاء profile مرتبط بنفس الـ id من Auth
       const { error: profileError } = await supabase
         .from("profiles")
         .insert({
-          id: data.user.id,
-          email: email,
-          name: name.trim() || email.split("@")[0],
-          gender: gender,
-          role: "user",
-          is_blocked: false,
-          daily_limit: DEFAULT_USER_DAILY_LIMIT,
-          used_today: 0,
-          last_reset_date: new Date().toISOString().slice(0, 10),
-          created_at: new Date().toISOString(),
-          last_seen: new Date().toISOString(),
-          personality: "blak"
+          id:              data.user.id,
+          email:           email,
+          name:            displayName,
+          gender:          gender,
+          role:            "user",
+          personality:     "blak",
+          is_blocked:      false,
+          daily_limit:     DEFAULT_USER_DAILY_LIMIT,
+          used_today:      0,
+          last_reset_date: today,
+          last_seen:       new Date().toISOString(),
+          created_at:      new Date().toISOString()
         });
 
-      if (profileError) throw profileError;
+      if (profileError) {
+        // لو فيه مشكلة في إنشاء الـ profile، نحذف الـ auth user عشان ما يتخلفش بدون profile
+        await supabase.auth.admin?.deleteUser?.(data.user.id).catch(() => {});
+        throw new Error("حدث خطأ في إنشاء الحساب: " + profileError.message);
+      }
 
-      // 3. إرسال البيانات للتطبيق
-      onRegister({
-        id: data.user.id,
-        email: email,
-        name: name.trim() || email.split("@")[0],
-        role: "user",
-        gender: gender,
+      // 3. إرسال بيانات المستخدم الجديد للتطبيق
+      const newUser = {
+        id:          data.user.id,
+        email:       email,
+        name:        displayName,
+        role:        "user",
+        gender:      gender,
+        personality: "blak",
         daily_limit: DEFAULT_USER_DAILY_LIMIT,
-        used_today: 0,
-        personality: "blak"
-      });
+        used_today:  0,
+        last_reset_date: today,
+        is_blocked:  false
+      };
+
+      localStorage.setItem("black-user", JSON.stringify(newUser));
+      onRegister(newUser);
 
     } catch (err) {
       console.error("Registration error:", err);
-      setError("❌ " + err.message);
+      setError("❌ " + (err.message || "حدث خطأ غير متوقع"));
     } finally {
       setLoading(false);
     }
@@ -108,7 +124,8 @@ export default function Register({ onRegister, onSwitchToLogin }) {
     background: "rgba(255,255,255,0.05)",
     color: "#e0e0e0",
     fontSize: "16px",
-    outline: "none"
+    outline: "none",
+    boxSizing: "border-box"
   };
 
   return (
@@ -118,7 +135,8 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       alignItems: "center",
       justifyContent: "center",
       background: "#0f0f1a",
-      fontFamily: "system-ui, sans-serif"
+      fontFamily: "system-ui, sans-serif",
+      overflowY: "auto"
     }}>
       <div style={{
         background: "#1a1a2e",
@@ -126,7 +144,8 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         borderRadius: "20px",
         width: "100%",
         maxWidth: "400px",
-        textAlign: "center"
+        textAlign: "center",
+        margin: "20px"
       }}>
         <div style={{ fontSize: "50px", marginBottom: "20px" }}>🖤</div>
         <h2 style={{ color: "#e0e0e0", marginBottom: "30px" }}>إنشاء حساب جديد</h2>
@@ -232,7 +251,7 @@ export default function Register({ onRegister, onSwitchToLogin }) {
               borderRadius: "12px",
               fontSize: "16px",
               fontWeight: "bold",
-              cursor: "pointer",
+              cursor: loading ? "not-allowed" : "pointer",
               opacity: loading ? 0.6 : 1,
               marginBottom: "15px"
             }}>
