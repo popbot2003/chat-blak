@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
@@ -6,6 +6,7 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import Chat from "./pages/Chat";
 import Admin from "./pages/Admin";
+import { supabase } from './lib/supabase';
 
 export default function App() {
   const [user, setUser] = useState(() => {
@@ -25,10 +26,62 @@ export default function App() {
     }
   });
 
+  const [verifiedRole, setVerifiedRole] = useState(null);
+  const [roleChecked, setRoleChecked]   = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  // ✅ يدعم hash و query params (code, token_hash)
+  // ✅ التحقق من الدور من قاعدة البيانات مباشرة — ليس من localStorage
+  useEffect(() => {
+    if (!user) {
+      setVerifiedRole(null);
+      setRoleChecked(true);
+      return;
+    }
+
+    async function verifyRole() {
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("role, is_blocked")
+          .eq("id", user.id)
+          .single();
+
+        if (error || !data) {
+          // المستخدم غير موجود في قاعدة البيانات — سجّل خروج
+          localStorage.removeItem("black-user");
+          setUser(null);
+          setRoleChecked(true);
+          return;
+        }
+
+        if (data.is_blocked) {
+          localStorage.removeItem("black-user");
+          setUser(null);
+          setRoleChecked(true);
+          return;
+        }
+
+        // ✅ الدور من قاعدة البيانات فقط
+        setVerifiedRole(data.role);
+
+        // تحديث الـ localStorage بالدور الصحيح
+        const updated = { ...user, role: data.role };
+        localStorage.setItem("black-user", JSON.stringify(updated));
+        setUser(updated);
+
+      } catch (err) {
+        console.error("❌ خطأ في التحقق من الدور:", err.message);
+        setVerifiedRole(user.role || "user");
+      } finally {
+        setRoleChecked(true);
+      }
+    }
+
+    verifyRole();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   const params = new URLSearchParams(window.location.search);
   const isResetPassword =
     window.location.pathname === "/reset-password" ||
@@ -39,10 +92,13 @@ export default function App() {
   function handleLogout() {
     try {
       localStorage.removeItem("black-user");
+      supabase.auth.signOut();
     } catch (error) {
       console.error("❌ خطأ في تسجيل الخروج:", error);
     }
     setUser(null);
+    setVerifiedRole(null);
+    setRoleChecked(false);
     setShowRegister(false);
     setShowForgotPassword(false);
   }
@@ -88,7 +144,10 @@ export default function App() {
     return (
       <ErrorBoundary>
         <Login
-          onLogin={(userData) => setUser(userData)}
+          onLogin={(userData) => {
+            setUser(userData);
+            setRoleChecked(false);
+          }}
           onSwitchToRegister={() => setShowRegister(true)}
           onSwitchToForgotPassword={() => setShowForgotPassword(true)}
         />
@@ -96,7 +155,25 @@ export default function App() {
     );
   }
 
-  if (user.role === "admin") {
+  // ⏳ انتظار التحقق من الدور قبل عرض أي شيء
+  if (!roleChecked) {
+    return (
+      <div style={{
+        height: "100dvh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#0f0f1a",
+        color: "#e0e0e0",
+        fontFamily: "system-ui, sans-serif"
+      }}>
+        🖤 جاري التحقق...
+      </div>
+    );
+  }
+
+  // ✅ الدور المتحقق منه من قاعدة البيانات
+  if (verifiedRole === "admin") {
     const isChatWindow = window.location.search === "?chat";
     if (isChatWindow) {
       return (
