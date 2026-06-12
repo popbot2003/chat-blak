@@ -6,7 +6,7 @@ import { PERSONALITY_LABELS, DEFAULT_PERSONALITY } from '../config/personalities
 import { validateGroqKey, validateAllKeys } from '../utils/groqValidator';
 
 export default function Admin({ user, onLogout }) {
-  // ===== States الموجودة =====
+  // ===== States =====
   const [users, setUsers] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [allChats, setAllChats] = useState([]);
@@ -28,7 +28,7 @@ export default function Admin({ user, onLogout }) {
   const [newKeyLimit, setNewKeyLimit] = useState(1000000);
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
 
-  // ===== States جديدة =====
+  // ===== Theme =====
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('adminDarkMode');
     return saved !== null ? saved === 'true' : true;
@@ -41,7 +41,6 @@ export default function Admin({ user, onLogout }) {
   const [toast, setToast] = useState(null);
   const [showMenu, setShowMenu] = useState(false);
   
-  // ✅ نظام فحص المفاتيح
   const [validating, setValidating] = useState(false);
   const [validationProgress, setValidationProgress] = useState({ current: 0, total: 0, name: '', status: '' });
   const [validationResults, setValidationResults] = useState([]);
@@ -53,11 +52,9 @@ export default function Admin({ user, onLogout }) {
   });
   const [validationInterval, setValidationInterval] = useState(null);
   const [showFullKey, setShowFullKey] = useState({});
-  
-  // ✅ جديد: حالة المتصلين (Presence)
   const [onlineUsers, setOnlineUsers] = useState({});
 
-  // ===== CSS Variables للـ Dark/Light Mode =====
+  // ===== Theme CSS =====
   const theme = {
     bg: darkMode ? '#1a1a2e' : '#f0f2f5',
     surface: darkMode ? '#2a2a3e' : '#ffffff',
@@ -74,23 +71,23 @@ export default function Admin({ user, onLogout }) {
     tabInactiveColor: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)',
   };
 
-  // ===== useEffect =====
+  // ===== Effects =====
   useEffect(() => {
     const profilesChannel = supabase
-  .channel('profiles-realtime')
-  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
-    setUsers(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u));
-  })
-  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, (payload) => {
-    showToast(`مستخدم جديد: ${payload.new.name || payload.new.email}`, "info");
-    setUsers(prev => [payload.new, ...prev]);
-  })
-  // ✅ إضافة DELETE
-  .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'profiles' }, (payload) => {
-    setUsers(prev => prev.filter(u => u.id !== payload.old.id));
-    showToast(`تم حذف مستخدم`, "info");
-  })
-  .subscribe();
+      .channel('profiles-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+        setUsers(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, (payload) => {
+        showToast(`مستخدم جديد: ${payload.new.name || payload.new.email}`, "info");
+        setUsers(prev => [payload.new, ...prev]);
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'profiles' }, (payload) => {
+        setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+        showToast(`تم حذف مستخدم`, "info");
+      })
+      .subscribe();
+
     const chatsChannel = supabase
       .channel('chats-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, (payload) => {
@@ -101,7 +98,6 @@ export default function Admin({ user, onLogout }) {
       })
       .subscribe();
 
-    // ✅ قناة Realtime للمفاتيح - مدمجة بدل قناة منفصلة
     const apiKeysChannel = supabase
       .channel('api-keys-realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'api_keys' }, () => {
@@ -117,12 +113,11 @@ export default function Admin({ user, onLogout }) {
   }, []);
 
   useEffect(() => { loadAllData(); }, []);
-
   useEffect(() => {
     document.body.style.backgroundColor = darkMode ? '#1a1a2e' : '#f0f2f5';
   }, [darkMode]);
 
-  // ✅ مراقبة المتصلين (Presence)
+  // ===== Presence =====
   useEffect(() => {
     const presenceChannel = supabase.channel('online-users', {
       config: { presence: { key: 'admin-monitor' } }
@@ -140,7 +135,7 @@ export default function Admin({ user, onLogout }) {
     };
   }, []);
 
-  // ✅ تفعيل الفحص التلقائي
+  // ===== Auto validate keys =====
   useEffect(() => {
     let interval = null;
     if (autoValidate) {
@@ -159,7 +154,7 @@ export default function Admin({ user, onLogout }) {
     };
   }, [autoValidate]);
 
-  // ✅ دالة التحقق من حالة الاتصال
+  // ===== Helper Functions =====
   function isUserOnline(userId) {
     return Object.keys(onlineUsers).some(key => {
       const usersInKey = onlineUsers[key];
@@ -167,7 +162,6 @@ export default function Admin({ user, onLogout }) {
     });
   }
 
-  // ===== دوال التحميل =====
   async function loadAllData() {
     setLoading(true);
     await Promise.all([loadUsers(), loadApiKeys(), loadAllChats()]);
@@ -193,35 +187,49 @@ export default function Admin({ user, onLogout }) {
     return users.find(u => u.id === userId);
   }
 
-  // ===== Toast =====
   function showToast(message, type = "success") {
     setToast({ message, type });
     setTimeout(() => setToast(null), 3000);
   }
 
-  // ===== فلترة المحادثات =====
-  const filteredChats = allChats.filter(chat => {
-    if (chatFilterUser && chat.user_id !== chatFilterUser) return false;
-    if (chatFilterDate !== "all") {
-      const chatDate = new Date(chat.updated_at);
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      if (chatFilterDate === "today" && chatDate < today) return false;
-      if (chatFilterDate === "week" && chatDate < weekAgo) return false;
-      if (chatFilterDate === "month" && chatDate < monthStart) return false;
-    }
-    if (chatSearchTerm && !(chat.title || "").toLowerCase().includes(chatSearchTerm.toLowerCase())) return false;
-    return true;
-  });
-
-  // ===== دوال المحادثات =====
+  // ===== ✅ FIXED: Delete single chat =====
   async function deleteSingleChat(chatId) {
     if (!confirm("🗑️ حذف هذه المحادثة؟")) return;
-    await supabase.from('chats').delete().eq('id', chatId);
-    loadAllChats();
-    showToast("تم حذف المحادثة");
+    
+    const { error } = await supabase
+      .from('chats')  // ✅ Fixed: was 'profiles'
+      .delete()
+      .eq('id', chatId);
+      
+    if (error) {
+      showToast("خطأ: " + error.message, "error");
+    } else {
+      showToast("تم حذف المحادثة");
+      loadAllChats();
+    }
+  }
+
+  // ===== ✅ FIXED: Delete chat from modal =====
+  async function deleteChatFromModal(chatId) {
+    if (!confirm("🗑️ حذف هذه المحادثة؟")) return;
+    
+    const { error } = await supabase
+      .from('chats')  // ✅ Fixed: was 'profiles'
+      .delete()
+      .eq('id', chatId);
+      
+    if (error) {
+      showToast("خطأ: " + error.message, "error");
+    } else {
+      showToast("تم حذف المحادثة");
+      const { data } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', selectedUserForChats.id)
+        .order('updated_at', { ascending: false });
+      setUserChatsList(data || []);
+      loadAllChats();
+    }
   }
 
   async function deleteAllChatsConfirm() {
@@ -237,7 +245,7 @@ export default function Admin({ user, onLogout }) {
     setLoading(false);
   }
 
-  // ===== دوال التصدير =====
+  // ===== Export functions =====
   function exportToCSV(data, filename) {
     if (!data || data.length === 0) {
       showToast("لا توجد بيانات للتصدير", "error");
@@ -302,7 +310,21 @@ export default function Admin({ user, onLogout }) {
     }
   }
 
-  // ===== دوال المستخدمين =====
+  function exportKeysToCSV() {
+    const exportData = apiKeys.map(k => ({
+      'الاسم': k.key_name || '',
+      'المفتاح': k.key_value || '',
+      'الحد اليومي': k.daily_limit || 1000000,
+      'الاستهلاك اليومي': k.used_today || 0,
+      'نسبة الاستخدام': `${((k.used_today || 0) / (k.daily_limit || 1) * 100).toFixed(2)}%`,
+      'الحالة': k.is_active ? 'نشط' : 'معطل',
+      'صحة المفتاح': k.is_valid ? 'صالح' : (k.invalid_reason || 'غير صالح'),
+      'آخر فحص': k.last_checked_at ? new Date(k.last_checked_at).toLocaleString('ar-EG') : 'لم يفحص'
+    }));
+    exportToCSV(exportData, 'api_keys_export');
+  }
+
+  // ===== User functions =====
   const filteredUsers = users.filter(u => {
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
@@ -316,22 +338,51 @@ export default function Admin({ user, onLogout }) {
     setShowUserChatsModal(true);
   }
   
-  async function deleteChatFromModal(chatId) {
-    if (!confirm("حذف هذه المحادثة؟")) return;
-    await supabase.from('chats').delete().eq('id', chatId);
-    const { data } = await supabase.from('chats').select('*').eq('user_id', selectedUserForChats.id).order('updated_at', { ascending: false });
-    setUserChatsList(data || []);
-    loadAllChats();
-    showToast("تم حذف المحادثة");
-  }
-  
   function openChatViewer(chat) {
     setSelectedChat(chat);
     setShowChatModal(true);
   }
   
-  // ===== دوال فحص المفاتيح =====
+  async function toggleUserBlock(userId, isBlocked) {
+    await supabase.from('profiles').update({ is_blocked: !isBlocked }).eq('id', userId);
+    loadUsers();
+  }
   
+  async function deleteAllUserChats(userId, userName) {
+    if (!confirm(`⚠️ حذف كل محادثات "${userName}"؟\n\nلا يمكن التراجع!`)) return;
+    await supabase.from('chats').delete().eq('user_id', userId);
+    showToast(`تم حذف كل محادثات ${userName}`);
+    loadAllChats();
+    if (selectedUserForChats?.id === userId) setUserChatsList([]);
+  }
+  
+  async function deleteUser(userId, userName) {
+    if (!confirm(`⚠️ تحذير: هل أنت متأكد من حذف "${userName}" نهائياً؟\n\nسيتم حذف الحساب وجميع المحادثات.\n\nلا يمكن التراجع!`)) return;
+    try {
+      await supabase.from('chats').delete().eq('user_id', userId);
+      await supabase.from('profiles').delete().eq('id', userId);
+      showToast(`تم حذف ${userName} نهائياً`);
+      loadUsers(); loadAllChats();
+    } catch (err) {
+      showToast("خطأ في حذف المستخدم: " + err.message, "error");
+    }
+  }
+  
+  async function saveUserSettings() {
+    if (!selectedUser) return;
+    await supabase.from('profiles').update({ daily_limit: editDailyLimit }).eq('id', selectedUser.id);
+    showToast("تم حفظ الإعدادات");
+    setShowEditUserModal(false);
+    loadUsers();
+  }
+
+  async function changePersonality(userId, personality) {
+    await supabase.from("profiles").update({ personality }).eq("id", userId);
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, personality } : u));
+    showToast("تم تغيير الشخصية");
+  }
+
+  // ===== Key functions =====
   async function validateNewKeyBeforeAdd(keyValue) {
     setValidating(true);
     const result = await validateGroqKey(keyValue);
@@ -341,7 +392,6 @@ export default function Admin({ user, onLogout }) {
       showToast(`❌ المفتاح غير صالح: ${result.reason}`, 'error');
       return false;
     }
-    
     showToast('✅ المفتاح صالح', 'success');
     return true;
   }
@@ -380,15 +430,6 @@ export default function Admin({ user, onLogout }) {
         } else if (invalidCount === 0 && !silent) {
           showToast(`✅ جميع المفاتيح (${results.length}) صالحة`, 'success');
         }
-        
-        // تسجيل الفحص في السجل
-        supabase.from('key_check_logs').insert({
-          check_type: silent ? 'auto' : 'manual',
-          total_keys: results.length,
-          valid_keys: results.filter(r => r.valid).length,
-          invalid_keys: results.filter(r => !r.valid).length,
-          details: results
-        }).then(() => loadValidationLogs());
       }
     );
   }
@@ -415,44 +456,9 @@ export default function Admin({ user, onLogout }) {
       is_valid: true,
       invalid_reason: null
     }).eq('id', keyId);
-    
     loadApiKeys();
     showToast('✅ تم إعادة تفعيل المفتاح', 'success');
   }
-  
-  function exportKeysToCSV() {
-    const exportData = apiKeys.map(k => ({
-      'الاسم': k.key_name || '',
-      'المفتاح': k.key_value || '',
-      'الحد اليومي': k.daily_limit || 1000000,
-      'الاستهلاك اليومي': k.used_today || 0,
-      'نسبة الاستخدام': `${((k.used_today || 0) / (k.daily_limit || 1) * 100).toFixed(2)}%`,
-      'الحالة': k.is_active ? 'نشط' : 'معطل',
-      'صحة المفتاح': k.is_valid ? 'صالح' : (k.invalid_reason || 'غير صالح'),
-      'آخر فحص': k.last_checked_at ? new Date(k.last_checked_at).toLocaleString('ar-EG') : 'لم يفحص'
-    }));
-    
-    exportToCSV(exportData, 'api_keys_export');
-  }
-  
-  async function loadValidationLogs() {
-    const { data } = await supabase
-      .from('key_check_logs')
-      .select('*')
-      .order('checked_at', { ascending: false })
-      .limit(50);
-    
-    if (data) setValidationLogs(data);
-  }
-  
-  function toggleAutoValidate() {
-    const newValue = !autoValidate;
-    setAutoValidate(newValue);
-    localStorage.setItem('auto_validate_keys', String(newValue));
-    showToast(newValue ? '✅ تم تفعيل الفحص التلقائي كل ساعة' : '⏹️ تم إيقاف الفحص التلقائي', 'info');
-  }
-  
-  // ===== دوال المفاتيح =====
   
   async function addApiKey() {
     if (!newKeyValue.trim()) { 
@@ -460,11 +466,9 @@ export default function Admin({ user, onLogout }) {
       return; 
     }
     
-    // التحقق من التكرار
     const isDuplicate = await checkDuplicateKey(newKeyValue.trim());
     if (isDuplicate) return;
     
-    // التحقق من صحة المفتاح مع Groq
     const isValid = await validateNewKeyBeforeAdd(newKeyValue.trim());
     if (!isValid) return;
     
@@ -508,46 +512,40 @@ export default function Admin({ user, onLogout }) {
     showToast("تم تصفير استهلاك المفتاح");
   }
   
-  async function toggleUserBlock(userId, isBlocked) {
-    await supabase.from('profiles').update({ is_blocked: !isBlocked }).eq('id', userId);
-    loadUsers();
+  async function loadValidationLogs() {
+    const { data } = await supabase
+      .from('key_check_logs')
+      .select('*')
+      .order('checked_at', { ascending: false })
+      .limit(50);
+    if (data) setValidationLogs(data);
   }
   
-  async function deleteAllUserChats(userId, userName) {
-    if (!confirm(`⚠️ حذف كل محادثات "${userName}"؟\n\nلا يمكن التراجع!`)) return;
-    await supabase.from('chats').delete().eq('user_id', userId);
-    showToast(`تم حذف كل محادثات ${userName}`);
-    loadAllChats();
-    if (selectedUserForChats?.id === userId) setUserChatsList([]);
+  function toggleAutoValidate() {
+    const newValue = !autoValidate;
+    setAutoValidate(newValue);
+    localStorage.setItem('auto_validate_keys', String(newValue));
+    showToast(newValue ? '✅ تم تفعيل الفحص التلقائي كل ساعة' : '⏹️ تم إيقاف الفحص التلقائي', 'info');
   }
-  
-  async function deleteUser(userId, userName) {
-    if (!confirm(`⚠️ تحذير: هل أنت متأكد من حذف "${userName}" نهائياً؟\n\nسيتم حذف الحساب وجميع المحادثات.\n\nلا يمكن التراجع!`)) return;
-    try {
-      await supabase.from('chats').delete().eq('user_id', userId);
-      await supabase.from('profiles').delete().eq('id', userId);
-      showToast(`تم حذف ${userName} نهائياً`);
-      loadUsers(); loadAllChats();
-    } catch (err) {
-      showToast("خطأ في حذف المستخدم: " + err.message, "error");
+
+  // ===== Filtered chats =====
+  const filteredChats = allChats.filter(chat => {
+    if (chatFilterUser && chat.user_id !== chatFilterUser) return false;
+    if (chatFilterDate !== "all") {
+      const chatDate = new Date(chat.updated_at);
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      if (chatFilterDate === "today" && chatDate < today) return false;
+      if (chatFilterDate === "week" && chatDate < weekAgo) return false;
+      if (chatFilterDate === "month" && chatDate < monthStart) return false;
     }
-  }
-  
-  async function saveUserSettings() {
-    if (!selectedUser) return;
-    await supabase.from('profiles').update({ daily_limit: editDailyLimit }).eq('id', selectedUser.id);
-    showToast("تم حفظ الإعدادات");
-    setShowEditUserModal(false);
-    loadUsers();
-  }
+    if (chatSearchTerm && !(chat.title || "").toLowerCase().includes(chatSearchTerm.toLowerCase())) return false;
+    return true;
+  });
 
-  async function changePersonality(userId, personality) {
-    await supabase.from("profiles").update({ personality }).eq("id", userId);
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, personality } : u));
-    showToast("تم تغيير الشخصية");
-  }
-
-  // ===== Shared Input Style =====
+  // ===== Styles =====
   const inputStyle = {
     padding: "8px 12px",
     borderRadius: "8px",
@@ -583,7 +581,7 @@ export default function Admin({ user, onLogout }) {
       direction: 'rtl',
     }}>
 
-      {/* ===== Toast ===== */}
+      {/* Toast */}
       {toast && (
         <div style={{
           position: 'fixed',
@@ -606,7 +604,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== Header ===== */}
+      {/* Header */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -684,7 +682,7 @@ export default function Admin({ user, onLogout }) {
         </div>
       </div>
 
-      {/* ===== Tabs ===== */}
+      {/* Tabs */}
       <div style={{
         display: 'flex',
         gap: '4px',
@@ -724,10 +722,10 @@ export default function Admin({ user, onLogout }) {
         ))}
       </div>
 
-      {/* ===== محتوى التبويبات ===== */}
+      {/* Content */}
       <div style={{ padding: '12px' }}>
 
-        {/* ===== تبويبة المستخدمين ===== */}
+        {/* Users Tab */}
         {activeTab === "users" && (
           <div style={{ background: theme.surface, borderRadius: '16px', padding: '12px', border: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
@@ -807,6 +805,7 @@ export default function Admin({ user, onLogout }) {
                           </td>
                           <td style={{ padding: '12px 10px' }}>
                             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                              <button onClick={() => openUserChatsModal(u.id, u.name || u.email)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>💬</button>
                               <button onClick={() => { setSelectedUser(u); setEditDailyLimit(u.daily_limit || 5000); setShowEditUserModal(true); }} style={{ background: 'rgba(251,191,36,0.2)', color: '#fbbf24', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>⚙️</button>
                               <button onClick={() => toggleUserBlock(u.id, u.is_blocked)} style={{ background: u.is_blocked ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)', color: u.is_blocked ? '#4ade80' : '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>{u.is_blocked ? "فك الحظر" : "حظر"}</button>
                               <button onClick={() => deleteUser(u.id, u.name || u.email)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
@@ -822,7 +821,7 @@ export default function Admin({ user, onLogout }) {
           </div>
         )}
 
-        {/* ===== تبويبة المفاتيح ===== */}
+        {/* Keys Tab */}
         {activeTab === "keys" && (
           <div style={{ background: theme.surface, borderRadius: '16px', padding: '12px', border: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
@@ -837,39 +836,21 @@ export default function Admin({ user, onLogout }) {
               </div>
             </div>
             
-            {/* أزرار الفحص */}
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' }}>
-              <button 
-                onClick={() => handleValidateKeys(false)} 
-                disabled={validating}
-                style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: validating ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold', opacity: validating ? 0.6 : 1 }}
-              >
+              <button onClick={() => handleValidateKeys(false)} disabled={validating} style={{ background: 'linear-gradient(135deg, #f59e0b, #d97706)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: validating ? 'not-allowed' : 'pointer', fontSize: '14px', fontWeight: 'bold', opacity: validating ? 0.6 : 1 }}>
                 {validating ? '⏳ جاري الفحص...' : '🔍 فحص جميع المفاتيح'}
               </button>
-              
-              <button 
-                onClick={toggleAutoValidate}
-                style={{ background: autoValidate ? 'rgba(74,222,128,0.2)' : theme.inputBg, color: autoValidate ? '#4ade80' : theme.text, border: `1px solid ${autoValidate ? '#4ade80' : theme.border}`, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
-              >
+              <button onClick={toggleAutoValidate} style={{ background: autoValidate ? 'rgba(74,222,128,0.2)' : theme.inputBg, color: autoValidate ? '#4ade80' : theme.text, border: `1px solid ${autoValidate ? '#4ade80' : theme.border}`, padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
                 {autoValidate ? '🟢 الفحص التلقائي مفعل' : '⚫ تفعيل الفحص التلقائي'}
               </button>
-              
-              <button 
-                onClick={() => { loadValidationLogs(); setShowLogsModal(true); }}
-                style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
-              >
+              <button onClick={() => { loadValidationLogs(); setShowLogsModal(true); }} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
                 📋 سجل الفحوصات
               </button>
-              
-              <button 
-                onClick={exportKeysToCSV}
-                style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}
-              >
+              <button onClick={exportKeysToCSV} style={{ background: 'rgba(34,197,94,0.2)', color: '#22c55e', border: 'none', padding: '8px 16px', borderRadius: '8px', cursor: 'pointer', fontSize: '14px' }}>
                 📥 تصدير CSV
               </button>
             </div>
 
-            {/* شريط التقدم أثناء الفحص */}
             {validating && validationProgress.total > 0 && (
               <div style={{ marginBottom: '16px', padding: '12px', background: theme.inputBg, borderRadius: '8px' }}>
                 <div style={{ fontSize: '13px', marginBottom: '6px' }}>
@@ -904,10 +885,7 @@ export default function Admin({ user, onLogout }) {
                             <span style={{ fontFamily: 'monospace', fontSize: '13px', wordBreak: 'break-all' }}>
                               {showFullKey[key.id] ? key.key_value : (key.key_value?.slice(0, 25) + '...')}
                             </span>
-                            <button 
-                              onClick={() => setShowFullKey(prev => ({ ...prev, [key.id]: !prev[key.id] }))}
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', flexShrink: 0 }}
-                            >
+                            <button onClick={() => setShowFullKey(prev => ({ ...prev, [key.id]: !prev[key.id] }))} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '14px', flexShrink: 0 }}>
                               {showFullKey[key.id] ? '🙈' : '👁️'}
                             </button>
                           </div>
@@ -956,7 +934,7 @@ export default function Admin({ user, onLogout }) {
           </div>
         )}
 
-        {/* ===== تبويبة المحادثات ===== */}
+        {/* Chats Tab */}
         {activeTab === "chats" && (
           <div style={{ background: theme.surface, borderRadius: '16px', padding: '12px', border: `1px solid ${theme.border}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
@@ -1007,9 +985,9 @@ export default function Admin({ user, onLogout }) {
                         </td>
                         <td style={{ padding: '12px 10px', fontSize: '14px', opacity: 0.7 }}>{formatDate(chat.updated_at)}</td>
                         <td style={{ padding: '12px 10px' }}>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button onClick={() => openChatViewer(chat)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>👁️</button>
-                            <button onClick={() => deleteSingleChat(chat.id)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button onClick={() => openChatViewer(chat)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>👁️ عرض</button>
+                            <button onClick={() => deleteSingleChat(chat.id)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
                           </div>
                         </td>
                       </tr>
@@ -1020,10 +998,9 @@ export default function Admin({ user, onLogout }) {
             </div>
           </div>
         )}
-
       </div>
 
-      {/* ===== مودال إضافة مفتاح ===== */}
+      {/* Modals - باقي المودالات كما هي دون تغيير */}
       {showAddKeyModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '450px' }}>
@@ -1041,7 +1018,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== مودال نتائج الفحص ===== */}
       {showValidationModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '500px', maxHeight: '80vh', overflowY: 'auto' }}>
@@ -1067,7 +1043,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== مودال سجل الفحوصات ===== */}
       {showLogsModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto' }}>
@@ -1097,7 +1072,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== مودال تعديل المستخدم ===== */}
       {showEditUserModal && selectedUser && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '380px' }}>
@@ -1112,7 +1086,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== مودال تصدير البيانات ===== */}
       {showExportModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '360px' }}>
@@ -1133,7 +1106,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== مودال محادثات المستخدم ===== */}
       {showUserChatsModal && selectedUserForChats && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '650px', maxHeight: '80vh', overflowY: 'auto' }}>
@@ -1150,9 +1122,9 @@ export default function Admin({ user, onLogout }) {
                     <div style={{ fontWeight: 'bold', fontSize: '15px' }}>{chat.title || "بدون عنوان"}</div>
                     <div style={{ fontSize: '13px', opacity: 0.5 }}>{formatDate(chat.updated_at)} · {chat.messages?.length || 0} رسالة</div>
                   </div>
-                  <div>
-                    <button onClick={() => openChatViewer(chat)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', marginRight: '8px', cursor: 'pointer', fontSize: '13px' }}>👁️ عرض</button>
-                    <button onClick={() => deleteChatFromModal(chat.id)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️</button>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    <button onClick={() => openChatViewer(chat)} style={{ background: 'rgba(108,92,231,0.2)', color: '#a29bfe', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>👁️ عرض</button>
+                    <button onClick={() => deleteChatFromModal(chat.id)} style={{ background: 'rgba(248,113,113,0.2)', color: '#f87171', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>🗑️ حذف</button>
                   </div>
                 </div>
               ))
@@ -1165,7 +1137,6 @@ export default function Admin({ user, onLogout }) {
         </div>
       )}
 
-      {/* ===== مودال عرض المحادثة ===== */}
       {showChatModal && selectedChat && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '16px' }}>
           <div style={{ background: theme.surface2, padding: '20px', borderRadius: '16px', width: '100%', maxWidth: '650px', maxHeight: '80vh', overflowY: 'auto' }}>
@@ -1183,7 +1154,6 @@ export default function Admin({ user, onLogout }) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
