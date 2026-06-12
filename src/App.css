@@ -12,7 +12,6 @@ html, body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   padding: 0;
-  overflow: hidden;
 }
 
 #root {
@@ -52,27 +51,31 @@ body:has(.admin-root) {
 
 /* على الموبايل — الشات يملأ كامل الشاشة */
 @media (max-width: 767px) {
-  html, body {
-    height: 100%;
-    overflow: hidden;
-  }
-
+  /* الأدمن — سكرول حر */
   html:has(.admin-root),
   body:has(.admin-root) {
-    overflow: auto;
-    height: auto;
+    overflow: auto !important;
+    height: auto !important;
     min-height: 100%;
-  }
-
-  #root {
-    height: 100%;
-    overflow: hidden;
   }
 
   #root:has(.admin-root) {
-    height: auto;
+    height: auto !important;
     min-height: 100%;
-    overflow-y: auto;
+    overflow-y: auto !important;
+    align-items: flex-start;
+  }
+
+  /* الشات — يملأ الشاشة بدون سكرول خارجي */
+  html:not(:has(.admin-root)),
+  body:not(:has(.admin-root)) {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  #root:not(:has(.admin-root)) {
+    height: 100%;
+    overflow: hidden;
   }
 
   .container {
