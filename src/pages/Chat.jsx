@@ -449,14 +449,28 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
-  async function deleteAccount() {
+ async function deleteAccount() {
     if (!window.confirm("⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"))
       return;
 
     setSettingsLoading(true);
     try {
-      await supabase.from("chats").delete().eq("user_id", user.id);
-      await supabase.from("profiles").delete().eq("id", user.id);
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const res = await fetch(
+        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/delete-account",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+        }
+      );
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "خطأ في حذف الحساب");
+
       localStorage.removeItem("black-user");
       window.location.reload();
     } catch (err) {
