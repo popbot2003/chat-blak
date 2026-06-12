@@ -8,13 +8,10 @@ import Chat from "./pages/Chat";
 import Admin from "./pages/Admin";
 
 export default function App() {
-
-  // تحميل المستخدم من localStorage عند بدء التطبيق
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem("black-user");
       if (!saved) return null;
-      
       const parsed = JSON.parse(saved);
       if (!parsed.id || !parsed.email) {
         localStorage.removeItem("black-user");
@@ -31,9 +28,13 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  // ✅ التحقق من وجود رابط إعادة تعيين كلمة المرور
-  const isResetPassword = window.location.pathname === '/reset-password' || 
-                          window.location.hash.includes('access_token');
+  // ✅ يدعم الآن hash و query params (code, token_hash)
+  const params = new URLSearchParams(window.location.search);
+  const isResetPassword =
+    window.location.pathname === "/reset-password" ||
+    window.location.hash.includes("access_token") ||
+    params.get("code") !== null ||
+    params.get("token_hash") !== null;
 
   function handleLogout() {
     try {
@@ -47,10 +48,9 @@ export default function App() {
   }
 
   function handleResetPasswordComplete() {
-    window.location.href = '/';
+    window.location.href = "/";
   }
 
-  // ✅ عرض صفحة إعادة تعيين كلمة المرور إذا كان الرابط يحتوي على token
   if (isResetPassword) {
     return (
       <ErrorBoundary>
@@ -73,7 +73,6 @@ export default function App() {
         </ErrorBoundary>
       );
     }
-
     if (showForgotPassword) {
       return (
         <ErrorBoundary>
@@ -86,7 +85,6 @@ export default function App() {
         </ErrorBoundary>
       );
     }
-
     return (
       <ErrorBoundary>
         <Login
@@ -99,9 +97,7 @@ export default function App() {
   }
 
   if (user.role === "admin") {
-    // ✅ التحقق: إذا فتحنا النافذة بمعامل ?chat في الرابط، نعرض الشات بدلاً من لوحة التحكم
     const isChatWindow = window.location.search === "?chat";
-    
     if (isChatWindow) {
       return (
         <ErrorBoundary>
@@ -109,7 +105,6 @@ export default function App() {
         </ErrorBoundary>
       );
     }
-    
     return (
       <ErrorBoundary>
         <Admin user={user} onLogout={handleLogout} />
