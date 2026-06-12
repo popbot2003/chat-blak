@@ -24,7 +24,7 @@ html, body {
 }
 
 /* ===== Admin fixes — تجاوز الـ overflow للأدمن فقط ===== */
-#root:has(.admin-root) {
+#root.admin-page {
   align-items: flex-start;
   overflow-y: auto;
   height: auto;
@@ -32,8 +32,8 @@ html, body {
   -webkit-overflow-scrolling: touch;
 }
 
-html:has(.admin-root),
-body:has(.admin-root) {
+html.admin-page,
+body.admin-page {
   overflow: auto;
   height: auto;
   min-height: 100%;
@@ -52,14 +52,14 @@ body:has(.admin-root) {
 /* على الموبايل — الشات يملأ كامل الشاشة */
 @media (max-width: 767px) {
   /* الأدمن — سكرول حر */
-  html:has(.admin-root),
-  body:has(.admin-root) {
+  html.admin-page,
+  body.admin-page {
     overflow: auto !important;
     height: auto !important;
     min-height: 100%;
   }
 
-  #root:has(.admin-root) {
+  #root.admin-page {
     height: auto !important;
     min-height: 100%;
     overflow-y: auto !important;
@@ -67,13 +67,13 @@ body:has(.admin-root) {
   }
 
   /* الشات — يملأ الشاشة بدون سكرول خارجي */
-  html:not(:has(.admin-root)),
-  body:not(:has(.admin-root)) {
+  html:not(.admin-page),
+  body:not(.admin-page) {
     height: 100%;
     overflow: hidden;
   }
 
-  #root:not(:has(.admin-root)) {
+  #root:not(.admin-page) {
     height: 100%;
     overflow: hidden;
   }
@@ -679,13 +679,13 @@ body:has(.admin-root) {
   .msg-content-wrapper { max-width: 80%; }
   .input-area { padding: 16px 20px; }
 
-  #root:has(.admin-root) {
+  #root.admin-page {
     overflow-y: auto;
     height: auto;
   }
 
-  html:has(.admin-root),
-  body:has(.admin-root) {
+  html.admin-page,
+  body.admin-page {
     overflow: auto;
     height: auto;
     padding: 0;
