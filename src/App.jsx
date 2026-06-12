@@ -7,34 +7,6 @@ import Chat from "./pages/Chat";
 import Admin from "./pages/Admin";
 
 export default function App() {
-  // تفعيل سحب للتحديث على الهواتف (Pull to Refresh)
-  useEffect(() => {
-    let touchStartY = 0;
-    let isAtTop = true;
-
-    const handleTouchStart = (e) => {
-      touchStartY = e.touches[0].clientY;
-      isAtTop = window.scrollY === 0;
-    };
-
-    const handleTouchMove = (e) => {
-      const touchEndY = e.touches[0].clientY;
-      const pullDistance = touchEndY - touchStartY;
-      
-      if (pullDistance > 70 && isAtTop && touchStartY < 50) {
-        e.preventDefault();
-        window.location.reload();
-      }
-    };
-
-    window.addEventListener('touchstart', handleTouchStart, { passive: false });
-    window.addEventListener('touchmove', handleTouchMove, { passive: false });
-
-    return () => {
-      window.removeEventListener('touchstart', handleTouchStart);
-      window.removeEventListener('touchmove', handleTouchMove);
-    };
-  }, []);
 
   // تحميل المستخدم من localStorage عند بدء التطبيق
   const [user, setUser] = useState(() => {
