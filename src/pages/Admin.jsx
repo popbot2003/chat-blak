@@ -77,16 +77,20 @@ export default function Admin({ user, onLogout }) {
   // ===== useEffect =====
   useEffect(() => {
     const profilesChannel = supabase
-      .channel('profiles-realtime')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
-        setUsers(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u));
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, (payload) => {
-        showToast(`مستخدم جديد: ${payload.new.name || payload.new.email}`, "info");
-        setUsers(prev => [payload.new, ...prev]);
-      })
-      .subscribe();
-
+  .channel('profiles-realtime')
+  .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
+    setUsers(prev => prev.map(u => u.id === payload.new.id ? { ...u, ...payload.new } : u));
+  })
+  .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'profiles' }, (payload) => {
+    showToast(`مستخدم جديد: ${payload.new.name || payload.new.email}`, "info");
+    setUsers(prev => [payload.new, ...prev]);
+  })
+  // ✅ إضافة DELETE
+  .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'profiles' }, (payload) => {
+    setUsers(prev => prev.filter(u => u.id !== payload.old.id));
+    showToast(`تم حذف مستخدم`, "info");
+  })
+  .subscribe();
     const chatsChannel = supabase
       .channel('chats-realtime')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chats' }, (payload) => {
