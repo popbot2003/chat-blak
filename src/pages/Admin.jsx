@@ -734,9 +734,6 @@ export default function Admin({ user, onLogout }) {
             const adminUser = users.find(u => u.id === user.id);
             if (!adminUser) return null;
             const used = adminUser.used_today || 0;
-            const limit = adminUser.daily_limit || 5000;
-            const percent = getUsagePercent(used, limit);
-            const color = getUsageColor(percent);
             const online = isUserOnline(adminUser.id);
             return (
               <div style={{
@@ -772,16 +769,14 @@ export default function Admin({ user, onLogout }) {
                   </div>
                 </div>
                 <div style={{ minWidth: '180px' }}>
-                  <div style={{ fontSize: '13px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between' }}>
+                  <div style={{ fontSize: '13px', marginBottom: '6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span>استهلاك اليوم</span>
-                    <span style={{ fontWeight: 'bold' }}>{percent.toFixed(0)}%</span>
+                    <span style={{ fontWeight: 'bold', color: '#a29bfe', fontSize: '16px' }}>∞ غير محدود</span>
                   </div>
-                  <div style={{ fontSize: '13px', marginBottom: '6px', opacity: 0.7 }}>
-                    {used.toLocaleString()} / {limit.toLocaleString()} توكن
+                  <div style={{ fontSize: '15px', fontWeight: 'bold', color: darkMode ? '#e0e0e0' : '#1e1b4b' }}>
+                    {used.toLocaleString()} توكن
                   </div>
-                  <div style={{ width: '100%', height: '6px', background: theme.barBg, borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: percent + '%', height: '100%', background: color, transition: 'width 0.3s', borderRadius: '3px' }} />
-                  </div>
+                  <div style={{ fontSize: '12px', opacity: 0.5, marginTop: '4px' }}>بدون قيود على الاستهلاك</div>
                 </div>
               </div>
             );
