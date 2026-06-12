@@ -47,18 +47,22 @@ export default function Register({ onRegister, onSwitchToLogin }) {
       const displayName = name.trim() || email.split("@")[0];
       const today       = new Date().toISOString().slice(0, 10);
 
-      // 1. تسجيل عبر Supabase Auth — الباسورد يتشفر تلقائياً
+      // 1. تسجيل عبر Supabase Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: { name: displayName, gender }
+          data: { name: displayName, gender },
+          // ✅ إعادة التوجيه بعد تأكيد الإيميل
+          emailRedirectTo: `${window.location.origin}`
         }
       });
 
       if (signUpError) {
-        // رسائل خطأ مفهومة بالعربي
-        if (signUpError.message.includes("already registered") || signUpError.message.includes("already been registered")) {
+        if (
+          signUpError.message.includes("already registered") ||
+          signUpError.message.includes("already been registered")
+        ) {
           throw new Error("هذا البريد الإلكتروني مستخدم بالفعل");
         }
         throw signUpError;
@@ -85,27 +89,32 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         });
 
       if (profileError) {
-        // لو فيه مشكلة في إنشاء الـ profile، نحذف الـ auth user عشان ما يتخلفش بدون profile
-        await supabase.auth.admin?.deleteUser?.(data.user.id).catch(() => {});
-        throw new Error("حدث خطأ في إنشاء الحساب: " + profileError.message);
+        // ✅ لا يمكن حذف Auth user من client-side، نعطي رسالة واضحة بدلاً من ذلك
+        throw new Error("حدث خطأ في إنشاء الحساب، تواصل مع الدعم");
       }
 
-      // 3. إرسال بيانات المستخدم الجديد للتطبيق
-      const newUser = {
-        id:          data.user.id,
-        email:       email,
-        name:        displayName,
-        role:        "user",
-        gender:      gender,
-        personality: "blak",
-        daily_limit: DEFAULT_USER_DAILY_LIMIT,
-        used_today:  0,
-        last_reset_date: today,
-        is_blocked:  false
-      };
-
-      localStorage.setItem("black-user", JSON.stringify(newUser));
-      onRegister(newUser);
+      // 3. التحقق: هل Supabase يتطلب تأكيد الإيميل؟
+      if (data.session) {
+        // ✅ تسجيل دخول مباشر (email confirmation معطّل في Supabase)
+        const newUser = {
+          id:              data.user.id,
+          email:           email,
+          name:            displayName,
+          role:            "user",
+          gender:          gender,
+          personality:     "blak",
+          daily_limit:     DEFAULT_USER_DAILY_LIMIT,
+          used_today:      0,
+          last_reset_date: today,
+          is_blocked:      false
+        };
+        localStorage.setItem("black-user", JSON.stringify(newUser));
+        onRegister(newUser);
+      } else {
+        // ✅ Supabase أرسل بريد تأكيد — أخبر المستخدم
+        alert("✅ تم إنشاء حسابك! تحقق من بريدك الإلكتروني لتأكيد الحساب.");
+        onSwitchToLogin();
+      }
 
     } catch (err) {
       console.error("Registration error:", err);
@@ -190,8 +199,20 @@ export default function Register({ onRegister, onSwitchToLogin }) {
               style={{ ...inputStyle, marginBottom: 0, paddingLeft: "50px", direction: "ltr" }}
               required
             />
-            <button type="button" onClick={() => setShowPassword(!showPassword)}
-              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", cursor: "pointer", fontSize: "20px", color: "#a29bfe" }}>
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "20px",
+                color: "#a29bfe"
+              }}>
               {showPassword ? "🙈" : "👁️"}
             </button>
           </div>
@@ -205,8 +226,20 @@ export default function Register({ onRegister, onSwitchToLogin }) {
               style={{ ...inputStyle, marginBottom: 0, paddingLeft: "50px", direction: "ltr" }}
               required
             />
-            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", cursor: "pointer", fontSize: "20px", color: "#a29bfe" }}>
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "20px",
+                color: "#a29bfe"
+              }}>
               {showConfirmPassword ? "🙈" : "👁️"}
             </button>
           </div>
