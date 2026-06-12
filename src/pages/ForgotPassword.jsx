@@ -1,301 +1,193 @@
 // ============================================
-// ForgotPassword.jsx
-// صفحة استعادة كلمة المرور
+// ResetPassword.jsx
+// صفحة إدخال كلمة المرور الجديدة
 // ============================================
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from '../lib/supabase';
 
-export default function ForgotPassword({ onSwitchToLogin }) {
-  const [email, setEmail] = useState("");
-  const [step, setStep] = useState(1);
-  const [code, setCode] = useState("");
+export default function ResetPassword({ onPasswordReset }) {
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
-  const [resetCode, setResetCode] = useState("");
 
-  async function sendResetCode(e) {
+  useEffect(() => {
+    // التحقق من وجود hash في الرابط (من Supabase)
+    const hash = window.location.hash;
+    if (!hash || !hash.includes('access_token')) {
+      setError("❌ رابط غير صالح أو منتهي الصلاحية");
+    }
+  }, []);
+
+  async function handleResetPassword(e) {
     e.preventDefault();
     setError("");
-    setLoading(true);
+    setSuccess("");
 
-    // البحث عن المستخدم
-    const { data: user, error: userError } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('email', email)
-      .single();
-
-    if (userError || !user) {
-      setError("❌ هذا البريد غير مسجل");
-      setLoading(false);
-      return;
-    }
-
-    // إنشاء كود عشوائي
-    const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-    
-    // حفظ الكود مع صلاحية 15 دقيقة
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-    
-    // ملاحظة: نحتاج إضافة أعمدة reset_code و reset_code_expires في جدول profiles
-    // مؤقتاً هنعرض الكود بدون حفظه في قاعدة البيانات
-    setResetCode(generatedCode);
-    setStep(2);
-    setLoading(false);
-    setSuccess("✅ تم إنشاء كود التحقق");
-
-    // TODO: إرسال الكود إلى البريد الإلكتروني (يضاف لاحقاً)
-  }
-
-  async function verifyCode(e) {
-    e.preventDefault();
-    setLoading(true);
-    
-    if (code !== resetCode) {
-      setError("❌ الكود غير صحيح");
-      setLoading(false);
-      return;
-    }
-    
-    setStep(3);
-    setLoading(false);
-    setError("");
-  }
-
-  async function resetPassword(e) {
-    e.preventDefault();
-    
     if (newPassword.length < 6) {
-      setError("❌ كلمة المرور 6 أحرف على الأقل");
+      setError("❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل");
       return;
     }
-    
+
+    if (newPassword !== confirmPassword) {
+      setError("❌ كلمة المرور غير متطابقة");
+      return;
+    }
+
     setLoading(true);
 
-    // تحديث كلمة المرور
-    const { error: updateError } = await supabase
-      .from('profiles')
-      .update({ password: newPassword })
-      .eq('email', email);
+    try {
+      // تحديث كلمة المرور في Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
 
-    if (updateError) {
-      setError("❌ حدث خطأ أثناء تغيير كلمة المرور");
+      if (error) throw error;
+
+      setSuccess("✅ تم تغيير كلمة المرور بنجاح!");
+      
+      setTimeout(() => {
+        if (onPasswordReset) onPasswordReset();
+      }, 2000);
+      
+    } catch (err) {
+      setError("❌ " + (err.message || "حدث خطأ، حاول مرة أخرى"));
+    } finally {
       setLoading(false);
-      return;
     }
-
-    setSuccess("✅ تم تغيير كلمة المرور بنجاح!");
-    setLoading(false);
-    
-    setTimeout(() => {
-      onSwitchToLogin();
-    }, 3000);
   }
 
   return (
-    <div style={{ 
-      height: "100dvh", 
-      display: "flex", 
-      alignItems: "center", 
-      justifyContent: "center", 
-      background: "#0f0f1a", 
-      fontFamily: "system-ui, sans-serif" 
+    <div style={{
+      height: "100dvh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0f0f1a",
+      fontFamily: "system-ui, sans-serif"
     }}>
-      <div style={{ 
-        background: "#1a1a2e", 
-        padding: "40px", 
-        borderRadius: "20px", 
-        width: "100%", 
-        maxWidth: "400px", 
-        textAlign: "center" 
+      <div style={{
+        background: "#1a1a2e",
+        padding: "40px",
+        borderRadius: "20px",
+        width: "100%",
+        maxWidth: "400px",
+        textAlign: "center"
       }}>
-        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🔐</div>
-        <h2 style={{ color: "#e0e0e0", marginBottom: "10px" }}>
-          {step === 1 ? "استعادة كلمة المرور" : step === 2 ? "كود التحقق" : "كلمة مرور جديدة"}
-        </h2>
+        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🔑</div>
+        <h2 style={{ color: "#e0e0e0", marginBottom: "10px" }}>كلمة مرور جديدة</h2>
+        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "14px", marginBottom: "30px" }}>
+          أدخل كلمة المرور الجديدة
+        </p>
 
         {error && (
-          <div style={{ 
-            background: "rgba(248,113,113,0.1)", 
-            color: "#f87171", 
-            padding: "12px", 
-            borderRadius: "10px", 
-            marginBottom: "20px", 
-            fontSize: "14px" 
+          <div style={{
+            background: "rgba(248,113,113,0.1)",
+            color: "#f87171",
+            padding: "12px",
+            borderRadius: "10px",
+            marginBottom: "20px",
+            fontSize: "14px"
           }}>
             {error}
           </div>
         )}
 
         {success && (
-          <div style={{ 
-            background: "rgba(74,222,128,0.1)", 
-            color: "#4ade80", 
-            padding: "12px", 
-            borderRadius: "10px", 
-            marginBottom: "20px", 
-            fontSize: "14px" 
+          <div style={{
+            background: "rgba(74,222,128,0.1)",
+            color: "#4ade80",
+            padding: "12px",
+            borderRadius: "10px",
+            marginBottom: "20px",
+            fontSize: "14px"
           }}>
             {success}
           </div>
         )}
 
-        {resetCode && step === 2 && (
-          <div style={{ 
-            background: "rgba(108,92,231,0.2)", 
-            color: "#a29bfe", 
-            padding: "15px", 
-            borderRadius: "10px", 
-            marginBottom: "20px", 
-            fontSize: "24px", 
-            fontWeight: "bold", 
-            letterSpacing: "8px" 
-          }}>
-            {resetCode}
+        <form onSubmit={handleResetPassword}>
+          <div style={{ position: "relative", marginBottom: "15px" }}>
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="كلمة المرور الجديدة"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "14px",
+                paddingLeft: "50px",
+                borderRadius: "12px",
+                border: "1px solid rgba(255,255,255,0.1)",
+                background: "rgba(255,255,255,0.05)",
+                color: "#e0e0e0",
+                fontSize: "16px",
+                outline: "none",
+                direction: "ltr"
+              }}
+              required
+              disabled={loading}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                left: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                fontSize: "20px",
+                color: "#a29bfe"
+              }}>
+              {showPassword ? "🙈" : "👁️"}
+            </button>
           </div>
-        )}
 
-        {step === 1 && (
-          <form onSubmit={sendResetCode}>
-            <input 
-              type="email" 
-              placeholder="البريد الإلكتروني" 
-              value={email} 
-              onChange={(e) => setEmail(e.target.value)} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
-                marginBottom: "20px", 
-                borderRadius: "12px", 
-                border: "1px solid rgba(255,255,255,0.1)", 
-                background: "rgba(255,255,255,0.05)", 
-                color: "#e0e0e0", 
-                fontSize: "16px", 
-                outline: "none", 
-                direction: "ltr" 
-              }} 
-              required 
-            />
-            <button 
-              type="submit" 
-              disabled={loading} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
-                background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", 
-                color: "#fff", 
-                border: "none", 
-                borderRadius: "12px", 
-                fontSize: "16px", 
-                fontWeight: "bold", 
-                cursor: "pointer", 
-                opacity: loading ? 0.6 : 1, 
-                marginBottom: "15px" 
-              }}>
-              {loading ? "جاري..." : "إرسال الكود"}
-            </button>
-            <button 
-              type="button" 
-              onClick={onSwitchToLogin} 
-              style={{ 
-                background: "transparent", 
-                border: "none", 
-                color: "#a29bfe", 
-                cursor: "pointer", 
-                fontSize: "14px" 
-              }}>
-              ← العودة
-            </button>
-          </form>
-        )}
+          <input
+            type={showPassword ? "text" : "password"}
+            placeholder="تأكيد كلمة المرور"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "14px",
+              borderRadius: "12px",
+              border: "1px solid rgba(255,255,255,0.1)",
+              background: "rgba(255,255,255,0.05)",
+              color: "#e0e0e0",
+              fontSize: "16px",
+              outline: "none",
+              direction: "ltr",
+              marginBottom: "20px"
+            }}
+            required
+            disabled={loading}
+          />
 
-        {step === 2 && (
-          <form onSubmit={verifyCode}>
-            <input 
-              type="text" 
-              placeholder="الكود" 
-              value={code} 
-              onChange={(e) => setCode(e.target.value)} 
-              maxLength={6} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
-                marginBottom: "20px", 
-                borderRadius: "12px", 
-                border: "1px solid rgba(255,255,255,0.1)", 
-                background: "rgba(255,255,255,0.05)", 
-                color: "#e0e0e0", 
-                fontSize: "20px", 
-                textAlign: "center", 
-                letterSpacing: "8px", 
-                outline: "none" 
-              }} 
-              required 
-            />
-            <button 
-              type="submit" 
-              disabled={loading} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
-                background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", 
-                color: "#fff", 
-                border: "none", 
-                borderRadius: "12px", 
-                fontSize: "16px", 
-                fontWeight: "bold", 
-                cursor: "pointer", 
-                opacity: loading ? 0.6 : 1, 
-                marginBottom: "10px" 
-              }}>
-              تحقق
-            </button>
-          </form>
-        )}
-
-        {step === 3 && (
-          <form onSubmit={resetPassword}>
-            <input 
-              type="password" 
-              placeholder="كلمة مرور جديدة" 
-              value={newPassword} 
-              onChange={(e) => setNewPassword(e.target.value)} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
-                marginBottom: "20px", 
-                borderRadius: "12px", 
-                border: "1px solid rgba(255,255,255,0.1)", 
-                background: "rgba(255,255,255,0.05)", 
-                color: "#e0e0e0", 
-                fontSize: "16px", 
-                outline: "none", 
-                direction: "ltr" 
-              }} 
-              required 
-            />
-            <button 
-              type="submit" 
-              disabled={loading} 
-              style={{ 
-                width: "100%", 
-                padding: "14px", 
-                background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)", 
-                color: "#fff", 
-                border: "none", 
-                borderRadius: "12px", 
-                fontSize: "16px", 
-                fontWeight: "bold", 
-                cursor: "pointer", 
-                opacity: loading ? 0.6 : 1 
-              }}>
-              تغيير كلمة المرور
-            </button>
-          </form>
-        )}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1
+            }}>
+            {loading ? "جاري التغيير..." : "تغيير كلمة المرور"}
+          </button>
+        </form>
       </div>
     </div>
   );
