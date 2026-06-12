@@ -1,3 +1,8 @@
+// ============================================
+// ResetPassword.jsx — نسخة محدثة ✅
+// تدعم: ?code= و ?token_hash= و #access_token
+// ============================================
+
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 
@@ -17,7 +22,7 @@ export default function ResetPassword({ onPasswordReset }) {
       const code = params.get("code");
       const tokenHash = params.get("token_hash");
 
-      // ✅ الحالة 1: code param (PKCE flow - الأحدث في Supabase)
+      // الحالة 1: code param (PKCE flow - الأحدث في Supabase)
       if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
@@ -28,7 +33,7 @@ export default function ResetPassword({ onPasswordReset }) {
         return;
       }
 
-      // ✅ الحالة 2: token_hash param
+      // الحالة 2: token_hash param
       if (tokenHash) {
         const { error } = await supabase.auth.verifyOtp({
           token_hash: tokenHash,
@@ -42,7 +47,7 @@ export default function ResetPassword({ onPasswordReset }) {
         return;
       }
 
-      // ✅ الحالة 3: hash fragment (القديم)
+      // الحالة 3: hash fragment (القديم #access_token)
       if (hash && hash.includes("access_token")) {
         setSessionReady(true);
         return;
@@ -138,7 +143,7 @@ export default function ResetPassword({ onPasswordReset }) {
           </div>
         )}
 
-        {/* ✅ إخفاء الفورم إذا كان الرابط غير صالح */}
+        {/* إخفاء الفورم إذا كان الرابط غير صالح */}
         {!error && (
           <form onSubmit={handleResetPassword}>
             <div style={{ position: "relative", marginBottom: "15px" }}>
