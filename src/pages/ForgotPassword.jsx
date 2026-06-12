@@ -1,58 +1,37 @@
 // ============================================
-// ResetPassword.jsx
-// صفحة إدخال كلمة المرور الجديدة
+// ForgotPassword.jsx
+// صفحة إرسال رابط إعادة تعيين كلمة المرور
 // ============================================
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { supabase } from '../lib/supabase';
 
-export default function ResetPassword({ onPasswordReset }) {
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
+export default function ForgotPassword({ onSwitchToLogin }) {
+  const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // التحقق من وجود hash في الرابط (من Supabase)
-    const hash = window.location.hash;
-    if (!hash || !hash.includes('access_token')) {
-      setError("❌ رابط غير صالح أو منتهي الصلاحية");
-    }
-  }, []);
-
-  async function handleResetPassword(e) {
+  async function handleForgotPassword(e) {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (newPassword.length < 6) {
-      setError("❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("❌ كلمة المرور غير متطابقة");
+    if (!email || !email.includes("@")) {
+      setError("❌ أدخل بريد إلكتروني صالح");
       return;
     }
 
     setLoading(true);
 
     try {
-      // تحديث كلمة المرور في Supabase Auth
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
       });
 
       if (error) throw error;
 
-      setSuccess("✅ تم تغيير كلمة المرور بنجاح!");
-      
-      setTimeout(() => {
-        if (onPasswordReset) onPasswordReset();
-      }, 2000);
-      
+      setSuccess("✅ تم إرسال رابط إعادة التعيين! تحقق من بريدك الإلكتروني.");
     } catch (err) {
       setError("❌ " + (err.message || "حدث خطأ، حاول مرة أخرى"));
     } finally {
@@ -77,10 +56,10 @@ export default function ResetPassword({ onPasswordReset }) {
         maxWidth: "400px",
         textAlign: "center"
       }}>
-        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🔑</div>
-        <h2 style={{ color: "#e0e0e0", marginBottom: "10px" }}>كلمة مرور جديدة</h2>
+        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🔐</div>
+        <h2 style={{ color: "#e0e0e0", marginBottom: "10px" }}>نسيت كلمة المرور؟</h2>
         <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "14px", marginBottom: "30px" }}>
-          أدخل كلمة المرور الجديدة
+          أدخل بريدك وسنرسل لك رابط إعادة التعيين
         </p>
 
         {error && (
@@ -109,85 +88,62 @@ export default function ResetPassword({ onPasswordReset }) {
           </div>
         )}
 
-        <form onSubmit={handleResetPassword}>
-          <div style={{ position: "relative", marginBottom: "15px" }}>
+        {!success && (
+          <form onSubmit={handleForgotPassword}>
             <input
-              type={showPassword ? "text" : "password"}
-              placeholder="كلمة المرور الجديدة"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              type="email"
+              placeholder="البريد الإلكتروني"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               style={{
                 width: "100%",
                 padding: "14px",
-                paddingLeft: "50px",
                 borderRadius: "12px",
                 border: "1px solid rgba(255,255,255,0.1)",
                 background: "rgba(255,255,255,0.05)",
                 color: "#e0e0e0",
                 fontSize: "16px",
                 outline: "none",
-                direction: "ltr"
+                direction: "ltr",
+                marginBottom: "20px",
+                boxSizing: "border-box"
               }}
               required
               disabled={loading}
             />
+
             <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
+              type="submit"
+              disabled={loading}
               style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
+                width: "100%",
+                padding: "14px",
+                background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
+                color: "#fff",
                 border: "none",
-                cursor: "pointer",
-                fontSize: "20px",
-                color: "#a29bfe"
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "bold",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.6 : 1,
+                marginBottom: "15px"
               }}>
-              {showPassword ? "🙈" : "👁️"}
+              {loading ? "جاري الإرسال..." : "إرسال رابط التعيين 🔑"}
             </button>
-          </div>
+          </form>
+        )}
 
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="تأكيد كلمة المرور"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "14px",
-              borderRadius: "12px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
-              color: "#e0e0e0",
-              fontSize: "16px",
-              outline: "none",
-              direction: "ltr",
-              marginBottom: "20px"
-            }}
-            required
-            disabled={loading}
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: "14px",
-              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1
-            }}>
-            {loading ? "جاري التغيير..." : "تغيير كلمة المرور"}
-          </button>
-        </form>
+        <button
+          onClick={onSwitchToLogin}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "#a29bfe",
+            cursor: "pointer",
+            fontSize: "14px"
+          }}>
+          ← العودة لتسجيل الدخول
+        </button>
       </div>
     </div>
   );
