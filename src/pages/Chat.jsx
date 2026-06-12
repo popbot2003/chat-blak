@@ -193,14 +193,16 @@ export default function Chat({ user, onLogout }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Realtime: حذف المحادثات ──────────────────────────────
+  // ── Realtime: حذف المحادثات (بدون filter عشان يشتغل مع الأدمن كمان) ──
   useEffect(() => {
     const ch = supabase
       .channel("chats-delete-" + user.id)
       .on("postgres_changes",
-        { event: "DELETE", schema: "public", table: "chats", filter: `user_id=eq.${user.id}` },
+        { event: "DELETE", schema: "public", table: "chats" }, // ✅ بدون filter
         (payload) => {
           const deletedId = payload.old.id;
+          // ✅ تأكد إن المحادثة دي بتاعة المستخدم ده
+          if (payload.old.user_id !== user.id) return;
           setAllChats((prev) => prev.filter((c) => c.id !== deletedId));
           if (currentChatIdRef.current === deletedId) {
             const newId = Date.now().toString();
@@ -292,18 +294,9 @@ export default function Chat({ user, onLogout }) {
 
       if (error) throw error;
 
-      const today = new Date().toISOString().slice(0, 10);
-      const keys  = [];
+      const keys = [];
 
       for (const key of data ?? []) {
-        // ✅ تم إزالة التصفير التلقائي للاستهلاك هنا
-        // الكود ده كان بيسبب مشكلة تصفير الاستهلاك
-        // if (key.last_reset_date !== today) {
-        //   await supabase.from("api_keys").update({ used_today: 0, last_reset_date: today }).eq("id", key.id);
-        //   key.used_today = 0;
-        //   key.last_reset_date = today;
-        // }
-
         const dailyLimit = key.daily_limit || 1_000_000;
         keys.push({
           id:           key.id,
@@ -456,7 +449,6 @@ export default function Chat({ user, onLogout }) {
   function pickBestKey() {
     const available = apiKeysRef.current.filter((k) => k.used < k.dailyLimit);
     if (!available.length) return null;
-    // الأقل استخداماً أولاً
     return [...available].sort((a, b) => (a.used / a.dailyLimit) - (b.used / b.dailyLimit))[0];
   }
 
@@ -473,7 +465,6 @@ export default function Chat({ user, onLogout }) {
         })
         .eq("id", keyId);
 
-      // إزالة من القائمة المحلية بدون تسجيل قيمة المفتاح
       setApiKeys((prev) => prev.filter((k) => k.id !== keyId));
     } catch (err) {
       console.error("[Chat] خطأ في تعطيل المفتاح id=" + keyId + ":", err.message);
@@ -502,36 +493,16 @@ export default function Chat({ user, onLogout }) {
     }
   }
 
+  // ✅ إصلاح مشكلة العداد — الـ Realtime هو اللي بيحدث الـ state
   async function updateUserUsage(tokens) {
     try {
       await supabase.rpc("increment_user_usage", {
         user_id:     user.id,
         tokens_used: tokens,
       });
-      // تحديث الحالة المحلية
-      setCurrentUser((prev) => ({ ...prev, used_today: (prev?.used_today || 0) + tokens }));
-      // تحديث الـ ref
-      if (currentUserRef.current) {
-        currentUserRef.current.used_today = (currentUserRef.current.used_today || 0) + tokens;
-      }
-      // تحديث الـ localStorage
-      const stored = localStorage.getItem("black-user");
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        parsed.used_today = (parsed.used_today || 0) + tokens;
-        localStorage.setItem("black-user", JSON.stringify(parsed));
-      }
+      // ✅ مش بنحدث الـ state يدوياً — الـ Realtime هيعملها تلقائياً
     } catch (err) {
       console.error("[Chat] خطأ في تحديث استهلاك المستخدم:", err.message);
-      // fallback مباشر
-      try {
-        const newUsed = (currentUserRef.current?.used_today || 0) + tokens;
-        await supabase.from("profiles").update({ used_today: newUsed }).eq("id", user.id);
-        setCurrentUser((prev) => ({ ...prev, used_today: newUsed }));
-        if (currentUserRef.current) currentUserRef.current.used_today = newUsed;
-      } catch (fallbackErr) {
-        console.error("[Chat] fallback تحديث الاستهلاك فشل:", fallbackErr.message);
-      }
     }
   }
 
@@ -698,7 +669,6 @@ export default function Chat({ user, onLogout }) {
 
       if (!res.ok) {
         if (res.status === 401) {
-          // مفتاح غير صالح — نعطله ونحاول مفتاحاً آخر
           await deactivateKey(key.id);
           if (!isRetry) {
             showToast("⚠️ تم تبديل المفتاح تلقائياً", "info");
@@ -706,7 +676,6 @@ export default function Chat({ user, onLogout }) {
             return;
           }
         } else if (res.status === 429 || data.error?.code === "rate_limit_exceeded") {
-          // خطأ مؤقت — نُعيد المحاولة بمفتاح آخر دون تعطيل
           if (!isRetry) {
             setTimeout(() => executeRequest(text, true), 1500);
             return;
@@ -737,7 +706,6 @@ export default function Chat({ user, onLogout }) {
       }
       type();
     } catch (err) {
-      // لا نُسجِّل قيمة المفتاح
       console.error("[Chat] خطأ في executeRequest:", err.message);
       setMessages((prev) => [...prev, {
         role:    "assistant",
