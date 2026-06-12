@@ -3,6 +3,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
+import ResetPassword from "./pages/ResetPassword";
 import Chat from "./pages/Chat";
 import Admin from "./pages/Admin";
 
@@ -30,6 +31,10 @@ export default function App() {
   const [showRegister, setShowRegister] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
+  // ✅ التحقق من وجود رابط إعادة تعيين كلمة المرور
+  const isResetPassword = window.location.pathname === '/reset-password' || 
+                          window.location.hash.includes('access_token');
+
   function handleLogout() {
     try {
       localStorage.removeItem("black-user");
@@ -39,6 +44,19 @@ export default function App() {
     setUser(null);
     setShowRegister(false);
     setShowForgotPassword(false);
+  }
+
+  function handleResetPasswordComplete() {
+    window.location.href = '/';
+  }
+
+  // ✅ عرض صفحة إعادة تعيين كلمة المرور إذا كان الرابط يحتوي على token
+  if (isResetPassword) {
+    return (
+      <ErrorBoundary>
+        <ResetPassword onPasswordReset={handleResetPasswordComplete} />
+      </ErrorBoundary>
+    );
   }
 
   if (!user) {
