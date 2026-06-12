@@ -1,10 +1,5 @@
-// ============================================
-// ResetPassword.jsx
-// صفحة إدخال كلمة المرور الجديدة
-// ============================================
-
 import { useState, useEffect } from "react";
-import { supabase } from '../lib/supabase';
+import { supabase } from "../lib/supabase";
 
 export default function ResetPassword({ onPasswordReset }) {
   const [newPassword, setNewPassword] = useState("");
@@ -13,13 +8,50 @@ export default function ResetPassword({ onPasswordReset }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
 
   useEffect(() => {
-    // التحقق من وجود hash في الرابط (من Supabase)
-    const hash = window.location.hash;
-    if (!hash || !hash.includes('access_token')) {
+    async function initSession() {
+      const hash = window.location.hash;
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get("code");
+      const tokenHash = params.get("token_hash");
+
+      // ✅ الحالة 1: code param (PKCE flow - الأحدث في Supabase)
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setError("❌ رابط غير صالح أو منتهي الصلاحية");
+        } else {
+          setSessionReady(true);
+        }
+        return;
+      }
+
+      // ✅ الحالة 2: token_hash param
+      if (tokenHash) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: tokenHash,
+          type: "recovery",
+        });
+        if (error) {
+          setError("❌ رابط غير صالح أو منتهي الصلاحية");
+        } else {
+          setSessionReady(true);
+        }
+        return;
+      }
+
+      // ✅ الحالة 3: hash fragment (القديم)
+      if (hash && hash.includes("access_token")) {
+        setSessionReady(true);
+        return;
+      }
+
       setError("❌ رابط غير صالح أو منتهي الصلاحية");
     }
+
+    initSession();
   }, []);
 
   async function handleResetPassword(e) {
@@ -40,19 +72,16 @@ export default function ResetPassword({ onPasswordReset }) {
     setLoading(true);
 
     try {
-      // تحديث كلمة المرور في Supabase Auth
       const { error } = await supabase.auth.updateUser({
-        password: newPassword
+        password: newPassword,
       });
 
       if (error) throw error;
 
       setSuccess("✅ تم تغيير كلمة المرور بنجاح!");
-      
       setTimeout(() => {
         if (onPasswordReset) onPasswordReset();
       }, 2000);
-      
     } catch (err) {
       setError("❌ " + (err.message || "حدث خطأ، حاول مرة أخرى"));
     } finally {
@@ -109,85 +138,90 @@ export default function ResetPassword({ onPasswordReset }) {
           </div>
         )}
 
-        <form onSubmit={handleResetPassword}>
-          <div style={{ position: "relative", marginBottom: "15px" }}>
+        {/* ✅ إخفاء الفورم إذا كان الرابط غير صالح */}
+        {!error && (
+          <form onSubmit={handleResetPassword}>
+            <div style={{ position: "relative", marginBottom: "15px" }}>
+              <input
+                type={showPassword ? "text" : "password"}
+                placeholder="كلمة المرور الجديدة"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  paddingLeft: "50px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.05)",
+                  color: "#e0e0e0",
+                  fontSize: "16px",
+                  outline: "none",
+                  direction: "ltr",
+                  boxSizing: "border-box"
+                }}
+                required
+                disabled={loading || !sessionReady}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                style={{
+                  position: "absolute",
+                  left: "12px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  color: "#a29bfe"
+                }}>
+                {showPassword ? "🙈" : "👁️"}
+              </button>
+            </div>
+
             <input
               type={showPassword ? "text" : "password"}
-              placeholder="كلمة المرور الجديدة"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="تأكيد كلمة المرور"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               style={{
                 width: "100%",
                 padding: "14px",
-                paddingLeft: "50px",
                 borderRadius: "12px",
                 border: "1px solid rgba(255,255,255,0.1)",
                 background: "rgba(255,255,255,0.05)",
                 color: "#e0e0e0",
                 fontSize: "16px",
                 outline: "none",
-                direction: "ltr"
+                direction: "ltr",
+                marginBottom: "20px",
+                boxSizing: "border-box"
               }}
               required
-              disabled={loading}
+              disabled={loading || !sessionReady}
             />
+
             <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
+              type="submit"
+              disabled={loading || !sessionReady}
               style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
+                width: "100%",
+                padding: "14px",
+                background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
+                color: "#fff",
                 border: "none",
-                cursor: "pointer",
-                fontSize: "20px",
-                color: "#a29bfe"
+                borderRadius: "12px",
+                fontSize: "16px",
+                fontWeight: "bold",
+                cursor: loading || !sessionReady ? "not-allowed" : "pointer",
+                opacity: loading || !sessionReady ? 0.6 : 1
               }}>
-              {showPassword ? "🙈" : "👁️"}
+              {loading ? "جاري التغيير..." : !sessionReady ? "جاري التحقق..." : "تغيير كلمة المرور"}
             </button>
-          </div>
-
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="تأكيد كلمة المرور"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            style={{
-              width: "100%",
-              padding: "14px",
-              borderRadius: "12px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
-              color: "#e0e0e0",
-              fontSize: "16px",
-              outline: "none",
-              direction: "ltr",
-              marginBottom: "20px"
-            }}
-            required
-            disabled={loading}
-          />
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              width: "100%",
-              padding: "14px",
-              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1
-            }}>
-            {loading ? "جاري التغيير..." : "تغيير كلمة المرور"}
-          </button>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );
