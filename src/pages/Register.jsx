@@ -1,93 +1,132 @@
-import { useState, useEffect } from "react";
-import { supabase } from "../lib/supabase";
+// ============================================
+// Register.jsx — Supabase Auth (آمن ✅)
+// ============================================
 
-export default function ResetPassword({ onPasswordReset }) {
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [sessionReady, setSessionReady] = useState(false);
+import { useState } from "react";
+import { supabase } from '../lib/supabase';
+import { validateEmail, validatePassword } from '../utils/validators';
+import { DEFAULT_USER_DAILY_LIMIT } from '../config/constants';
 
-  useEffect(() => {
-    async function initSession() {
-      const hash = window.location.hash;
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      const tokenHash = params.get("token_hash");
+export default function Register({ onRegister, onSwitchToLogin }) {
+  const [name, setName]                         = useState("");
+  const [email, setEmail]                       = useState("");
+  const [password, setPassword]                 = useState("");
+  const [confirmPassword, setConfirmPassword]   = useState("");
+  const [gender, setGender]                     = useState("ولد");
+  const [showPassword, setShowPassword]         = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [error, setError]                       = useState("");
+  const [loading, setLoading]                   = useState(false);
 
-      // ✅ الحالة 1: code param (PKCE flow - الأحدث في Supabase)
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) {
-          setError("❌ رابط غير صالح أو منتهي الصلاحية");
-        } else {
-          setSessionReady(true);
-        }
-        return;
-      }
-
-      // ✅ الحالة 2: token_hash param
-      if (tokenHash) {
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: tokenHash,
-          type: "recovery",
-        });
-        if (error) {
-          setError("❌ رابط غير صالح أو منتهي الصلاحية");
-        } else {
-          setSessionReady(true);
-        }
-        return;
-      }
-
-      // ✅ الحالة 3: hash fragment (القديم)
-      if (hash && hash.includes("access_token")) {
-        setSessionReady(true);
-        return;
-      }
-
-      setError("❌ رابط غير صالح أو منتهي الصلاحية");
-    }
-
-    initSession();
-  }, []);
-
-  async function handleResetPassword(e) {
+  async function handleRegister(e) {
     e.preventDefault();
     setError("");
-    setSuccess("");
-
-    if (newPassword.length < 6) {
-      setError("❌ كلمة المرور يجب أن تكون 6 أحرف على الأقل");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("❌ كلمة المرور غير متطابقة");
-      return;
-    }
-
     setLoading(true);
 
+    if (password !== confirmPassword) {
+      setError("❌ كلمة المرور غير متطابقة");
+      setLoading(false);
+      return;
+    }
+
+    const passwordCheck = validatePassword(password);
+    if (!passwordCheck.valid) {
+      setError("❌ " + passwordCheck.error);
+      setLoading(false);
+      return;
+    }
+
+    const emailCheck = validateEmail(email);
+    if (!emailCheck.valid) {
+      setError("❌ " + emailCheck.error);
+      setLoading(false);
+      return;
+    }
+
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword,
+      const displayName = name.trim() || email.split("@")[0];
+      const today       = new Date().toISOString().slice(0, 10);
+
+      // 1. تسجيل عبر Supabase Auth — الباسورد يتشفر تلقائياً
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { name: displayName, gender }
+        }
       });
 
-      if (error) throw error;
+      if (signUpError) {
+        // رسائل خطأ مفهومة بالعربي
+        if (signUpError.message.includes("already registered") || signUpError.message.includes("already been registered")) {
+          throw new Error("هذا البريد الإلكتروني مستخدم بالفعل");
+        }
+        throw signUpError;
+      }
 
-      setSuccess("✅ تم تغيير كلمة المرور بنجاح!");
-      setTimeout(() => {
-        if (onPasswordReset) onPasswordReset();
-      }, 2000);
+      if (!data.user) throw new Error("حدث خطأ أثناء التسجيل، حاول مرة أخرى");
+
+      // 2. إنشاء profile مرتبط بنفس الـ id من Auth
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .insert({
+          id:              data.user.id,
+          email:           email,
+          name:            displayName,
+          gender:          gender,
+          role:            "user",
+          personality:     "blak",
+          is_blocked:      false,
+          daily_limit:     DEFAULT_USER_DAILY_LIMIT,
+          used_today:      0,
+          last_reset_date: today,
+          last_seen:       new Date().toISOString(),
+          created_at:      new Date().toISOString()
+        });
+
+      if (profileError) {
+        // لو فيه مشكلة في إنشاء الـ profile، نحذف الـ auth user عشان ما يتخلفش بدون profile
+        await supabase.auth.admin?.deleteUser?.(data.user.id).catch(() => {});
+        throw new Error("حدث خطأ في إنشاء الحساب: " + profileError.message);
+      }
+
+      // 3. إرسال بيانات المستخدم الجديد للتطبيق
+      const newUser = {
+        id:          data.user.id,
+        email:       email,
+        name:        displayName,
+        role:        "user",
+        gender:      gender,
+        personality: "blak",
+        daily_limit: DEFAULT_USER_DAILY_LIMIT,
+        used_today:  0,
+        last_reset_date: today,
+        is_blocked:  false
+      };
+
+      localStorage.setItem("black-user", JSON.stringify(newUser));
+      onRegister(newUser);
+
     } catch (err) {
-      setError("❌ " + (err.message || "حدث خطأ، حاول مرة أخرى"));
+      console.error("Registration error:", err);
+      setError("❌ " + (err.message || "حدث خطأ غير متوقع"));
     } finally {
       setLoading(false);
     }
   }
+
+  const inputStyle = {
+    width: "100%",
+    padding: "14px",
+    marginBottom: "15px",
+    borderRadius: "12px",
+    border: "1px solid rgba(255,255,255,0.1)",
+    background: "rgba(255,255,255,0.05)",
+    color: "#e0e0e0",
+    fontSize: "16px",
+    outline: "none",
+    boxSizing: "border-box"
+  };
 
   return (
     <div style={{
@@ -96,7 +135,8 @@ export default function ResetPassword({ onPasswordReset }) {
       alignItems: "center",
       justifyContent: "center",
       background: "#0f0f1a",
-      fontFamily: "system-ui, sans-serif"
+      fontFamily: "system-ui, sans-serif",
+      overflowY: "auto"
     }}>
       <div style={{
         background: "#1a1a2e",
@@ -104,13 +144,11 @@ export default function ResetPassword({ onPasswordReset }) {
         borderRadius: "20px",
         width: "100%",
         maxWidth: "400px",
-        textAlign: "center"
+        textAlign: "center",
+        margin: "20px"
       }}>
-        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🔑</div>
-        <h2 style={{ color: "#e0e0e0", marginBottom: "10px" }}>كلمة مرور جديدة</h2>
-        <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "14px", marginBottom: "30px" }}>
-          أدخل كلمة المرور الجديدة
-        </p>
+        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🖤</div>
+        <h2 style={{ color: "#e0e0e0", marginBottom: "30px" }}>إنشاء حساب جديد</h2>
 
         {error && (
           <div style={{
@@ -125,103 +163,113 @@ export default function ResetPassword({ onPasswordReset }) {
           </div>
         )}
 
-        {success && (
-          <div style={{
-            background: "rgba(74,222,128,0.1)",
-            color: "#4ade80",
-            padding: "12px",
-            borderRadius: "10px",
-            marginBottom: "20px",
-            fontSize: "14px"
-          }}>
-            {success}
-          </div>
-        )}
+        <form onSubmit={handleRegister}>
+          <input
+            type="text"
+            placeholder="الاسم (اختياري)"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            style={inputStyle}
+          />
 
-        {/* ✅ إخفاء الفورم إذا كان الرابط غير صالح */}
-        {!error && (
-          <form onSubmit={handleResetPassword}>
-            <div style={{ position: "relative", marginBottom: "15px" }}>
-              <input
-                type={showPassword ? "text" : "password"}
-                placeholder="كلمة المرور الجديدة"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                style={{
-                  width: "100%",
-                  padding: "14px",
-                  paddingLeft: "50px",
-                  borderRadius: "12px",
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)",
-                  color: "#e0e0e0",
-                  fontSize: "16px",
-                  outline: "none",
-                  direction: "ltr",
-                  boxSizing: "border-box"
-                }}
-                required
-                disabled={loading || !sessionReady}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: "absolute",
-                  left: "12px",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: "20px",
-                  color: "#a29bfe"
-                }}>
-                {showPassword ? "🙈" : "👁️"}
-              </button>
-            </div>
+          <input
+            type="email"
+            placeholder="البريد الإلكتروني"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ ...inputStyle, direction: "ltr" }}
+            required
+          />
 
+          <div style={{ position: "relative", marginBottom: "15px" }}>
             <input
               type={showPassword ? "text" : "password"}
+              placeholder="كلمة المرور"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              style={{ ...inputStyle, marginBottom: 0, paddingLeft: "50px", direction: "ltr" }}
+              required
+            />
+            <button type="button" onClick={() => setShowPassword(!showPassword)}
+              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", cursor: "pointer", fontSize: "20px", color: "#a29bfe" }}>
+              {showPassword ? "🙈" : "👁️"}
+            </button>
+          </div>
+
+          <div style={{ position: "relative", marginBottom: "20px" }}>
+            <input
+              type={showConfirmPassword ? "text" : "password"}
               placeholder="تأكيد كلمة المرور"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "14px",
-                borderRadius: "12px",
-                border: "1px solid rgba(255,255,255,0.1)",
-                background: "rgba(255,255,255,0.05)",
-                color: "#e0e0e0",
-                fontSize: "16px",
-                outline: "none",
-                direction: "ltr",
-                marginBottom: "20px",
-                boxSizing: "border-box"
-              }}
+              style={{ ...inputStyle, marginBottom: 0, paddingLeft: "50px", direction: "ltr" }}
               required
-              disabled={loading || !sessionReady}
             />
-
-            <button
-              type="submit"
-              disabled={loading || !sessionReady}
-              style={{
-                width: "100%",
-                padding: "14px",
-                background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
-                color: "#fff",
-                border: "none",
-                borderRadius: "12px",
-                fontSize: "16px",
-                fontWeight: "bold",
-                cursor: loading || !sessionReady ? "not-allowed" : "pointer",
-                opacity: loading || !sessionReady ? 0.6 : 1
-              }}>
-              {loading ? "جاري التغيير..." : !sessionReady ? "جاري التحقق..." : "تغيير كلمة المرور"}
+            <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", background: "transparent", border: "none", cursor: "pointer", fontSize: "20px", color: "#a29bfe" }}>
+              {showConfirmPassword ? "🙈" : "👁️"}
             </button>
-          </form>
-        )}
+          </div>
+
+          {/* اختيار الجنس */}
+          <div style={{ marginBottom: "20px" }}>
+            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "13px", marginBottom: "10px" }}>أنت؟</p>
+            <div style={{ display: "flex", gap: "10px" }}>
+              {["ولد", "بنت"].map(g => (
+                <button
+                  key={g}
+                  type="button"
+                  onClick={() => setGender(g)}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: gender === g ? "2px solid #8b5cf6" : "2px solid rgba(255,255,255,0.1)",
+                    background: gender === g ? "rgba(139,92,246,0.2)" : "rgba(255,255,255,0.03)",
+                    color: gender === g ? "#a29bfe" : "rgba(255,255,255,0.5)",
+                    fontSize: "15px",
+                    fontWeight: gender === g ? "bold" : "normal",
+                    cursor: "pointer",
+                    transition: "all 0.2s"
+                  }}
+                >
+                  {g === "ولد" ? "👦 ولد" : "👧 بنت"}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            style={{
+              width: "100%",
+              padding: "14px",
+              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "12px",
+              fontSize: "16px",
+              fontWeight: "bold",
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1,
+              marginBottom: "15px"
+            }}>
+            {loading ? "جاري الإنشاء..." : "إنشاء حساب"}
+          </button>
+        </form>
+
+        <button
+          onClick={onSwitchToLogin}
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "#a29bfe",
+            cursor: "pointer",
+            fontSize: "14px"
+          }}>
+          عندك حساب بالفعل؟ سجل دخول
+        </button>
       </div>
     </div>
   );
