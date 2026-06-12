@@ -88,14 +88,8 @@ function getFileIcon(file) {
   return "📎";
 }
 
-/** عرض آمن للمفتاح — لا يُستخدم إلا للـ logs */
-function maskKey(keyValue) {
-  if (!keyValue || keyValue.length < 12) return "***";
-  return keyValue.slice(0, 8) + "..." + keyValue.slice(-4);
-}
-
 // ─────────────────────────────────────────
-// Toast مستقل (لا يعتمد على DOM مباشرة داخل render)
+// Toast مستقل
 // ─────────────────────────────────────────
 
 function showToast(message, type = "success") {
@@ -117,7 +111,6 @@ function showToast(message, type = "success") {
 // ─────────────────────────────────────────
 
 export default function Chat({ user, onLogout }) {
-  const [apiKeys, setApiKeys]           = useState([]);
   const [allChats, setAllChats]         = useState([]);
   const [currentChatId, setCurrentChatId] = useState(() => Date.now().toString());
   const [showHistory, setShowHistory]   = useState(false);
@@ -145,17 +138,14 @@ export default function Chat({ user, onLogout }) {
   const [settingsLoading, setSettingsLoading]       = useState(false);
   const [settingsError, setSettingsError]           = useState("");
 
-  // refs — يعكسون آخر قيمة للـ state دون إعادة تسجيل الـ effects
   const bottomRef         = useRef(null);
   const inputRef          = useRef(null);
   const fileInputRef      = useRef(null);
-  const apiKeysRef        = useRef(apiKeys);
   const messagesRef       = useRef(messages);
   const currentChatIdRef  = useRef(currentChatId);
   const currentUserRef    = useRef(currentUser);
   const debouncedSaveRef  = useRef(null);
 
-  useEffect(() => { apiKeysRef.current       = apiKeys;       }, [apiKeys]);
   useEffect(() => { messagesRef.current      = messages;      }, [messages]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
   useEffect(() => { currentUserRef.current   = currentUser;   }, [currentUser]);
@@ -183,9 +173,9 @@ export default function Chat({ user, onLogout }) {
         { event: "DELETE", schema: "public", table: "profiles" },
         (payload) => {
           if (payload.old.id === user.id) {
-            alert("⚠️ تم حذف حسابك بواسطة المدير. سيتم تسجيل خروجك.");
+            showToast("⚠️ تم حذف حسابك بواسطة المدير.", "error");
             localStorage.removeItem("black-user");
-            window.location.reload();
+            setTimeout(() => window.location.reload(), 2000);
           }
         }
       )
@@ -193,32 +183,31 @@ export default function Chat({ user, onLogout }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Realtime: حذف المحادثات (بدون filter عشان يشتغل مع الأدمن كمان) ──
- useEffect(() => {
-  const ch = supabase
-    .channel("chats-delete-" + user.id)
-    .on("postgres_changes",
-      { event: "DELETE", schema: "public", table: "chats" },
-      (payload) => {
-        const deletedId = payload.old?.id;
-        if (!deletedId) return;
-
-        setAllChats((prev) => prev.filter((c) => c.id !== deletedId));
-
-        if (currentChatIdRef.current === deletedId) {
-          const newId = Date.now().toString();
-          setCurrentChatId(newId);
-          setMessages([{
-            role: "assistant",
-            content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
-            id: Date.now(),
-          }]);
+  // ── Realtime: حذف المحادثات ───────────────────────────────
+  useEffect(() => {
+    const ch = supabase
+      .channel("chats-delete-" + user.id)
+      .on("postgres_changes",
+        { event: "DELETE", schema: "public", table: "chats" },
+        (payload) => {
+          const deletedId = payload.old?.id;
+          if (!deletedId) return;
+          setAllChats((prev) => prev.filter((c) => c.id !== deletedId));
+          if (currentChatIdRef.current === deletedId) {
+            const newId = Date.now().toString();
+            setCurrentChatId(newId);
+            setMessages([{
+              role: "assistant",
+              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
+              id: Date.now(),
+            }]);
+          }
         }
-      }
-    )
-    .subscribe();
-  return () => ch.unsubscribe();
-}, [user.id]);
+      )
+      .subscribe();
+    return () => ch.unsubscribe();
+  }, [user.id]);
+
   // ── Presence ─────────────────────────────────────────────
   useEffect(() => {
     let ch = null;
@@ -277,42 +266,10 @@ export default function Chat({ user, onLogout }) {
   // ─────────────────────────────────────────
 
   async function loadAllData() {
-    await loadApiKeys();
     await loadChatsFromSupabase();
     await refreshUserData();
     await checkAndShowWelcome();
     setIsLoaded(true);
-  }
-
-  async function loadApiKeys() {
-    try {
-      const { data, error } = await supabase
-        .from("api_keys")
-        .select("*")
-        .eq("is_active", true)
-        .eq("is_valid", true);
-
-      if (error) throw error;
-
-      const keys = [];
-
-      for (const key of data ?? []) {
-        const dailyLimit = key.daily_limit || 1_000_000;
-        keys.push({
-          id:           key.id,
-          key:          key.key_value,
-          used:         key.used_today || 0,
-          dailyLimit,
-          usagePercent: dailyLimit > 0 ? ((key.used_today || 0) / dailyLimit) * 100 : 0,
-        });
-      }
-
-      // ترتيب حسب أقل استخدام — توزيع ذكي
-      keys.sort((a, b) => a.usagePercent - b.usagePercent);
-      setApiKeys(keys);
-    } catch (err) {
-      console.error("[Chat] خطأ في تحميل المفاتيح:", err.message);
-    }
   }
 
   async function refreshUserData() {
@@ -443,120 +400,54 @@ export default function Chat({ user, onLogout }) {
   }
 
   // ─────────────────────────────────────────
-  // Key management
-  // ─────────────────────────────────────────
-
-  function pickBestKey() {
-    const available = apiKeysRef.current.filter((k) => k.used < k.dailyLimit);
-    if (!available.length) return null;
-    return [...available].sort((a, b) => (a.used / a.dailyLimit) - (b.used / b.dailyLimit))[0];
-  }
-
-  async function deactivateKey(keyId) {
-    const reason = "مفتاح غير صالح أو محذوف من Groq";
-    try {
-      await supabase
-        .from("api_keys")
-        .update({
-          is_active:       false,
-          is_valid:        false,
-          invalid_reason:  reason,
-          last_checked_at: new Date().toISOString(),
-        })
-        .eq("id", keyId);
-
-      setApiKeys((prev) => prev.filter((k) => k.id !== keyId));
-    } catch (err) {
-      console.error("[Chat] خطأ في تعطيل المفتاح id=" + keyId + ":", err.message);
-    }
-  }
-
-  async function updateKeyUsage(keyId, tokens) {
-    try {
-      await supabase.rpc("increment_key_usage", {
-        key_id:      String(keyId),
-        tokens_used: tokens,
-      });
-      setApiKeys((prev) =>
-        prev.map((k) => {
-          if (k.id !== keyId) return k;
-          const newUsed = k.used + tokens;
-          return {
-            ...k,
-            used:         newUsed,
-            usagePercent: k.dailyLimit > 0 ? (newUsed / k.dailyLimit) * 100 : 0,
-          };
-        })
-      );
-    } catch (err) {
-      console.error("[Chat] خطأ في تحديث استهلاك المفتاح:", err.message);
-    }
-  }
-
-  // ✅ إصلاح مشكلة العداد — الـ Realtime هو اللي بيحدث الـ state
-  async function updateUserUsage(tokens) {
-    try {
-      await supabase.rpc("increment_user_usage", {
-        user_id:     user.id,
-        tokens_used: tokens,
-      });
-      // ✅ مش بنحدث الـ state يدوياً — الـ Realtime هيعملها تلقائياً
-    } catch (err) {
-      console.error("[Chat] خطأ في تحديث استهلاك المستخدم:", err.message);
-    }
-  }
-
-  // ─────────────────────────────────────────
   // Settings
   // ─────────────────────────────────────────
 
- async function updateUserSettings() {
-  setSettingsError("");
+  async function updateUserSettings() {
+    setSettingsError("");
 
-  if (editNewPassword !== editConfirmPassword) {
-    setSettingsError("❌ كلمة المرور الجديدة غير متطابقة");
-    return;
-  }
-  if (editNewPassword && editNewPassword.length < 6) {
-    setSettingsError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
-    return;
-  }
-
-  const profileUpdates = {};
-  if (editName && editName !== currentUser?.name) profileUpdates.name = editName;
-
-  if (!Object.keys(profileUpdates).length && !editNewPassword) {
-    setSettingsError("❌ لا توجد تغييرات للحفظ");
-    return;
-  }
-
-  setSettingsLoading(true);
-  try {
-    // ✅ تحديث الاسم في profiles
-    if (Object.keys(profileUpdates).length) {
-      const { error } = await supabase.from("profiles").update(profileUpdates).eq("id", user.id);
-      if (error) throw error;
+    if (editNewPassword !== editConfirmPassword) {
+      setSettingsError("❌ كلمة المرور الجديدة غير متطابقة");
+      return;
+    }
+    if (editNewPassword && editNewPassword.length < 6) {
+      setSettingsError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
+      return;
     }
 
-    // ✅ تحديث كلمة المرور في Supabase Auth (مش في profiles)
-    if (editNewPassword) {
-      const { error: authError } = await supabase.auth.updateUser({ password: editNewPassword });
-      if (authError) throw authError;
+    const profileUpdates = {};
+    if (editName && editName !== currentUser?.name) profileUpdates.name = editName;
+
+    if (!Object.keys(profileUpdates).length && !editNewPassword) {
+      setSettingsError("❌ لا توجد تغييرات للحفظ");
+      return;
     }
 
-    const updatedUser = { ...currentUser, ...profileUpdates };
-    setCurrentUser(updatedUser);
-    localStorage.setItem("black-user", JSON.stringify(updatedUser));
-    setEditNewPassword("");
-    setEditConfirmPassword("");
-    setShowSettings(false);
-    showToast("✅ تم تحديث الإعدادات بنجاح");
-  } catch (err) {
-    setSettingsError("❌ خطأ: " + err.message);
-  } finally {
-    setSettingsLoading(false);
+    setSettingsLoading(true);
+    try {
+      if (Object.keys(profileUpdates).length) {
+        const { error } = await supabase.from("profiles").update(profileUpdates).eq("id", user.id);
+        if (error) throw error;
+      }
+
+      if (editNewPassword) {
+        const { error: authError } = await supabase.auth.updateUser({ password: editNewPassword });
+        if (authError) throw authError;
+      }
+
+      const updatedUser = { ...currentUser, ...profileUpdates };
+      setCurrentUser(updatedUser);
+      localStorage.setItem("black-user", JSON.stringify(updatedUser));
+      setEditNewPassword("");
+      setEditConfirmPassword("");
+      setShowSettings(false);
+      showToast("✅ تم تحديث الإعدادات بنجاح");
+    } catch (err) {
+      setSettingsError("❌ خطأ: " + err.message);
+    } finally {
+      setSettingsLoading(false);
+    }
   }
-}
 
   async function deleteAccount() {
     if (!window.confirm("⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"))
@@ -593,9 +484,9 @@ export default function Chat({ user, onLogout }) {
         return;
       }
       if (freshUser.is_blocked) {
-        alert("⚠️ تم حظر حسابك بواسطة المدير.");
+        showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
         localStorage.removeItem("black-user");
-        window.location.reload();
+        setTimeout(() => window.location.reload(), 2000);
         return;
       }
     } catch (err) {
@@ -605,17 +496,6 @@ export default function Chat({ user, onLogout }) {
     const limitCheck = checkUserDailyLimit(currentUserRef.current);
     if (!limitCheck.canChat) {
       setMessages((prev) => [...prev, { role: "assistant", content: limitCheck.reason, id: Date.now() }]);
-      setLoading(false);
-      return;
-    }
-
-    const key = pickBestKey();
-    if (!key) {
-      setMessages((prev) => [...prev, {
-        role: "assistant",
-        content: "🚫 جميع المفاتيح العامة وصلت للحد اليومي أو غير صالحة. راجع المدير 🖤",
-        id: Date.now(),
-      }]);
       setLoading(false);
       return;
     }
@@ -648,55 +528,46 @@ export default function Chat({ user, onLogout }) {
 
       const chatMessages = updatedMessages.map((m) => ({ role: m.role, content: m.content }));
 
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  "Bearer " + key.key,
-        },
-        body: JSON.stringify({
-          model:       GROQ_MODEL,
-          messages: [
-            {
-              role:    "system",
-              content: getPersonalityPrompt(
-                currentUserRef.current?.personality || DEFAULT_PERSONALITY,
-                currentUserRef.current?.gender || "ولد"
-              ),
-            },
-            ...chatMessages.slice(-CHAT_HISTORY_LIMIT),
-            { role: "user", content: enhancedText },
-          ],
-          temperature: GROQ_TEMPERATURE,
-          max_tokens:  GROQ_MAX_TOKENS,
-          stream:      false,
-        }),
-      });
+      // ✅ جلب الـ session token وإرسال الطلب للـ Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const res = await fetch(
+        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            model:        GROQ_MODEL,
+            max_tokens:   GROQ_MAX_TOKENS,
+            temperature:  GROQ_TEMPERATURE,
+            systemPrompt: getPersonalityPrompt(
+              currentUserRef.current?.personality || DEFAULT_PERSONALITY,
+              currentUserRef.current?.gender || "ولد"
+            ),
+            messages: [
+              ...chatMessages.slice(-CHAT_HISTORY_LIMIT),
+              { role: "user", content: enhancedText },
+            ],
+          }),
+        }
+      );
 
       const data = await res.json();
 
       if (!res.ok) {
-        if (res.status === 401) {
-          await deactivateKey(key.id);
-          if (!isRetry) {
-            showToast("⚠️ تم تبديل المفتاح تلقائياً", "info");
-            setTimeout(() => executeRequest(text, true), 500);
-            return;
-          }
-        } else if (res.status === 429 || data.error?.code === "rate_limit_exceeded") {
-          if (!isRetry) {
-            setTimeout(() => executeRequest(text, true), 1500);
-            return;
-          }
+        if (res.status === 401 && !isRetry) {
+          showToast("⚠️ خطأ في المصادقة، حاول مرة أخرى", "error");
+        } else if ((res.status === 429 || data.error?.code === "rate_limit_exceeded") && !isRetry) {
+          setTimeout(() => executeRequest(text, true), 1500);
+          return;
         }
-        throw new Error(data.error?.message || `خطأ: ${res.status}`);
+        throw new Error(data.error?.message || data.error || `خطأ: ${res.status}`);
       }
 
-      const reply      = cleanResponse(data.choices?.[0]?.message?.content || "");
-      const tokensUsed = data.usage?.total_tokens || 500;
-
-      await updateKeyUsage(key.id, tokensUsed);
-      await updateUserUsage(tokensUsed);
+      const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
 
       // typing effect
       let i = 0;
@@ -846,25 +717,6 @@ export default function Chat({ user, onLogout }) {
     return (
       <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0" }}>
         🖤 جاري التحميل...
-      </div>
-    );
-  }
-
-  if (!apiKeys.length) {
-    return (
-      <div style={{ height: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "#0f0f1a", color: "#e0e0e0", fontFamily: "system-ui, sans-serif", textAlign: "center", padding: "20px" }}>
-        <div>
-          <div style={{ fontSize: "80px", marginBottom: "20px" }}>🔑</div>
-          <h2>لا توجد مفاتيح API صالحة</h2>
-          <p style={{ marginBottom: "20px" }}>جميع المفاتيح غير صالحة أو وصلت للحد اليومي</p>
-          <p style={{ marginBottom: "20px", fontSize: "14px", opacity: 0.7 }}>يرجى إضافة مفاتيح جديدة في لوحة التحكم</p>
-          <button onClick={loadApiKeys} style={{ padding: "14px 40px", background: "linear-gradient(135deg,#6c5ce7,#8b5cf6)", color: "#fff", border: "none", borderRadius: "12px", cursor: "pointer", fontSize: "16px", fontWeight: "bold", margin: "15px auto", display: "block" }}>
-            🔄 تحديث
-          </button>
-          <button onClick={onLogout} style={{ padding: "10px 25px", background: "transparent", color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", borderRadius: "10px", cursor: "pointer", fontSize: "14px" }}>
-            🚪 خروج
-          </button>
-        </div>
       </div>
     );
   }
@@ -1082,7 +934,6 @@ export default function Chat({ user, onLogout }) {
               </div>
             )}
 
-            {/* Email (read-only) */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>📧 البريد الإلكتروني</label>
               <div style={{ padding: "12px", background: "rgba(255,255,255,0.05)", borderRadius: "10px", fontSize: "14px", border: "1px solid rgba(255,255,255,0.1)", color: "#a29bfe" }}>
@@ -1091,7 +942,6 @@ export default function Chat({ user, onLogout }) {
               <div style={{ fontSize: "10px", opacity: 0.5, marginTop: "4px" }}>لا يمكن تغيير البريد الإلكتروني</div>
             </div>
 
-            {/* Name */}
             <div style={{ marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>👤 الاسم</label>
               <input
@@ -1103,7 +953,6 @@ export default function Chat({ user, onLogout }) {
               />
             </div>
 
-            {/* New password */}
             <div style={{ position: "relative", marginBottom: "15px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>🔑 كلمة المرور الجديدة (اختياري)</label>
               <input
@@ -1118,7 +967,6 @@ export default function Chat({ user, onLogout }) {
               </button>
             </div>
 
-            {/* Confirm password */}
             <div style={{ position: "relative", marginBottom: "20px" }}>
               <label style={{ fontSize: "12px", opacity: 0.7, display: "block", marginBottom: "5px" }}>✓ تأكيد كلمة المرور الجديدة</label>
               <input
