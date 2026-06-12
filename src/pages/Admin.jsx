@@ -113,6 +113,16 @@ export default function Admin({ user, onLogout }) {
   }, []);
 
   useEffect(() => { loadAllData(); }, []);
+
+  // إضافة class على الـ body عشان CSS يعرف إننا في الأدمن
+  useEffect(() => {
+    document.body.classList.add('admin-page');
+    document.documentElement.classList.add('admin-page');
+    return () => {
+      document.body.classList.remove('admin-page');
+      document.documentElement.classList.remove('admin-page');
+    };
+  }, []);
   useEffect(() => {
     document.body.style.backgroundColor = darkMode ? '#1a1a2e' : '#f0f2f5';
   }, [darkMode]);
