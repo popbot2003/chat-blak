@@ -48,6 +48,12 @@ export function validateKeyValue(key) {
 export function checkUserDailyLimit(user) {
   if (!user) return { canChat: false, reason: "مستخدم غير موجود" };
   if (user.is_blocked) return { canChat: false, reason: "تم حظر هذا الحساب" };
+
+  // المدير ليس له حد — يشات بلا قيود
+  if (user.role === "admin") {
+    const used = user.used_today || 0;
+    return { canChat: true, used, limit: Infinity, percent: 0, isAdmin: true };
+  }
   
   const used = user.used_today || 0;
   const limit = user.daily_limit || 5000;
