@@ -178,7 +178,7 @@ export default function App() {
     if (isChatWindow) {
       return (
         <ErrorBoundary>
-          <Chat user={user} onLogout={handleLogout} />
+          <Chat user={user} onLogout={handleLogout} isAdmin={true} />
         </ErrorBoundary>
       );
     }
