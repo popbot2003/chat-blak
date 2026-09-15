@@ -755,11 +755,26 @@ export default function Chat({ user, onLogout, isAdmin }) {
           </div>
         </div>
         <div className="header-right">
-          <button onClick={newChat} className="header-btn" style={{ fontSize: "20px" }}>➕</button>
-          <button onClick={() => setShowMenu(!showMenu)} className="header-btn" style={{ fontSize: "22px" }}>
-            {showMenu ? "✕" : "☰"}
-          </button>
-        </div>
+  {isAdmin && (
+    <button
+      onClick={() => window.location.href = "/admin"}
+      className="header-btn"
+      style={{ fontSize: "14px" }}
+    >
+      ← لوحة التحكم
+    </button>
+  )}
+
+  <button onClick={newChat} className="header-btn" style={{ fontSize: "20px" }}>➕</button>
+
+  <button
+    onClick={() => setShowMenu(!showMenu)}
+    className="header-btn"
+    style={{ fontSize: "22px" }}
+  >
+    {showMenu ? "✕" : "☰"}
+  </button>
+</div>
 
         {showMenu && (
           <>
