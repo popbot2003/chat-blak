@@ -110,7 +110,7 @@ function showToast(message, type = "success") {
 // Component
 // ─────────────────────────────────────────
 
-export default function Chat({ user, onLogout }) {
+export default function Chat({ user, onLogout, isAdmin }) {
   const [allChats, setAllChats]         = useState([]);
   const [currentChatId, setCurrentChatId] = useState(() => Date.now().toString());
   const [showHistory, setShowHistory]   = useState(false);
