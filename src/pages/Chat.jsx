@@ -484,6 +484,44 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // Core chat logic
   // ─────────────────────────────────────────
 
+  // ─────────────────────────────────────────
+// Summarize old messages to reduce token usage
+// ─────────────────────────────────────────
+async function summarizeOldMessages(oldMessages, session) {
+  if (!oldMessages || oldMessages.length === 0) return null;
+
+  const text = oldMessages
+    .map((m) => `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(0, 300)}`)
+    .join("\n");
+
+  try {
+    const res = await fetch(
+      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          max_tokens: 200,
+          temperature: 0.3,
+          systemPrompt: "أنت ملخّص محادثات. لخّص المحادثة التالية في 3 جمل قصيرة بالعربية فقط. لا تضف تعليقًا.",
+          messages: [
+            { role: "user", content: text },
+          ],
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
   const executeRequest = useCallback(async (text, isRetry = false) => {
     // التحقق من حالة المستخدم
     try {
@@ -541,7 +579,42 @@ export default function Chat({ user, onLogout, isAdmin }) {
           "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
       }
 
-      const chatMessages = updatedMessages.map((m) => ({ role: m.role, content: m.content }));
+// ─────────────────────────────────────────
+// Build chat messages with smart summarization + truncation
+// ─────────────────────────────────────────
+const KEEP_FULL = 5;              // آخر 5 رسائل كاملة
+const MAX_CHARS_PER_MSG = 500;    // قصّ كل رسالة قديمة عند 500 حرف
+
+const allMsgs = updatedMessages.slice(0, -1); // بدون الرسالة الجديدة
+const recentMsgs = allMsgs.slice(-KEEP_FULL);
+const oldMsgs = allMsgs.slice(0, -KEEP_FULL);
+
+// لو فيه رسائل قديمة → لخّصها
+let summaryText = null;
+if (oldMsgs.length > 0) {
+  summaryText = await summarizeOldMessages(oldMsgs, session);
+}
+
+// بناء قائمة الرسائل النهائية
+const chatMessages = [];
+
+// 1. ملخص الرسائل القديمة (لو موجود)
+if (summaryText) {
+  chatMessages.push({
+    role: "system",
+    content: `ملخص المحادثة السابقة: ${summaryText}`,
+  });
+}
+
+// 2. آخر 5 رسائل كاملة + قصّ الباقي
+recentMsgs.forEach((m) => {
+  chatMessages.push({
+    role: m.role,
+    content: m.content.length > MAX_CHARS_PER_MSG
+      ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
+      : m.content,
+  });
+});
 
       // ✅ جلب الـ session token وإرسال الطلب للـ Edge Function
       const { data: { session } } = await supabase.auth.getSession();
