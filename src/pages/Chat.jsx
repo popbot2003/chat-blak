@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - نسخة معدلة (تم إزالة التصفير التلقائي للاستهلاك)
+// Chat.jsx - نسخة معدلة (مع تفعيل زر الإيقاف)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -145,6 +145,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const currentChatIdRef  = useRef(currentChatId);
   const currentUserRef    = useRef(currentUser);
   const debouncedSaveRef  = useRef(null);
+  const abortControllerRef = useRef(null); // ✅ إضافة مرجع AbortController
 
   useEffect(() => { messagesRef.current      = messages;      }, [messages]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
@@ -545,6 +546,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       // ✅ جلب الـ session token وإرسال الطلب للـ Edge Function
       const { data: { session } } = await supabase.auth.getSession();
 
+      // ✅ إنشاء AbortController جديد لكل طلب
+      abortControllerRef.current = new AbortController();
+
       const res = await fetch(
         "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
         {
@@ -553,6 +557,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${session?.access_token}`,
           },
+          signal: abortControllerRef.current.signal, // ✅ تمرير الإشارة
           body: JSON.stringify({
             model:        GROQ_MODEL,
             max_tokens:   GROQ_MAX_TOKENS,
@@ -586,6 +591,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       // typing effect
       let i = 0;
       function type() {
+        // ✅ التحقق من عدم وجود إلغاء
+        if (abortControllerRef.current === null) return;
+
         if (i <= reply.length) {
           setStreamingText(reply.slice(0, i));
           i++;
@@ -594,21 +602,44 @@ export default function Chat({ user, onLogout, isAdmin }) {
           setStreamingText("");
           setMessages((prev) => [...prev, { role: "assistant", content: reply, id: Date.now() }]);
           setLoading(false);
+          abortControllerRef.current = null; // ✅ تصفير المرجع بعد الانتهاء
           setTimeout(() => inputRef.current?.focus(), 100);
         }
       }
       type();
     } catch (err) {
-      console.error("[Chat] خطأ في executeRequest:", err.message);
-      setMessages((prev) => [...prev, {
-        role:    "assistant",
-        content: "❌ حدث خطأ: " + err.message,
-        id:      Date.now(),
-      }]);
+      if (err.name === 'AbortError') {
+        // ✅ المستخدم قام بإلغاء الطلب
+        console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
+        setMessages((prev) => [...prev, {
+          role:    "assistant",
+          content: "⏹️ تم إيقاف التوليد.",
+          id:      Date.now(),
+        }]);
+      } else {
+        console.error("[Chat] خطأ في executeRequest:", err.message);
+        setMessages((prev) => [...prev, {
+          role:    "assistant",
+          content: "❌ حدث خطأ: " + err.message,
+          id:      Date.now(),
+        }]);
+      }
       setLoading(false);
+      setStreamingText("");
+      abortControllerRef.current = null;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.id]);
+
+  // ✅ دالة إيقاف التوليد
+  function handleStop() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setStreamingText("");
+  }
 
   async function sendMessage(overrideText, isRetry = false) {
     if (loading && !isRetry) return;
@@ -936,15 +967,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
           className="textarea"
           disabled={loading && !streamingText}
         />
+        {/* ✅ زر الإرسال/الإيقاف */}
         <button
-          onClick={() => sendMessage()}
+          onClick={loading ? handleStop : () => sendMessage()}
           className="send-btn"
           style={{
-            opacity:    (!input.trim() && !attachedFiles.length) || loading ? 0.4 : 1,
+            opacity:    (!input.trim() && !attachedFiles.length) && !loading ? 0.4 : 1,
             background: loading ? "#f87171" : "",
+            cursor: "pointer",
           }}
         >
-          {loading ? "⏳" : "↑"}
+          {loading ? "⏹️" : "↑"}
         </button>
       </div>
 
