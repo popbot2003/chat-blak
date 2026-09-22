@@ -1,5 +1,8 @@
 // ============================================
-// Chat.jsx - نسخة معدلة (مع تفعيل زر الإيقاف + حل TPM)
+// Chat.jsx - نسخة معدلة
+// - زر الإيقاف
+// - حل TPM (تلخيص + قصّ)
+// - تخزين الملخص في chats.summary
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -111,32 +114,33 @@ function showToast(message, type = "success") {
 // ─────────────────────────────────────────
 
 export default function Chat({ user, onLogout, isAdmin }) {
-  const [allChats, setAllChats]         = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(() => Date.now().toString());
-  const [showHistory, setShowHistory]   = useState(false);
-  const [showMenu, setShowMenu]         = useState(false);
-  const [messages, setMessages]         = useState([{
+  const [allChats, setAllChats]               = useState([]);
+  const [currentChatId, setCurrentChatId]     = useState(() => Date.now().toString());
+  const [currentChatSummary, setCurrentChatSummary] = useState(null);
+  const [showHistory, setShowHistory]         = useState(false);
+  const [showMenu, setShowMenu]               = useState(false);
+  const [messages, setMessages]               = useState([{
     role: "assistant",
     content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎",
     id: Date.now(),
   }]);
-  const [input, setInput]               = useState("");
-  const [loading, setLoading]           = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [copiedId, setCopiedId]         = useState(null);
-  const [theme, setTheme]               = useState("dark");
-  const [attachedFiles, setAttachedFiles] = useState([]);
-  const [isLoaded, setIsLoaded]         = useState(false);
-  const [currentUser, setCurrentUser]   = useState(user);
+  const [input, setInput]                     = useState("");
+  const [loading, setLoading]                 = useState(false);
+  const [streamingText, setStreamingText]     = useState("");
+  const [copiedId, setCopiedId]               = useState(null);
+  const [theme, setTheme]                     = useState("dark");
+  const [attachedFiles, setAttachedFiles]     = useState([]);
+  const [isLoaded, setIsLoaded]               = useState(false);
+  const [currentUser, setCurrentUser]         = useState(user);
 
-  const [showSettings, setShowSettings]             = useState(false);
-  const [editName, setEditName]                     = useState(user?.name || "");
-  const [editNewPassword, setEditNewPassword]       = useState("");
+  const [showSettings, setShowSettings]               = useState(false);
+  const [editName, setEditName]                       = useState(user?.name || "");
+  const [editNewPassword, setEditNewPassword]         = useState("");
   const [editConfirmPassword, setEditConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword]       = useState(false);
+  const [showNewPassword, setShowNewPassword]         = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [settingsLoading, setSettingsLoading]       = useState(false);
-  const [settingsError, setSettingsError]           = useState("");
+  const [settingsLoading, setSettingsLoading]         = useState(false);
+  const [settingsError, setSettingsError]             = useState("");
 
   const bottomRef         = useRef(null);
   const inputRef          = useRef(null);
@@ -144,12 +148,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const messagesRef       = useRef(messages);
   const currentChatIdRef  = useRef(currentChatId);
   const currentUserRef    = useRef(currentUser);
+  const currentSummaryRef = useRef(currentChatSummary);
   const debouncedSaveRef  = useRef(null);
   const abortControllerRef = useRef(null);
 
-  useEffect(() => { messagesRef.current      = messages;      }, [messages]);
-  useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
-  useEffect(() => { currentUserRef.current   = currentUser;   }, [currentUser]);
+  useEffect(() => { messagesRef.current       = messages;            }, [messages]);
+  useEffect(() => { currentChatIdRef.current  = currentChatId;       }, [currentChatId]);
+  useEffect(() => { currentUserRef.current    = currentUser;         }, [currentUser]);
+  useEffect(() => { currentSummaryRef.current = currentChatSummary;  }, [currentChatSummary]);
 
   // ── Realtime: تحديث بيانات المستخدم ──────────────────────
   useEffect(() => {
@@ -197,6 +203,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           if (currentChatIdRef.current === deletedId) {
             const newId = Date.now().toString();
             setCurrentChatId(newId);
+            setCurrentChatSummary(null);
             setMessages([{
               role: "assistant",
               content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
@@ -584,23 +591,36 @@ export default function Chat({ user, onLogout, isAdmin }) {
       // ─────────────────────────────────────────
       // بناء الرسائل مع التلخيص + القصّ (حل TPM)
       // ─────────────────────────────────────────
-      const KEEP_FULL = 5;            // آخر 5 رسائل كاملة
-      const MAX_CHARS_PER_MSG = 500;  // قصّ كل رسالة قديمة عند 500 حرف
+      const KEEP_FULL = 5;
+      const MAX_CHARS_PER_MSG = 500;
 
-      const allMsgs    = updatedMessages.slice(0, -1); // بدون الرسالة الجديدة
+      const allMsgs    = updatedMessages.slice(0, -1);
       const recentMsgs = allMsgs.slice(-KEEP_FULL);
       const oldMsgs    = allMsgs.slice(0, -KEEP_FULL);
 
-      // لو فيه رسائل قديمة → لخّصها
-      let summaryText = null;
-      if (oldMsgs.length > 0) {
+      // استخدم الملخص المخزَّن أولًا، ثم أنشئ جديدًا فقط عند الحاجة
+      let summaryText = currentSummaryRef.current;
+
+      if (oldMsgs.length > 0 && !summaryText) {
         summaryText = await summarizeOldMessages(oldMsgs, session);
+
+        if (summaryText) {
+          // حفظ في DB (بدون انتظار)
+          supabase
+            .from("chats")
+            .update({ summary: summaryText })
+            .eq("id", currentChatIdRef.current)
+            .then(() => {
+              setCurrentChatSummary(summaryText);
+            })
+            .catch((err) => {
+              console.error("[Chat] خطأ في حفظ الملخص:", err.message);
+            });
+        }
       }
 
-      // بناء قائمة الرسائل النهائية
       const chatMessages = [];
 
-      // 1. ملخص الرسائل القديمة (لو موجود)
       if (summaryText) {
         chatMessages.push({
           role: "system",
@@ -608,7 +628,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         });
       }
 
-      // 2. آخر 5 رسائل كاملة + قصّ الباقي
       recentMsgs.forEach((m) => {
         chatMessages.push({
           role: m.role,
@@ -741,6 +760,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     await saveChatToSupabase();
     const newId = Date.now().toString();
     setCurrentChatId(newId);
+    setCurrentChatSummary(null);
     setMessages([{ role: "assistant", content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.", id: Date.now() }]);
     setShowMenu(false);
     setShowHistory(false);
@@ -755,6 +775,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     if (data?.messages) {
       setCurrentChatId(chatId);
       setMessages(data.messages.slice(-CHAT_HISTORY_LIMIT));
+      setCurrentChatSummary(data.summary || null);
     }
     setShowHistory(false);
     setShowMenu(false);
