@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx - نسخة معدلة (مع تفعيل زر الإيقاف)
+// Chat.jsx - نسخة معدلة (مع تفعيل زر الإيقاف + حل TPM)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -145,7 +145,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const currentChatIdRef  = useRef(currentChatId);
   const currentUserRef    = useRef(currentUser);
   const debouncedSaveRef  = useRef(null);
-  const abortControllerRef = useRef(null); // ✅ إضافة مرجع AbortController
+  const abortControllerRef = useRef(null);
 
   useEffect(() => { messagesRef.current      = messages;      }, [messages]);
   useEffect(() => { currentChatIdRef.current = currentChatId; }, [currentChatId]);
@@ -450,7 +450,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
- async function deleteAccount() {
+  async function deleteAccount() {
     if (!window.confirm("⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"))
       return;
 
@@ -484,44 +484,43 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // Core chat logic
   // ─────────────────────────────────────────
 
-  // ─────────────────────────────────────────
-// Summarize old messages to reduce token usage
-// ─────────────────────────────────────────
-async function summarizeOldMessages(oldMessages, session) {
-  if (!oldMessages || oldMessages.length === 0) return null;
+  // لخّص الرسائل القديمة لتقليل حجم الطلب
+  async function summarizeOldMessages(oldMessages, session) {
+    if (!oldMessages || oldMessages.length === 0) return null;
 
-  const text = oldMessages
-    .map((m) => `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(0, 300)}`)
-    .join("\n");
+    const text = oldMessages
+      .map((m) => `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(0, 300)}`)
+      .join("\n");
 
-  try {
-    const res = await fetch(
-      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          max_tokens: 200,
-          temperature: 0.3,
-          systemPrompt: "أنت ملخّص محادثات. لخّص المحادثة التالية في 3 جمل قصيرة بالعربية فقط. لا تضف تعليقًا.",
-          messages: [
-            { role: "user", content: text },
-          ],
-        }),
-      }
-    );
+    try {
+      const res = await fetch(
+        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            model: GROQ_MODEL,
+            max_tokens: 200,
+            temperature: 0.3,
+            systemPrompt: "أنت ملخّص محادثات. لخّص المحادثة التالية في 3 جمل قصيرة بالعربية فقط. لا تضف تعليقًا.",
+            messages: [
+              { role: "user", content: text },
+            ],
+          }),
+        }
+      );
 
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
-    return null;
+      if (!res.ok) return null;
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || null;
+    } catch {
+      return null;
+    }
   }
-}
+
   const executeRequest = useCallback(async (text, isRetry = false) => {
     // التحقق من حالة المستخدم
     try {
@@ -579,45 +578,45 @@ async function summarizeOldMessages(oldMessages, session) {
           "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
       }
 
-// ─────────────────────────────────────────
-// Build chat messages with smart summarization + truncation
-// ─────────────────────────────────────────
-const KEEP_FULL = 5;              // آخر 5 رسائل كاملة
-const MAX_CHARS_PER_MSG = 500;    // قصّ كل رسالة قديمة عند 500 حرف
-
-const allMsgs = updatedMessages.slice(0, -1); // بدون الرسالة الجديدة
-const recentMsgs = allMsgs.slice(-KEEP_FULL);
-const oldMsgs = allMsgs.slice(0, -KEEP_FULL);
-
-// لو فيه رسائل قديمة → لخّصها
-let summaryText = null;
-if (oldMsgs.length > 0) {
-  summaryText = await summarizeOldMessages(oldMsgs, session);
-}
-
-// بناء قائمة الرسائل النهائية
-const chatMessages = [];
-
-// 1. ملخص الرسائل القديمة (لو موجود)
-if (summaryText) {
-  chatMessages.push({
-    role: "system",
-    content: `ملخص المحادثة السابقة: ${summaryText}`,
-  });
-}
-
-// 2. آخر 5 رسائل كاملة + قصّ الباقي
-recentMsgs.forEach((m) => {
-  chatMessages.push({
-    role: m.role,
-    content: m.content.length > MAX_CHARS_PER_MSG
-      ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
-      : m.content,
-  });
-});
-
-      // ✅ جلب الـ session token وإرسال الطلب للـ Edge Function
+      // ✅ جلب الـ session token (قبل استخدامه)
       const { data: { session } } = await supabase.auth.getSession();
+
+      // ─────────────────────────────────────────
+      // بناء الرسائل مع التلخيص + القصّ (حل TPM)
+      // ─────────────────────────────────────────
+      const KEEP_FULL = 5;            // آخر 5 رسائل كاملة
+      const MAX_CHARS_PER_MSG = 500;  // قصّ كل رسالة قديمة عند 500 حرف
+
+      const allMsgs    = updatedMessages.slice(0, -1); // بدون الرسالة الجديدة
+      const recentMsgs = allMsgs.slice(-KEEP_FULL);
+      const oldMsgs    = allMsgs.slice(0, -KEEP_FULL);
+
+      // لو فيه رسائل قديمة → لخّصها
+      let summaryText = null;
+      if (oldMsgs.length > 0) {
+        summaryText = await summarizeOldMessages(oldMsgs, session);
+      }
+
+      // بناء قائمة الرسائل النهائية
+      const chatMessages = [];
+
+      // 1. ملخص الرسائل القديمة (لو موجود)
+      if (summaryText) {
+        chatMessages.push({
+          role: "system",
+          content: `ملخص المحادثة السابقة: ${summaryText}`,
+        });
+      }
+
+      // 2. آخر 5 رسائل كاملة + قصّ الباقي
+      recentMsgs.forEach((m) => {
+        chatMessages.push({
+          role: m.role,
+          content: m.content.length > MAX_CHARS_PER_MSG
+            ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
+            : m.content,
+        });
+      });
 
       // ✅ إنشاء AbortController جديد لكل طلب
       abortControllerRef.current = new AbortController();
@@ -630,7 +629,7 @@ recentMsgs.forEach((m) => {
             "Content-Type": "application/json",
             "Authorization": `Bearer ${session?.access_token}`,
           },
-          signal: abortControllerRef.current.signal, // ✅ تمرير الإشارة
+          signal: abortControllerRef.current.signal,
           body: JSON.stringify({
             model:        GROQ_MODEL,
             max_tokens:   GROQ_MAX_TOKENS,
@@ -640,7 +639,7 @@ recentMsgs.forEach((m) => {
               currentUserRef.current?.gender || "ولد"
             ),
             messages: [
-              ...chatMessages.slice(-CHAT_HISTORY_LIMIT),
+              ...chatMessages,
               { role: "user", content: enhancedText },
             ],
           }),
@@ -664,7 +663,6 @@ recentMsgs.forEach((m) => {
       // typing effect
       let i = 0;
       function type() {
-        // ✅ التحقق من عدم وجود إلغاء
         if (abortControllerRef.current === null) return;
 
         if (i <= reply.length) {
@@ -675,14 +673,13 @@ recentMsgs.forEach((m) => {
           setStreamingText("");
           setMessages((prev) => [...prev, { role: "assistant", content: reply, id: Date.now() }]);
           setLoading(false);
-          abortControllerRef.current = null; // ✅ تصفير المرجع بعد الانتهاء
+          abortControllerRef.current = null;
           setTimeout(() => inputRef.current?.focus(), 100);
         }
       }
       type();
     } catch (err) {
       if (err.name === 'AbortError') {
-        // ✅ المستخدم قام بإلغاء الطلب
         console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
         setMessages((prev) => [...prev, {
           role:    "assistant",
@@ -1040,7 +1037,6 @@ recentMsgs.forEach((m) => {
           className="textarea"
           disabled={loading && !streamingText}
         />
-        {/* ✅ زر الإرسال/الإيقاف */}
         <button
           onClick={loading ? handleStop : () => sendMessage()}
           className="send-btn"
