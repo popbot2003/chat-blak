@@ -1,6 +1,6 @@
 // ============================================
 // TaskMessage.jsx
-// كارت مهمة في الشات
+// كارت مهمة في الشات مع مؤشرات تحميل متحركة
 // ============================================
 
 export default function TaskMessage({ task, onCancel }) {
@@ -12,7 +12,6 @@ export default function TaskMessage({ task, onCancel }) {
     total_steps = 0,
     result,
     error,
-    created_at,
   } = task;
 
   const isActive = ["pending", "planning", "running", "waiting", "merging"].includes(status);
@@ -25,10 +24,12 @@ export default function TaskMessage({ task, onCancel }) {
     : 0;
 
   return (
-    <div className="task-card">
+    <div className={`task-card ${isActive ? "task-card-active" : ""}`}>
       {/* Header */}
       <div className="task-card-header">
         <div className="task-card-title">
+          {/* حلقة دوارة عند النشاط */}
+          {isActive && <span className="task-spinner" />}
           <span className="task-card-icon">📋</span>
           <span className="task-card-label">
             {isCompleted && "✅ مهمة مكتملة"}
@@ -54,7 +55,7 @@ export default function TaskMessage({ task, onCancel }) {
         {input}
       </div>
 
-      {/* Progress (للمهام النشطة) */}
+      {/* Progress (للمهام النشطة مع خطوات) */}
       {isActive && total_steps > 0 && (
         <div className="task-card-progress">
           <div className="task-card-progress-info">
@@ -65,11 +66,14 @@ export default function TaskMessage({ task, onCancel }) {
             </span>
             <span>{percent}%</span>
           </div>
+
           <div className="task-card-progress-bar">
             <div
               className="task-card-progress-fill"
               style={{ width: `${percent}%` }}
             />
+            {/* خط متحرك فوق الشريط */}
+            <div className="task-card-progress-shimmer" />
           </div>
         </div>
       )}
@@ -77,7 +81,8 @@ export default function TaskMessage({ task, onCancel }) {
       {/* Pending State (لم يبدأ بعد) */}
       {isActive && total_steps === 0 && (
         <div className="task-card-waiting">
-          ⏳ في الانتظار... سيبدأ التنفيذ خلال دقيقة.
+          <span className="task-spinner task-spinner-small" />
+          <span>في الانتظار... سيبدأ التنفيذ خلال دقيقة.</span>
         </div>
       )}
 
