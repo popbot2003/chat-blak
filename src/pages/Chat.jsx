@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx — نسخة مُقسَّمة + المهام
+// Chat.jsx — نسخة مُقسَّمة + المهام + آخر محادثة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -121,7 +121,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [sendMode, setSendMode] = useState("chat"); // "chat" | "task"
+  const [sendMode, setSendMode] = useState("chat");
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -152,6 +152,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }, [messages]);
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
+    // احفظ آخر محادثة في localStorage
+    if (currentChatId) {
+      localStorage.setItem("black-last-chat-id", currentChatId);
+    }
   }, [currentChatId]);
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -189,6 +193,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           if (payload.old.id === user.id) {
             showToast("⚠️ تم حذف حسابك بواسطة المدير.", "error");
             localStorage.removeItem("black-user");
+            localStorage.removeItem("black-last-chat-id");
             setTimeout(() => window.location.reload(), 2000);
           }
         }
@@ -213,7 +218,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
           const task = payload.new;
           if (!task || !task.id) return;
 
-          // حدّث الرسالة في messages
           setMessages((prev) =>
             prev.map((m) => {
               if (m.type === "task" && m.task && m.task.id === task.id) {
@@ -223,13 +227,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
             })
           );
 
-          // إذا اكتملت المهمة → أضف رسالة بالنص النهائي
           if (
             payload.eventType === "UPDATE" &&
             task.status === "completed" &&
             task.result
           ) {
-            // تحقق من عدم إضافتها مسبقًا
             const alreadyAdded = messagesRef.current.some(
               (m) => m.id === `completed-${task.id}`
             );
@@ -343,11 +345,41 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // Data loading
   // ─────────────────────────────────────────
   async function loadAllData() {
-    await loadChatsFromSupabase();
+    const chats = await loadChatsFromSupabase();
     await loadActiveTasks();
     await refreshUserData();
-    await checkAndShowWelcome();
+    await checkAndShowWelcome(chats);
+    await restoreLastChat(chats);
     setIsLoaded(true);
+  }
+
+  // ⭐ جديد: يستعيد آخر محادثة
+  async function restoreLastChat(chats) {
+    try {
+      const lastChatId = localStorage.getItem("black-last-chat-id");
+      if (!lastChatId) return;
+
+      // هل المحادثة موجودة في قائمة المستخدم؟
+      const exists = (chats || []).find((c) => c.id === lastChatId);
+      if (!exists) {
+        localStorage.removeItem("black-last-chat-id");
+        return;
+      }
+
+      // اجلب محتوى المحادثة
+      const { data } = await supabase
+        .from("chats")
+        .select("*")
+        .eq("id", lastChatId)
+        .single();
+
+      if (data?.messages && data.messages.length > 0) {
+        setCurrentChatId(lastChatId);
+        setMessages(data.messages.slice(-CHAT_HISTORY_LIMIT));
+      }
+    } catch (err) {
+      console.warn("[Chat] تعذر استعادة آخر محادثة:", err.message);
+    }
   }
 
   async function loadActiveTasks() {
@@ -402,16 +434,19 @@ export default function Chat({ user, onLogout, isAdmin }) {
         .order("updated_at", { ascending: false })
         .limit(50);
       if (error) throw error;
-      setAllChats(
-        (chats ?? []).map((c) => ({
-          id: c.id,
-          title: c.title || "محادثة",
-          date: c.updated_at,
-          messageCount: c.messages?.length || 0,
-        }))
-      );
+
+      const mapped = (chats ?? []).map((c) => ({
+        id: c.id,
+        title: c.title || "محادثة",
+        date: c.updated_at,
+        messageCount: c.messages?.length || 0,
+      }));
+
+      setAllChats(mapped);
+      return mapped;
     } catch (err) {
       console.error("[Chat] خطأ في تحميل المحادثات:", err.message);
+      return [];
     }
   }
 
@@ -419,7 +454,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length <= 1) return;
 
-    // لا تحفظ رسائل المهام
     const normalMsgs = msgs.filter((m) => m.type !== "task");
     if (normalMsgs.length <= 1) return;
 
@@ -501,14 +535,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return opts[Math.floor(Math.random() * opts.length)];
   }
 
-  async function checkAndShowWelcome() {
+  async function checkAndShowWelcome(chats) {
     const cu = currentUserRef.current;
     if (!cu) return;
 
     const today = new Date().toISOString().slice(0, 10);
     const isNewUser = !cu.last_login_date;
     const isFirstDay = cu.last_login_date !== today;
-    const chatCount = allChats.length;
+    const chatCount = (chats || []).length;
 
     const welcomeMessage = isNewUser
       ? `أهلاً وسهلاً يا ${
@@ -592,6 +626,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       if (!res.ok) throw new Error(data.error || "خطأ في حذف الحساب");
 
       localStorage.removeItem("black-user");
+      localStorage.removeItem("black-last-chat-id");
       window.location.reload();
     } catch (err) {
       alert("❌ خطأ في حذف الحساب: " + err.message);
@@ -863,7 +898,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
 
-      // اجلب المهمة
       const { data: task, error: fetchErr } = await supabase
         .from("tasks")
         .select("*")
@@ -875,7 +909,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         return;
       }
 
-      // أضف الرسالة
       setMessages((prev) => [
         ...prev,
         {
@@ -888,7 +921,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       setInput("");
       setAttachedFiles([]);
-      setSendMode("chat"); // ارجع للوضع الافتراضي
+      setSendMode("chat");
     } catch (err) {
       console.error("[Chat] خطأ في createTask:", err);
       showToast("❌ فشل إنشاء المهمة", "error");
@@ -904,8 +937,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       if (error) throw error;
 
       showToast("🛑 تم إيقاف المهمة.", "info");
-
-      // Realtime سيحدّث الرسالة تلقائيًا
     } catch (err) {
       console.error("[Chat] خطأ في cancelTask:", err);
       showToast("❌ فشل إيقاف المهمة", "error");
@@ -921,13 +952,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const text = input.trim();
     if (!text && !attachedFiles.length) return;
 
-    // إذا الوضع "مهمة" وليس هناك ملفات
     if (sendMode === "task" && !attachedFiles.length) {
       await createTask(text);
       return;
     }
 
-    // الوضع العادي (رد سريع)
     const MAX_FILE_CHARS = 3000;
     let finalText = text;
 
