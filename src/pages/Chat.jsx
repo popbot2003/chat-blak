@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx — نسخة كاملة (مهام + آخر محادثة + المهام الحديثة)
+// Chat.jsx — نسخة كاملة (الكارت يختفي عند الاكتمال)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -218,6 +218,56 @@ export default function Chat({ user, onLogout, isAdmin }) {
           if (!task || !task.id) return;
 
           setMessages((prev) => {
+            // ✅ عند الاكتمال → احذف الكارت وأضف النتيجة
+            if (task.status === "completed" && task.result) {
+              const withoutTask = prev.filter(
+                (m) => !(m.type === "task" && m.task && m.task.id === task.id)
+              );
+
+              const alreadyAdded = withoutTask.some(
+                (m) => m.id === `completed-${task.id}`
+              );
+              if (alreadyAdded) return withoutTask;
+
+              return [
+                ...withoutTask,
+                {
+                  id: `completed-${task.id}`,
+                  role: "assistant",
+                  content: task.result,
+                },
+              ];
+            }
+
+            // ✅ عند الفشل → احذف الكارت وأضف رسالة خطأ
+            if (task.status === "failed") {
+              const withoutTask = prev.filter(
+                (m) => !(m.type === "task" && m.task && m.task.id === task.id)
+              );
+
+              const alreadyAdded = withoutTask.some(
+                (m) => m.id === `failed-${task.id}`
+              );
+              if (alreadyAdded) return withoutTask;
+
+              return [
+                ...withoutTask,
+                {
+                  id: `failed-${task.id}`,
+                  role: "assistant",
+                  content: `❌ فشلت المهمة: ${task.error || "خطأ غير معروف"}`,
+                },
+              ];
+            }
+
+            // ✅ عند الإلغاء → احذف الكارت بصمت
+            if (task.status === "cancelled") {
+              return prev.filter(
+                (m) => !(m.type === "task" && m.task && m.task.id === task.id)
+              );
+            }
+
+            // ✅ للمهام النشطة → عرض/تحديث الكارت
             const exists = prev.some(
               (m) => m.type === "task" && m.task && m.task.id === task.id
             );
@@ -367,19 +417,30 @@ export default function Chat({ user, onLogout, isAdmin }) {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const taskMessages = data.map((task) => ({
-          id: `task-${task.id}`,
-          role: "assistant",
-          type: "task",
-          task,
-        }));
+        const taskMessages = data.map((task) => {
+          // المهام المكتملة → نتيجتها كرسالة
+          if (task.status === "completed" && task.result) {
+            return {
+              id: `completed-${task.id}`,
+              role: "assistant",
+              content: task.result,
+            };
+          }
+          // المهام النشطة → كارت
+          return {
+            id: `task-${task.id}`,
+            role: "assistant",
+            type: "task",
+            task,
+          };
+        });
 
         setMessages((prev) => {
           const existingIds = new Set(prev.map((m) => m.id));
-          const newTasks = taskMessages.filter(
+          const newMsgs = taskMessages.filter(
             (m) => !existingIds.has(m.id)
           );
-          return [...prev, ...newTasks];
+          return [...prev, ...newMsgs];
         });
       }
     } catch (err) {
@@ -409,7 +470,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setCurrentChatId(lastChatId);
         setMessages((prev) => {
           const taskMsgs = prev.filter((m) => m.type === "task");
-          return [...data.messages.slice(-CHAT_HISTORY_LIMIT), ...taskMsgs];
+          const completedMsgs = prev.filter(
+            (m) =>
+              !m.type && m.id && String(m.id).startsWith("completed-")
+          );
+          return [
+            ...data.messages.slice(-CHAT_HISTORY_LIMIT),
+            ...completedMsgs,
+            ...taskMsgs,
+          ];
         });
       }
     } catch (err) {
@@ -463,6 +532,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length <= 1) return;
 
+    // احفظ كل الرسائل النصية (بما فيها نتائج المهام المكتملة)
+    // استبعد فقط كروت المهام النشطة
     const normalMsgs = msgs.filter((m) => m.type !== "task");
     if (normalMsgs.length <= 1) return;
 
@@ -1019,8 +1090,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
     if (data?.messages) {
       setCurrentChatId(chatId);
       setMessages((prev) => {
+        // احتفظ بالمهام النشطة والنتائج المكتملة الحديثة
         const taskMsgs = prev.filter((m) => m.type === "task");
-        return [...data.messages.slice(-CHAT_HISTORY_LIMIT), ...taskMsgs];
+        const completedMsgs = prev.filter(
+          (m) =>
+            !m.type && m.id && String(m.id).startsWith("completed-")
+        );
+        return [
+          ...data.messages.slice(-CHAT_HISTORY_LIMIT),
+          ...completedMsgs,
+          ...taskMsgs,
+        ];
       });
     }
     setShowHistory(false);
