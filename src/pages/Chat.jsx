@@ -264,7 +264,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
             "merging",
           ];
 
-          // ✅ تحديث قائمة المهام النشطة
           setAllActiveTasks((prev) => {
             const isActive = ACTIVE_STATUSES.includes(task.status);
             const exists = prev.some((t) => t.id === task.id);
@@ -279,7 +278,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
             return prev.filter((t) => t.id !== task.id);
           });
 
-          // ✅ إذا كانت المهمة في محادثة أخرى → لا نلمس messages
           if (task.chat_id && task.chat_id !== currentChatIdRef.current) {
             if (task.status === "completed") {
               showToast("✅ اكتملت مهمة في محادثة أخرى.", "success");
@@ -1402,7 +1400,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       <ChatTokenBar user={currentUser} />
 
-      {/* ✅ إشعار المهام النشطة */}
       <ActiveTasksNotification
         tasks={allActiveTasks}
         currentChatId={currentChatId}
