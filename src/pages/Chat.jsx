@@ -1,9 +1,9 @@
 // ============================================
 // Chat.jsx — نسخة كاملة
+// - ربط المهام بالمحادثة (chat_id)
 // - الأقدم أعلى الشاشة
 // - محادثة جديدة عند كل دخول
 // - منع تكرار المهام
-// - المهام آخر 24 ساعة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -114,29 +114,26 @@ function showToast(message, type = "success") {
   setTimeout(() => div.remove(), 3000);
 }
 
-// ✅ استخراج timestamp من رسالة (عادية أو مهمة)
+// ✅ استخراج timestamp
 function getMessageTimestamp(msg) {
-  // من المهمة
   if (msg.task?.created_at) {
     return new Date(msg.task.created_at).getTime();
   }
-  // من id (إذا كان رقمي — Date.now())
   if (typeof msg.id === "number") return msg.id;
   if (typeof msg.id === "string" && !isNaN(Number(msg.id))) {
     return Number(msg.id);
   }
-  // افتراضي
   return 0;
 }
 
-// ✅ ترتيب الرسائل: الأقدم أولًا
+// ✅ ترتيب: الأقدم أولًا
 function sortMessagesByTime(msgs) {
   return [...msgs].sort((a, b) => {
     return getMessageTimestamp(a) - getMessageTimestamp(b);
   });
 }
 
-// ✅ دمج رسائل بدون تكرار + ترتيب
+// ✅ دمج بدون تكرار + ترتيب
 function mergeMessages(existing, newMsgs) {
   const seen = new Set();
   const combined = [];
@@ -260,12 +257,19 @@ export default function Chat({ user, onLogout, isAdmin }) {
           const task = payload.new;
           if (!task || !task.id) return;
 
+          // ✅ فلتر: فقط مهام المحادثة الحالية
+          if (
+            task.chat_id &&
+            task.chat_id !== currentChatIdRef.current
+          ) {
+            return;
+          }
+
           const taskMsgId = `task-${task.id}`;
           const completedMsgId = `completed-${task.id}`;
           const failedMsgId = `failed-${task.id}`;
 
           setMessages((prev) => {
-            // عند الاكتمال → احذف الكارت وأضف النتيجة
             if (task.status === "completed" && task.result) {
               const withoutTask = prev.filter((m) => m.id !== taskMsgId);
 
@@ -280,12 +284,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
                   id: completedMsgId,
                   role: "assistant",
                   content: task.result,
-                  task, // للترتيب
+                  task,
                 },
               ]);
             }
 
-            // عند الفشل → احذف الكارت وأضف رسالة خطأ
             if (task.status === "failed") {
               const withoutTask = prev.filter((m) => m.id !== taskMsgId);
 
@@ -305,12 +308,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
               ]);
             }
 
-            // عند الإلغاء → احذف الكارت
             if (task.status === "cancelled") {
               return prev.filter((m) => m.id !== taskMsgId);
             }
 
-            // للمهام النشطة → عرض/تحديث الكارت
             const exists = prev.some((m) => m.id === taskMsgId);
 
             if (exists) {
@@ -431,15 +432,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ─────────────────────────────────────────
   async function loadAllData() {
     const chats = await loadChatsFromSupabase();
-    await loadRecentTasks();
+    await loadChatTasks();
     await refreshUserData();
     await checkAndShowWelcome(chats);
-    // ✅ إلغاء استعادة آخر محادثة — محادثة جديدة كل دخول
     setIsLoaded(true);
   }
 
-  // ⭐ تحميل المهام النشطة + المهام الحديثة (آخر 24 ساعة)
-  async function loadRecentTasks() {
+  // ✅ تحميل مهام المحادثة الحالية فقط
+  async function loadChatTasks() {
     try {
       const oneDayAgo = new Date(
         Date.now() - 24 * 60 * 60 * 1000
@@ -449,6 +449,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         .from("tasks")
         .select("*")
         .eq("user_id", user.id)
+        .eq("chat_id", currentChatIdRef.current)
         .or(
           `status.in.(pending,planning,running,waiting,merging),created_at.gte.${oneDayAgo}`
         )
@@ -459,7 +460,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       if (data && data.length > 0) {
         const taskMessages = data.map((task) => {
-          // المهام المكتملة → نتيجتها كرسالة
           if (task.status === "completed" && task.result) {
             return {
               id: `completed-${task.id}`,
@@ -468,7 +468,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
               task,
             };
           }
-          // المهام النشطة → كارت
           return {
             id: `task-${task.id}`,
             role: "assistant",
@@ -480,7 +479,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setMessages((prev) => mergeMessages(prev, taskMessages));
       }
     } catch (err) {
-      console.error("[Chat] خطأ في تحميل المهام:", err.message);
+      console.error("[Chat] خطأ في تحميل مهام المحادثة:", err.message);
     }
   }
 
@@ -980,8 +979,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
     creatingTaskRef.current = true;
 
     try {
+      // ✅ تمرير chat_id
       const { data: taskId, error } = await supabase.rpc("create_task", {
         task_input: text,
+        chat_id_input: currentChatIdRef.current,
       });
 
       if (error) {
@@ -1109,7 +1110,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       .single();
     if (data?.messages) {
       setCurrentChatId(chatId);
-      // احتفظ بالمهام النشطة فقط
       setMessages((prev) => {
         const taskMsgs = prev.filter((m) => m.type === "task");
         return sortMessagesByTime([
