@@ -1,6 +1,5 @@
 // ============================================
-// Chat.jsx — نسخة مُقسَّمة
-// المنطق الرئيسي، والعرض عبر المكونات
+// Chat.jsx — نسخة مُقسَّمة + المهام
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -26,11 +25,7 @@ import {
   getPersonalityPrompt,
   DEFAULT_PERSONALITY,
 } from "../config/personalities";
-import {
-  formatDate,
-  copyToClipboard,
-  debounce,
-} from "../utils/helpers";
+import { formatDate, copyToClipboard, debounce } from "../utils/helpers";
 import { checkUserDailyLimit } from "../utils/validators";
 
 // ─────────────────────────────────────────
@@ -126,6 +121,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [sendMode, setSendMode] = useState("chat"); // "chat" | "task"
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -198,6 +194,61 @@ export default function Chat({ user, onLogout, isAdmin }) {
         }
       )
       .subscribe();
+    return () => ch.unsubscribe();
+  }, [user.id]);
+
+  // ── Realtime: المهام ──
+  useEffect(() => {
+    const ch = supabase
+      .channel(`tasks-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "tasks",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const task = payload.new;
+          if (!task || !task.id) return;
+
+          // حدّث الرسالة في messages
+          setMessages((prev) =>
+            prev.map((m) => {
+              if (m.type === "task" && m.task && m.task.id === task.id) {
+                return { ...m, task };
+              }
+              return m;
+            })
+          );
+
+          // إذا اكتملت المهمة → أضف رسالة بالنص النهائي
+          if (
+            payload.eventType === "UPDATE" &&
+            task.status === "completed" &&
+            task.result
+          ) {
+            // تحقق من عدم إضافتها مسبقًا
+            const alreadyAdded = messagesRef.current.some(
+              (m) => m.id === `completed-${task.id}`
+            );
+            if (!alreadyAdded) {
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: `completed-${task.id}`,
+                  role: "assistant",
+                  content: `✅ **اكتملت المهمة!**\n\n${task.result}`,
+                  fromTask: task.id,
+                },
+              ]);
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => ch.unsubscribe();
   }, [user.id]);
 
@@ -293,9 +344,36 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ─────────────────────────────────────────
   async function loadAllData() {
     await loadChatsFromSupabase();
+    await loadActiveTasks();
     await refreshUserData();
     await checkAndShowWelcome();
     setIsLoaded(true);
+  }
+
+  async function loadActiveTasks() {
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", user.id)
+        .in("status", ["pending", "planning", "running", "waiting", "merging"])
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const taskMessages = data.map((task) => ({
+          id: `task-${task.id}`,
+          role: "assistant",
+          type: "task",
+          task,
+        }));
+
+        setMessages((prev) => [...prev, ...taskMessages]);
+      }
+    } catch (err) {
+      console.error("[Chat] خطأ في تحميل المهام:", err.message);
+    }
   }
 
   async function refreshUserData() {
@@ -341,8 +419,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length <= 1) return;
 
+    // لا تحفظ رسائل المهام
+    const normalMsgs = msgs.filter((m) => m.type !== "task");
+    if (normalMsgs.length <= 1) return;
+
     const title =
-      msgs.find((m) => m.role === "user")?.content?.slice(0, 50) || "محادثة";
+      normalMsgs.find((m) => m.role === "user")?.content?.slice(0, 50) ||
+      "محادثة";
     const chatId = currentChatIdRef.current;
     const now = new Date().toISOString();
 
@@ -351,7 +434,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         id: chatId,
         user_id: user.id,
         title,
-        messages: msgs.slice(-CHAT_HISTORY_LIMIT),
+        messages: normalMsgs.slice(-CHAT_HISTORY_LIMIT),
         updated_at: now,
       });
       if (error) throw error;
@@ -362,7 +445,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           id: chatId,
           title,
           date: now,
-          messageCount: msgs.length,
+          messageCount: normalMsgs.length,
         };
         return exists
           ? [updated, ...prev.filter((c) => c.id !== chatId)]
@@ -764,12 +847,87 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setStreamingText("");
   }
 
-  async function sendMessage(overrideText, isRetry = false) {
-    if (loading && !isRetry) return;
+  // ─────────────────────────────────────────
+  // إنشاء مهمة جديدة
+  // ─────────────────────────────────────────
+  async function createTask(text) {
+    try {
+      const { data: taskId, error } = await supabase.rpc("create_task", {
+        task_input: text,
+      });
 
-    const text = (overrideText || input).trim();
-    if (!text && !attachedFiles.length && !isRetry) return;
+      if (error) {
+        showToast("❌ " + error.message, "error");
+        return;
+      }
 
+      showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
+
+      // اجلب المهمة
+      const { data: task, error: fetchErr } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("id", taskId)
+        .single();
+
+      if (fetchErr || !task) {
+        console.error("[Chat] فشل جلب المهمة:", fetchErr);
+        return;
+      }
+
+      // أضف الرسالة
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `task-${task.id}`,
+          role: "assistant",
+          type: "task",
+          task,
+        },
+      ]);
+
+      setInput("");
+      setAttachedFiles([]);
+      setSendMode("chat"); // ارجع للوضع الافتراضي
+    } catch (err) {
+      console.error("[Chat] خطأ في createTask:", err);
+      showToast("❌ فشل إنشاء المهمة", "error");
+    }
+  }
+
+  async function cancelTask(taskId) {
+    try {
+      const { error } = await supabase.rpc("cancel_task", {
+        target_task_id: taskId,
+      });
+
+      if (error) throw error;
+
+      showToast("🛑 تم إيقاف المهمة.", "info");
+
+      // Realtime سيحدّث الرسالة تلقائيًا
+    } catch (err) {
+      console.error("[Chat] خطأ في cancelTask:", err);
+      showToast("❌ فشل إيقاف المهمة", "error");
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // Send (chat or task)
+  // ─────────────────────────────────────────
+  async function sendMessage() {
+    if (loading) return;
+
+    const text = input.trim();
+    if (!text && !attachedFiles.length) return;
+
+    // إذا الوضع "مهمة" وليس هناك ملفات
+    if (sendMode === "task" && !attachedFiles.length) {
+      await createTask(text);
+      return;
+    }
+
+    // الوضع العادي (رد سريع)
     const MAX_FILE_CHARS = 3000;
     let finalText = text;
 
@@ -790,7 +948,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       finalText = (text || "الملفات المرفقة:") + filesText;
     }
 
-    executeRequest(finalText, isRetry);
+    executeRequest(finalText);
   }
 
   async function newChat() {
@@ -911,7 +1069,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ─────────────────────────────────────────
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
-      {/* Header + Menu */}
       <div style={{ position: "relative" }}>
         <ChatHeader
           user={currentUser}
@@ -944,10 +1101,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
         )}
       </div>
 
-      {/* Token Bar */}
       <ChatTokenBar user={currentUser} />
 
-      {/* History Panel */}
       {showHistory && (
         <ChatHistory
           chats={allChats}
@@ -958,7 +1113,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         />
       )}
 
-      {/* Messages */}
       <ChatMessages
         messages={messages}
         streamingText={streamingText}
@@ -966,23 +1120,26 @@ export default function Chat({ user, onLogout, isAdmin }) {
         isDark={isDark}
         copiedId={copiedId}
         onCopy={copyMessage}
+        onCancelTask={cancelTask}
         bottomRef={bottomRef}
       />
 
-      {/* Input + Files */}
       <ChatInput
         input={input}
         setInput={setInput}
         loading={loading}
         streamingText={streamingText}
         attachedFiles={attachedFiles}
-        onSend={() => sendMessage()}
+        sendMode={sendMode}
+        onSend={sendMessage}
         onStop={handleStop}
         onFileUpload={handleFileUpload}
         onRemoveFile={removeFile}
+        onToggleMode={() =>
+          setSendMode((m) => (m === "chat" ? "task" : "chat"))
+        }
       />
 
-      {/* Settings Modal */}
       {showSettings && (
         <ChatSettings
           user={currentUser}
