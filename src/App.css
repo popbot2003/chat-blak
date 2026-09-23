@@ -260,6 +260,341 @@ h3 { font-size: 18px; }
   transition: width 0.5s ease;
 }
 
+/* ========== Active Tasks Notification ========== */
+.active-tasks-notification {
+  flex-shrink: 0;
+  background: linear-gradient(
+    135deg,
+    rgba(108, 92, 231, 0.1),
+    rgba(139, 92, 246, 0.05)
+  );
+  border-bottom: 1px solid rgba(108, 92, 231, 0.25);
+  font-family: var(--font-body);
+  animation: active-tasks-slide-in 0.3s ease;
+}
+
+.light .active-tasks-notification {
+  background: linear-gradient(
+    135deg,
+    rgba(108, 92, 231, 0.06),
+    rgba(139, 92, 246, 0.03)
+  );
+  border-bottom: 1px solid rgba(108, 92, 231, 0.15);
+}
+
+@keyframes active-tasks-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.active-tasks-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: #a29bfe;
+  padding: 10px 16px;
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  text-align: right;
+}
+
+.light .active-tasks-header {
+  color: #6c5ce7;
+}
+
+.active-tasks-header:hover {
+  background: rgba(108, 92, 231, 0.08);
+}
+
+.active-tasks-header-text {
+  flex: 1;
+}
+
+.active-tasks-header-toggle {
+  font-size: 14px;
+  opacity: 0.7;
+  transition: transform 0.2s;
+}
+
+.active-tasks-body {
+  padding: 0 12px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.active-tasks-body::-webkit-scrollbar {
+  width: 4px;
+}
+
+.active-tasks-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.light .active-tasks-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.active-tasks-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 4px 0;
+}
+
+.light .active-tasks-divider {
+  color: rgba(30, 27, 75, 0.5);
+}
+
+.active-tasks-divider::before,
+.active-tasks-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.light .active-tasks-divider::before,
+.light .active-tasks-divider::after {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+/* ========== Active Task Item ========== */
+.active-task-item {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(108, 92, 231, 0.2);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.light .active-task-item {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(108, 92, 231, 0.15);
+}
+
+.active-task-item.is-current {
+  background: rgba(108, 92, 231, 0.08);
+  border-color: rgba(108, 92, 231, 0.35);
+}
+
+.light .active-task-item.is-current {
+  background: rgba(108, 92, 231, 0.05);
+  border-color: rgba(108, 92, 231, 0.25);
+}
+
+.active-task-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.active-task-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: active-task-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes active-task-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(0.85);
+  }
+}
+
+.active-task-status-label {
+  font-weight: 600;
+  color: inherit;
+  opacity: 0.9;
+}
+
+.active-task-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fbbf24;
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.active-task-title {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+  opacity: 0.95;
+  word-break: break-word;
+}
+
+.active-task-progress {
+  margin-top: 2px;
+}
+
+.active-task-progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  opacity: 0.75;
+  margin-bottom: 4px;
+}
+
+.active-task-progress-bar {
+  width: 100%;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+  position: relative;
+}
+
+.light .active-task-progress-bar {
+  background: rgba(108, 92, 231, 0.1);
+}
+
+.active-task-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.active-task-progress-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: task-shimmer 1.8s ease-in-out infinite;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.light .active-task-progress-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(108, 92, 231, 0.25),
+    transparent
+  );
+}
+
+.active-task-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  opacity: 0.7;
+  font-style: italic;
+  padding: 4px 0;
+}
+
+.active-task-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid rgba(162, 155, 254, 0.25);
+  border-top-color: #a29bfe;
+  border-radius: 50%;
+  animation: task-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.light .active-task-spinner {
+  border-color: rgba(108, 92, 231, 0.2);
+  border-top-color: #6c5ce7;
+}
+
+.active-task-open-btn {
+  margin-top: 4px;
+  padding: 6px 12px;
+  background: rgba(108, 92, 231, 0.15);
+  border: 1px solid rgba(108, 92, 231, 0.3);
+  color: #a29bfe;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.2s;
+  align-self: flex-start;
+}
+
+.light .active-task-open-btn {
+  background: rgba(108, 92, 231, 0.1);
+  border-color: rgba(108, 92, 231, 0.25);
+  color: #6c5ce7;
+}
+
+.active-task-open-btn:hover {
+  background: rgba(108, 92, 231, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Responsive */
+@media (max-width: 767px) {
+  .active-tasks-header {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .active-tasks-body {
+    padding: 0 8px 8px 8px;
+    gap: 6px;
+    max-height: 240px;
+  }
+
+  .active-task-item {
+    padding: 8px 10px;
+  }
+
+  .active-task-title {
+    font-size: 12px;
+  }
+
+  .active-task-progress-info {
+    font-size: 10px;
+  }
+
+  .active-task-open-btn {
+    padding: 5px 10px;
+    font-size: 11px;
+  }
+}
+
 /* ========== شريط البحث/السجل ========== */
 .search-bar {
   display: flex;
@@ -763,7 +1098,6 @@ h3 { font-size: 18px; }
   border: 1px solid rgba(108,92,231,0.2);
 }
 
-/* نبض خفيف للكارت النشط */
 .task-card-active {
   animation: task-pulse 2s ease-in-out infinite;
 }
@@ -820,7 +1154,6 @@ h3 { font-size: 18px; }
   font-weight: 700;
 }
 
-/* الحلقة الدوارة */
 .task-spinner {
   display: inline-block;
   width: 16px;
@@ -896,7 +1229,6 @@ h3 { font-size: 18px; }
   opacity: 0.9;
 }
 
-/* شريط التقدم مع الشيمر المتحرك */
 .task-card-progress-bar {
   width: 100%;
   height: 8px;
@@ -919,7 +1251,6 @@ h3 { font-size: 18px; }
   z-index: 2;
 }
 
-/* الشيمر المتحرك فوق الشريط */
 .task-card-progress-shimmer {
   position: absolute;
   top: 0;
