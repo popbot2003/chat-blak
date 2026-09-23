@@ -1,5 +1,9 @@
 // ============================================
-// Chat.jsx — نسخة كاملة (مع إصلاح تكرار الكارت)
+// Chat.jsx — نسخة كاملة
+// - الأقدم أعلى الشاشة
+// - محادثة جديدة عند كل دخول
+// - منع تكرار المهام
+// - المهام آخر 24 ساعة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -110,6 +114,44 @@ function showToast(message, type = "success") {
   setTimeout(() => div.remove(), 3000);
 }
 
+// ✅ استخراج timestamp من رسالة (عادية أو مهمة)
+function getMessageTimestamp(msg) {
+  // من المهمة
+  if (msg.task?.created_at) {
+    return new Date(msg.task.created_at).getTime();
+  }
+  // من id (إذا كان رقمي — Date.now())
+  if (typeof msg.id === "number") return msg.id;
+  if (typeof msg.id === "string" && !isNaN(Number(msg.id))) {
+    return Number(msg.id);
+  }
+  // افتراضي
+  return 0;
+}
+
+// ✅ ترتيب الرسائل: الأقدم أولًا
+function sortMessagesByTime(msgs) {
+  return [...msgs].sort((a, b) => {
+    return getMessageTimestamp(a) - getMessageTimestamp(b);
+  });
+}
+
+// ✅ دمج رسائل بدون تكرار + ترتيب
+function mergeMessages(existing, newMsgs) {
+  const seen = new Set();
+  const combined = [];
+
+  for (const m of [...existing, ...newMsgs]) {
+    if (!m || !m.id) continue;
+    const key = String(m.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    combined.push(m);
+  }
+
+  return sortMessagesByTime(combined);
+}
+
 // ─────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────
@@ -146,7 +188,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const currentUserRef = useRef(currentUser);
   const debouncedSaveRef = useRef(null);
   const abortControllerRef = useRef(null);
-  // ✅ منع إرسال المهمة مرتين
   const creatingTaskRef = useRef(false);
 
   useEffect(() => {
@@ -224,7 +265,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           const failedMsgId = `failed-${task.id}`;
 
           setMessages((prev) => {
-            // ✅ عند الاكتمال → احذف الكارت وأضف النتيجة
+            // عند الاكتمال → احذف الكارت وأضف النتيجة
             if (task.status === "completed" && task.result) {
               const withoutTask = prev.filter((m) => m.id !== taskMsgId);
 
@@ -233,17 +274,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
               );
               if (alreadyAdded) return withoutTask;
 
-              return [
+              return sortMessagesByTime([
                 ...withoutTask,
                 {
                   id: completedMsgId,
                   role: "assistant",
                   content: task.result,
+                  task, // للترتيب
                 },
-              ];
+              ]);
             }
 
-            // ✅ عند الفشل → احذف الكارت وأضف رسالة خطأ
+            // عند الفشل → احذف الكارت وأضف رسالة خطأ
             if (task.status === "failed") {
               const withoutTask = prev.filter((m) => m.id !== taskMsgId);
 
@@ -252,27 +294,26 @@ export default function Chat({ user, onLogout, isAdmin }) {
               );
               if (alreadyAdded) return withoutTask;
 
-              return [
+              return sortMessagesByTime([
                 ...withoutTask,
                 {
                   id: failedMsgId,
                   role: "assistant",
                   content: `❌ فشلت المهمة: ${task.error || "خطأ غير معروف"}`,
+                  task,
                 },
-              ];
+              ]);
             }
 
-            // ✅ عند الإلغاء → احذف الكارت بصمت
+            // عند الإلغاء → احذف الكارت
             if (task.status === "cancelled") {
               return prev.filter((m) => m.id !== taskMsgId);
             }
 
-            // ✅ للمهام النشطة → عرض/تحديث الكارت
-            // ✅ الفحص بـ id الفريد (وليس task.id)
+            // للمهام النشطة → عرض/تحديث الكارت
             const exists = prev.some((m) => m.id === taskMsgId);
 
             if (exists) {
-              // حدّث الكارت
               return prev.map((m) => {
                 if (m.id === taskMsgId) {
                   return { ...m, task };
@@ -280,8 +321,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
                 return m;
               });
             } else {
-              // أضف الكارت مرة واحدة فقط
-              return [
+              return sortMessagesByTime([
                 ...prev,
                 {
                   id: taskMsgId,
@@ -289,7 +329,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
                   type: "task",
                   task,
                 },
-              ];
+              ]);
             }
           });
         }
@@ -394,7 +434,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     await loadRecentTasks();
     await refreshUserData();
     await checkAndShowWelcome(chats);
-    await restoreLastChat(chats);
+    // ✅ إلغاء استعادة آخر محادثة — محادثة جديدة كل دخول
     setIsLoaded(true);
   }
 
@@ -412,7 +452,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         .or(
           `status.in.(pending,planning,running,waiting,merging),created_at.gte.${oneDayAgo}`
         )
-        .order("created_at", { ascending: false })
+        .order("created_at", { ascending: true })
         .limit(20);
 
       if (error) throw error;
@@ -425,6 +465,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
               id: `completed-${task.id}`,
               role: "assistant",
               content: task.result,
+              task,
             };
           }
           // المهام النشطة → كارت
@@ -436,54 +477,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
           };
         });
 
-        setMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m.id));
-          const newMsgs = taskMessages.filter(
-            (m) => !existingIds.has(m.id)
-          );
-          return [...prev, ...newMsgs];
-        });
+        setMessages((prev) => mergeMessages(prev, taskMessages));
       }
     } catch (err) {
       console.error("[Chat] خطأ في تحميل المهام:", err.message);
-    }
-  }
-
-  // ⭐ استعادة آخر محادثة
-  async function restoreLastChat(chats) {
-    try {
-      const lastChatId = localStorage.getItem("black-last-chat-id");
-      if (!lastChatId) return;
-
-      const exists = (chats || []).find((c) => c.id === lastChatId);
-      if (!exists) {
-        localStorage.removeItem("black-last-chat-id");
-        return;
-      }
-
-      const { data } = await supabase
-        .from("chats")
-        .select("*")
-        .eq("id", lastChatId)
-        .single();
-
-      if (data?.messages && data.messages.length > 0) {
-        setCurrentChatId(lastChatId);
-        setMessages((prev) => {
-          const taskMsgs = prev.filter((m) => m.type === "task");
-          const completedMsgs = prev.filter(
-            (m) =>
-              !m.type && m.id && String(m.id).startsWith("completed-")
-          );
-          return [
-            ...data.messages.slice(-CHAT_HISTORY_LIMIT),
-            ...completedMsgs,
-            ...taskMsgs,
-          ];
-        });
-      }
-    } catch (err) {
-      console.warn("[Chat] تعذر استعادة آخر محادثة:", err.message);
     }
   }
 
@@ -533,8 +530,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length <= 1) return;
 
-    // احفظ كل الرسائل النصية (بما فيها نتائج المهام المكتملة)
-    // استبعد فقط كروت المهام النشطة
     const normalMsgs = msgs.filter((m) => m.type !== "task");
     if (normalMsgs.length <= 1) return;
 
@@ -784,14 +779,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       const limitCheck = checkUserDailyLimit(currentUserRef.current);
       if (!limitCheck.canChat) {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: limitCheck.reason,
-            id: Date.now(),
-          },
-        ]);
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: limitCheck.reason,
+              id: Date.now(),
+            },
+          ])
+        );
         setLoading(false);
         return;
       }
@@ -915,10 +912,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
             setTimeout(type, 15);
           } else {
             setStreamingText("");
-            setMessages((prev) => [
-              ...prev,
-              { role: "assistant", content: reply, id: Date.now() },
-            ]);
+            setMessages((prev) =>
+              sortMessagesByTime([
+                ...prev,
+                { role: "assistant", content: reply, id: Date.now() },
+              ])
+            );
             setLoading(false);
             abortControllerRef.current = null;
             setTimeout(() => inputRef.current?.focus(), 100);
@@ -928,24 +927,28 @@ export default function Chat({ user, onLogout, isAdmin }) {
       } catch (err) {
         if (err.name === "AbortError") {
           console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: "⏹️ تم إيقاف التوليد.",
-              id: Date.now(),
-            },
-          ]);
+          setMessages((prev) =>
+            sortMessagesByTime([
+              ...prev,
+              {
+                role: "assistant",
+                content: "⏹️ تم إيقاف التوليد.",
+                id: Date.now(),
+              },
+            ])
+          );
         } else {
           console.error("[Chat] خطأ في executeRequest:", err.message);
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: "assistant",
-              content: "❌ حدث خطأ: " + err.message,
-              id: Date.now(),
-            },
-          ]);
+          setMessages((prev) =>
+            sortMessagesByTime([
+              ...prev,
+              {
+                role: "assistant",
+                content: "❌ حدث خطأ: " + err.message,
+                id: Date.now(),
+              },
+            ])
+          );
         }
         setLoading(false);
         setStreamingText("");
@@ -969,7 +972,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // إنشاء مهمة جديدة
   // ─────────────────────────────────────────
   async function createTask(text) {
-    // ✅ منع الإرسال المزدوج
     if (creatingTaskRef.current) {
       console.log("[Chat] createTask already in progress, skipping");
       return;
@@ -1000,14 +1002,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
         return;
       }
 
-      // ✅ الفحص بـ id الفريد
       const taskMsgId = `task-${task.id}`;
 
       setMessages((prev) => {
         const exists = prev.some((m) => m.id === taskMsgId);
         if (exists) return prev;
 
-        return [
+        return sortMessagesByTime([
           ...prev,
           {
             id: taskMsgId,
@@ -1015,7 +1016,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
             type: "task",
             task,
           },
-        ];
+        ]);
       });
 
       setInput("");
@@ -1025,7 +1026,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       console.error("[Chat] خطأ في createTask:", err);
       showToast("❌ فشل إنشاء المهمة", "error");
     } finally {
-      // ✅ إعادة تعيين القفل
       creatingTaskRef.current = false;
     }
   }
@@ -1109,17 +1109,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
       .single();
     if (data?.messages) {
       setCurrentChatId(chatId);
+      // احتفظ بالمهام النشطة فقط
       setMessages((prev) => {
         const taskMsgs = prev.filter((m) => m.type === "task");
-        const completedMsgs = prev.filter(
-          (m) =>
-            !m.type && m.id && String(m.id).startsWith("completed-")
-        );
-        return [
+        return sortMessagesByTime([
           ...data.messages.slice(-CHAT_HISTORY_LIMIT),
-          ...completedMsgs,
           ...taskMsgs,
-        ];
+        ]);
       });
     }
     setShowHistory(false);
