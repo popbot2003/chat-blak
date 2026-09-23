@@ -218,13 +218,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
           if (!task || !task.id) return;
 
           setMessages((prev) => {
-            // هل الكارت موجود؟
             const exists = prev.some(
               (m) => m.type === "task" && m.task && m.task.id === task.id
             );
 
             if (exists) {
-              // حدّث الكارت
               return prev.map((m) => {
                 if (m.type === "task" && m.task && m.task.id === task.id) {
                   return { ...m, task };
@@ -232,7 +230,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
                 return m;
               });
             } else {
-              // أضف الكارت (لو لأول مرة نراه)
               return [
                 ...prev,
                 {
@@ -378,7 +375,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         }));
 
         setMessages((prev) => {
-          // ادمج مع الرسائل الموجودة (بدون تكرار)
           const existingIds = new Set(prev.map((m) => m.id));
           const newTasks = taskMessages.filter(
             (m) => !existingIds.has(m.id)
@@ -411,13 +407,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       if (data?.messages && data.messages.length > 0) {
         setCurrentChatId(lastChatId);
-        // ادمج الرسائل المحفوظة مع المهام الحالية
         setMessages((prev) => {
           const taskMsgs = prev.filter((m) => m.type === "task");
-          return [
-            ...data.messages.slice(-CHAT_HISTORY_LIMIT),
-            ...taskMsgs,
-          ];
+          return [...data.messages.slice(-CHAT_HISTORY_LIMIT), ...taskMsgs];
         });
       }
     } catch (err) {
@@ -1026,13 +1018,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       .single();
     if (data?.messages) {
       setCurrentChatId(chatId);
-      // احتفظ بالمهام
       setMessages((prev) => {
         const taskMsgs = prev.filter((m) => m.type === "task");
-        return [
-          ...data.messages.slice(-CHAT_HISTORY_LIMIT),
-          ...taskMsgs,
-        ];
+        return [...data.messages.slice(-CHAT_HISTORY_LIMIT), ...taskMsgs];
       });
     }
     setShowHistory(false);
@@ -1198,7 +1186,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       {showSettings && (
         <ChatSettings
           user={currentUser}
-          avatar={currentUser?.name || currentUser?.email}
           onClose={() => setShowSettings(false)}
           onSave={handleSaveSettings}
           onDeleteAccount={handleDeleteAccount}
