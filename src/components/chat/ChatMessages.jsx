@@ -1,122 +1,111 @@
 // ============================================
-// TaskMessage.jsx
-// كارت مهمة في الشات مع مؤشرات تحميل متحركة
+// ChatMessages.jsx
+// عرض الرسائل + المهام + النتائج المكتملة
 // ============================================
 
-export default function TaskMessage({ task, onCancel }) {
-  const {
-    id,
-    input,
-    status,
-    current_step = 0,
-    total_steps = 0,
-    result,
-    error,
-  } = task;
+import MessageContent from "../MessageContent";
+import TypingDots from "../TypingDots";
+import TaskMessage from "./TaskMessage";
 
-  const isActive = ["pending", "planning", "running", "waiting", "merging"].includes(status);
-  const isCompleted = status === "completed";
-  const isFailed = status === "failed";
-  const isCancelled = status === "cancelled";
-
-  const percent = total_steps > 0
-    ? Math.floor((current_step / total_steps) * 100)
-    : 0;
-
+export default function ChatMessages({
+  messages,
+  tasks = [],
+  streamingText,
+  loading,
+  isDark,
+  copiedId,
+  onCopy,
+  onCancelTask,
+  bottomRef,
+}) {
   return (
-    <div className={`task-card ${isActive ? "task-card-active" : ""}`}>
-      {/* Header */}
-      <div className="task-card-header">
-        <div className="task-card-title">
-          {/* حلقة دوارة عند النشاط */}
-          {isActive && <span className="task-spinner" />}
-          <span className="task-card-icon">📋</span>
-          <span className="task-card-label">
-            {isCompleted && "✅ مهمة مكتملة"}
-            {isActive && "📋 مهمة قيد التنفيذ"}
-            {isFailed && "❌ مهمة فاشلة"}
-            {isCancelled && "🛑 مهمة ملغاة"}
-          </span>
-        </div>
+    <div className="messages">
+      {/* الرسائل العادية + المهام + النتائج */}
+      {messages.map((msg) => {
+        // رسالة مهمة نشطة → كارت
+        if (msg.type === "task" && msg.task) {
+          return (
+            <div key={msg.id} className="msg-row msg-row-ai">
+              <div className="avatar-small">🖤</div>
+              <div
+                className="msg-content-wrapper"
+                style={{ maxWidth: "95%", width: "100%" }}
+              >
+                <TaskMessage task={msg.task} onCancel={onCancelTask} />
+              </div>
+            </div>
+          );
+        }
 
-        {isActive && onCancel && (
-          <button
-            onClick={() => onCancel(id)}
-            className="task-card-cancel"
-            title="إيقاف المهمة"
+        // رسالة عادية (بما فيها نتائج المهام المكتملة)
+        return (
+          <div
+            key={msg.id}
+            className={`msg-row ${
+              msg.role === "user" ? "msg-row-user" : "msg-row-ai"
+            }`}
           >
-            🛑 إيقاف
-          </button>
-        )}
-      </div>
+            {msg.role === "assistant" && (
+              <div className="avatar-small">🖤</div>
+            )}
 
-      {/* Input (الطلب) */}
-      <div className="task-card-input">
-        {input}
-      </div>
+            <div className="msg-content-wrapper">
+              <div
+                className={`bubble ${
+                  msg.role === "user"
+                    ? "bubble-user"
+                    : isDark
+                    ? "bubble-ai"
+                    : "bubble-ai-light"
+                }`}
+              >
+                <MessageContent content={msg.content} />
+              </div>
 
-      {/* Progress (للمهام النشطة مع خطوات) */}
-      {isActive && total_steps > 0 && (
-        <div className="task-card-progress">
-          <div className="task-card-progress-info">
-            <span>
-              {status === "merging"
-                ? "🔄 جاري دمج النتائج..."
-                : `⏳ الخطوة ${current_step}/${total_steps}`}
-            </span>
-            <span>{percent}%</span>
+              {msg.role === "assistant" && (
+                <button
+                  onClick={() => onCopy(msg.content, msg.id)}
+                  className="copy-msg-btn"
+                  title="نسخ"
+                >
+                  {copiedId === msg.id ? "✓" : "📋"}
+                </button>
+              )}
+            </div>
+
+            {msg.role === "user" && (
+              <div className="avatar-small avatar-user">👤</div>
+            )}
           </div>
+        );
+      })}
 
-          <div className="task-card-progress-bar">
-            <div
-              className="task-card-progress-fill"
-              style={{ width: `${percent}%` }}
-            />
-            {/* خط متحرك فوق الشريط */}
-            <div className="task-card-progress-shimmer" />
-          </div>
-        </div>
-      )}
-
-      {/* Pending State (لم يبدأ بعد) */}
-      {isActive && total_steps === 0 && (
-        <div className="task-card-waiting">
-          <span className="task-spinner task-spinner-small" />
-          <span>في الانتظار... سيبدأ التنفيذ خلال دقيقة.</span>
-        </div>
-      )}
-
-      {/* Result (عند الاكتمال) */}
-      {isCompleted && result && (
-        <div className="task-card-result">
-          <div className="task-card-result-header">
-            <span>📄 النتيجة النهائية</span>
-            <button
-              onClick={() => navigator.clipboard.writeText(result)}
-              className="task-card-copy"
-              title="نسخ"
-            >
-              📋 نسخ
-            </button>
-          </div>
-          <div className="task-card-result-body">
-            {result}
+      {/* النص المتدفق (streaming) */}
+      {streamingText && (
+        <div className="msg-row msg-row-ai">
+          <div className="avatar-small">🖤</div>
+          <div
+            className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
+          >
+            <MessageContent content={streamingText} />
           </div>
         </div>
       )}
 
-      {/* Error */}
-      {isFailed && error && (
-        <div className="task-card-error">
-          ❌ {error}
+      {/* مؤشر الكتابة */}
+      {loading && !streamingText && (
+        <div className="msg-row msg-row-ai">
+          <div className="avatar-small">🖤</div>
+          <div
+            className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
+          >
+            <TypingDots />
+          </div>
         </div>
       )}
 
-      {isCancelled && (
-        <div className="task-card-cancelled">
-          🛑 تم إيقاف هذه المهمة.
-        </div>
-      )}
+      {/* مرجع للتمرير التلقائي */}
+      <div ref={bottomRef} />
     </div>
   );
 }
