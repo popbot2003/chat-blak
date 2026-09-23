@@ -20,7 +20,7 @@ export default function ChatMessages({
 }) {
   return (
     <div className="messages">
-      {/* الرسائل العادية */}
+      {/* الرسائل العادية + المهام */}
       {messages.map((msg) => {
         // رسالة مهمة
         if (msg.type === "task" && msg.task) {
@@ -31,10 +31,7 @@ export default function ChatMessages({
                 className="msg-content-wrapper"
                 style={{ maxWidth: "95%", width: "100%" }}
               >
-                <TaskMessage
-                  task={msg.task}
-                  onCancel={onCancelTask}
-                />
+                <TaskMessage task={msg.task} onCancel={onCancelTask} />
               </div>
             </div>
           );
@@ -88,9 +85,7 @@ export default function ChatMessages({
         <div className="msg-row msg-row-ai">
           <div className="avatar-small">🖤</div>
           <div
-            className={`bubble ${
-              isDark ? "bubble-ai" : "bubble-ai-light"
-            }`}
+            className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
           >
             <MessageContent content={streamingText} />
           </div>
@@ -102,9 +97,7 @@ export default function ChatMessages({
         <div className="msg-row msg-row-ai">
           <div className="avatar-small">🖤</div>
           <div
-            className={`bubble ${
-              isDark ? "bubble-ai" : "bubble-ai-light"
-            }`}
+            className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
           >
             <TypingDots />
           </div>
