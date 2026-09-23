@@ -1,5 +1,5 @@
 // ============================================
-// Chat.jsx — نسخة كاملة (الكارت يختفي عند الاكتمال)
+// Chat.jsx — نسخة كاملة (مع إصلاح تكرار الكارت)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -146,6 +146,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const currentUserRef = useRef(currentUser);
   const debouncedSaveRef = useRef(null);
   const abortControllerRef = useRef(null);
+  // ✅ منع إرسال المهمة مرتين
+  const creatingTaskRef = useRef(false);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -217,22 +219,24 @@ export default function Chat({ user, onLogout, isAdmin }) {
           const task = payload.new;
           if (!task || !task.id) return;
 
+          const taskMsgId = `task-${task.id}`;
+          const completedMsgId = `completed-${task.id}`;
+          const failedMsgId = `failed-${task.id}`;
+
           setMessages((prev) => {
             // ✅ عند الاكتمال → احذف الكارت وأضف النتيجة
             if (task.status === "completed" && task.result) {
-              const withoutTask = prev.filter(
-                (m) => !(m.type === "task" && m.task && m.task.id === task.id)
-              );
+              const withoutTask = prev.filter((m) => m.id !== taskMsgId);
 
               const alreadyAdded = withoutTask.some(
-                (m) => m.id === `completed-${task.id}`
+                (m) => m.id === completedMsgId
               );
               if (alreadyAdded) return withoutTask;
 
               return [
                 ...withoutTask,
                 {
-                  id: `completed-${task.id}`,
+                  id: completedMsgId,
                   role: "assistant",
                   content: task.result,
                 },
@@ -241,19 +245,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
             // ✅ عند الفشل → احذف الكارت وأضف رسالة خطأ
             if (task.status === "failed") {
-              const withoutTask = prev.filter(
-                (m) => !(m.type === "task" && m.task && m.task.id === task.id)
-              );
+              const withoutTask = prev.filter((m) => m.id !== taskMsgId);
 
               const alreadyAdded = withoutTask.some(
-                (m) => m.id === `failed-${task.id}`
+                (m) => m.id === failedMsgId
               );
               if (alreadyAdded) return withoutTask;
 
               return [
                 ...withoutTask,
                 {
-                  id: `failed-${task.id}`,
+                  id: failedMsgId,
                   role: "assistant",
                   content: `❌ فشلت المهمة: ${task.error || "خطأ غير معروف"}`,
                 },
@@ -262,28 +264,27 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
             // ✅ عند الإلغاء → احذف الكارت بصمت
             if (task.status === "cancelled") {
-              return prev.filter(
-                (m) => !(m.type === "task" && m.task && m.task.id === task.id)
-              );
+              return prev.filter((m) => m.id !== taskMsgId);
             }
 
             // ✅ للمهام النشطة → عرض/تحديث الكارت
-            const exists = prev.some(
-              (m) => m.type === "task" && m.task && m.task.id === task.id
-            );
+            // ✅ الفحص بـ id الفريد (وليس task.id)
+            const exists = prev.some((m) => m.id === taskMsgId);
 
             if (exists) {
+              // حدّث الكارت
               return prev.map((m) => {
-                if (m.type === "task" && m.task && m.task.id === task.id) {
+                if (m.id === taskMsgId) {
                   return { ...m, task };
                 }
                 return m;
               });
             } else {
+              // أضف الكارت مرة واحدة فقط
               return [
                 ...prev,
                 {
-                  id: `task-${task.id}`,
+                  id: taskMsgId,
                   role: "assistant",
                   type: "task",
                   task,
@@ -968,6 +969,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // إنشاء مهمة جديدة
   // ─────────────────────────────────────────
   async function createTask(text) {
+    // ✅ منع الإرسال المزدوج
+    if (creatingTaskRef.current) {
+      console.log("[Chat] createTask already in progress, skipping");
+      return;
+    }
+
+    creatingTaskRef.current = true;
+
     try {
       const { data: taskId, error } = await supabase.rpc("create_task", {
         task_input: text,
@@ -991,15 +1000,23 @@ export default function Chat({ user, onLogout, isAdmin }) {
         return;
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `task-${task.id}`,
-          role: "assistant",
-          type: "task",
-          task,
-        },
-      ]);
+      // ✅ الفحص بـ id الفريد
+      const taskMsgId = `task-${task.id}`;
+
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === taskMsgId);
+        if (exists) return prev;
+
+        return [
+          ...prev,
+          {
+            id: taskMsgId,
+            role: "assistant",
+            type: "task",
+            task,
+          },
+        ];
+      });
 
       setInput("");
       setAttachedFiles([]);
@@ -1007,6 +1024,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     } catch (err) {
       console.error("[Chat] خطأ في createTask:", err);
       showToast("❌ فشل إنشاء المهمة", "error");
+    } finally {
+      // ✅ إعادة تعيين القفل
+      creatingTaskRef.current = false;
     }
   }
 
@@ -1090,7 +1110,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     if (data?.messages) {
       setCurrentChatId(chatId);
       setMessages((prev) => {
-        // احتفظ بالمهام النشطة والنتائج المكتملة الحديثة
         const taskMsgs = prev.filter((m) => m.type === "task");
         const completedMsgs = prev.filter(
           (m) =>
