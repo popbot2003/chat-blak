@@ -1,1016 +1,158 @@
-/* ============================================
-   Chat-Blak — App.css
-   Fonts: Cairo + IBM Plex Sans Arabic + JetBrains Mono
-   ============================================ */
+// ============================================
+// ChatInput.jsx
+// منطقة الإدخال + رفع الملفات + إرسال (رد/مهمة)
+// ============================================
 
-/* ========== CSS Variables ========== */
-:root {
-  --font-heading: 'Cairo', 'IBM Plex Sans Arabic', system-ui, sans-serif;
-  --font-body: 'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-}
+import { useRef } from "react";
 
-/* ========== Reset ========== */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+export default function ChatInput({
+  input,
+  setInput,
+  loading,
+  streamingText,
+  attachedFiles,
+  sendMode = "chat",
+  onSend,
+  onStop,
+  onFileUpload,
+  onRemoveFile,
+  onToggleMode,
+}) {
+  const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
 
-html, body {
-  width: 100%;
-  height: 100%;
-  background: #0f0f1a;
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.7;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  padding: 0;
-}
-
-#root {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 0;
-}
-
-/* ===== Admin fixes ===== */
-#root.admin-page {
-  align-items: flex-start;
-  overflow-y: auto;
-  height: auto;
-  min-height: 100%;
-  -webkit-overflow-scrolling: touch;
-}
-
-html.admin-page,
-body.admin-page {
-  overflow: auto;
-  height: auto;
-  min-height: 100%;
-}
-
-/* ========== Typography ========== */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-  font-weight: 700;
-  line-height: 1.4;
-}
-
-h1 { font-size: 24px; }
-h2 { font-size: 20px; }
-h3 { font-size: 18px; }
-
-/* ========== Chat Container ========== */
-.container {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-  overflow: hidden;
-}
-
-@media (max-width: 767px) {
-  html.admin-page,
-  body.admin-page {
-    overflow: auto !important;
-    height: auto !important;
-    min-height: 100%;
+  function handleKeyDown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
   }
 
-  #root.admin-page {
-    height: auto !important;
-    min-height: 100%;
-    overflow-y: auto !important;
-    align-items: flex-start;
-  }
-
-  html:not(.admin-page),
-  body:not(.admin-page) {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  #root:not(.admin-page) {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .container {
-    height: 100dvh;
-    max-height: 100dvh;
-  }
-}
-
-.container.dark { background: #0f0f1a; color: #e0e0e0; }
-.container.light { background: #f4f6fb; color: #1e1b4b; }
-
-/* ========== الهيدر ========== */
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
-  background: #0f0f1a;
-  min-height: 56px;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-.light .header {
-  background: #ffffff;
-  border-bottom: 1px solid rgba(99,102,241,0.15);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
-}
-
-.avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  flex-shrink: 0;
-}
-
-.header-name {
-  font-family: var(--font-heading);
-  font-size: 18px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.header-status {
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  opacity: 0.7;
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4ade80;
-  display: inline-block;
-  flex-shrink: 0;
-}
-
-.header-right {
-  display: flex;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.header-btn {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 20px;
-  padding: 8px;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: background 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 36px;
-  min-height: 36px;
-}
-
-.header-btn:hover { background: rgba(255,255,255,0.1); }
-.light .header-btn:hover { background: rgba(0,0,0,0.05); }
-
-/* ========== القائمة المنسدلة ========== */
-.menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  border: none;
-  color: inherit;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
-  text-align: right;
-  width: 100%;
-  font-family: inherit;
-}
-
-.menu-item:hover { background: rgba(108,92,231,0.15); }
-.light .menu-item:hover { background: rgba(108,92,231,0.1); }
-
-/* ========== شريط التوكن ========== */
-.token-bar {
-  padding: 10px 16px;
-  flex-shrink: 0;
-  background: #1a1a2e;
-  border-bottom: 1px solid rgba(108,92,231,0.2);
-}
-
-.light .token-bar {
-  background: #eef0f7;
-  border-bottom: 1px solid rgba(99,102,241,0.15);
-}
-
-.token-info {
-  display: flex;
-  justify-content: space-between;
-  font-size: 15px;
-  font-weight: bold;
-  margin-bottom: 4px;
-  opacity: 0.9;
-}
-
-.token-track {
-  width: 100%;
-  height: 6px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.light .token-track { background: rgba(99,102,241,0.12); }
-
-.token-fill {
-  height: 100%;
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
-/* ========== شريط البحث/السجل ========== */
-.search-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
-  background: #0f0f1a;
-}
-
-.light .search-bar {
-  background: #ffffff;
-  border-bottom: 1px solid rgba(99,102,241,0.15);
-}
-
-.search-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: inherit;
-  font-size: 15px;
-}
-
-.search-count { font-size: 12px; opacity: 0.6; white-space: nowrap; }
-
-.close-btn {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-/* ========== الرسائل ========== */
-.messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  -webkit-overflow-scrolling: touch;
-  min-height: 0;
-}
-
-.messages::-webkit-scrollbar { width: 4px; }
-.messages::-webkit-scrollbar-track { background: transparent; }
-.messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-.light .messages::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
-
-.msg-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  max-width: 100%;
-  min-width: 0;
-}
-
-.msg-row-user { justify-content: flex-end; }
-.msg-row-ai { justify-content: flex-start; }
-
-.msg-content-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 85%;
-  min-width: 0;
-  overflow: hidden;
-}
-
-.msg-row-user .msg-content-wrapper { align-items: flex-end; }
-.msg-row-ai .msg-content-wrapper { align-items: flex-start; }
-
-.avatar-small {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  flex-shrink: 0;
-  background: linear-gradient(135deg, #6c5ce7, #a29bfe);
-}
-
-.avatar-user { background: linear-gradient(135deg, #4ade80, #22c55e); }
-
-/* ========== بالونات الرسائل ========== */
-.bubble {
-  padding: 12px 16px;
-  border-radius: 18px;
-  font-family: var(--font-body);
-  font-size: 16px;
-  line-height: 1.8;
-  word-break: break-word;
-  overflow-wrap: anywhere;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.bubble-user {
-  background: linear-gradient(135deg, #7c3aed, #6c5ce7);
-  color: #fff;
-  border-bottom-right-radius: 4px;
-  box-shadow: 0 2px 8px rgba(108,92,231,0.3);
-}
-
-.bubble-ai {
-  background: #1e1e2e;
-  border: 1px solid rgba(108,92,231,0.2);
-  color: #f0f0f0;
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.bubble-ai-light {
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
-  color: #1a1a1a;
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-}
-
-.copy-msg-btn {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 13px;
-  opacity: 0.4;
-  cursor: pointer;
-  padding: 4px 6px;
-  transition: opacity 0.2s;
-  border-radius: 6px;
-}
-
-.copy-msg-btn:hover {
-  opacity: 1;
-  background: rgba(108,92,231,0.2);
-}
-
-/* ========== كود بلوك ========== */
-.code-wrapper {
-  margin: 8px 0;
-  border-radius: 10px;
-  overflow: hidden;
-  max-width: 100%;
-  width: 100%;
-}
-
-.code-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(0,0,0,0.6);
-  padding: 8px 12px;
-  font-size: 12px;
-}
-
-.code-lang {
-  opacity: 0.7;
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
-
-.code-copy-btn {
-  background: rgba(255,255,255,0.1);
-  border: none;
-  color: inherit;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.2s;
-  font-family: var(--font-body);
-}
-
-.code-copy-btn:hover { background: rgba(108,92,231,0.5); }
-
-.code-pre {
-  background: rgba(0,0,0,0.5);
-  padding: 12px;
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: 400px;
-  direction: ltr;
-  text-align: left;
-  margin: 0;
-  max-width: 100%;
-  -webkit-overflow-scrolling: touch;
-}
-
-.code-content {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre;
-  display: block;
-}
-
-.light .code-pre { background: #1e1e2e; color: #e0e0e0; }
-
-/* ========== تايبينج دوتس ========== */
-.typing-dots {
-  display: flex;
-  gap: 4px;
-  padding: 4px 0;
-}
-
-.typing-dots span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #a29bfe;
-  animation: bounce 1.4s infinite ease-in-out both;
-}
-
-.typing-dots span:nth-child(1) { animation-delay: -0.32s; }
-.typing-dots span:nth-child(2) { animation-delay: -0.16s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: scale(0); opacity: 0.4; }
-  40% { transform: scale(1); opacity: 1; }
-}
-
-/* ========== منطقة الكتابة ========== */
-.input-area {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 12px 16px;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  flex-shrink: 0;
-  background: #0f0f1a;
-  min-height: 68px;
-}
-
-.light .input-area {
-  background: #ffffff;
-  border-top: 1px solid rgba(99,102,241,0.15);
-}
-
-.textarea {
-  flex: 1;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.15);
-  border-radius: 20px;
-  padding: 12px 16px;
-  color: inherit;
-  font-size: 16px;
-  font-family: var(--font-body);
-  resize: none;
-  outline: none;
-  max-height: 120px;
-  line-height: 1.5;
-}
-
-.light .textarea { background: #f9fafb; border: 1px solid rgba(99,102,241,0.2); }
-.textarea:focus { border-color: #6c5ce7; }
-
-.send-btn {
-  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
-  border: none;
-  color: #fff;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  font-size: 20px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: transform 0.2s, opacity 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.send-btn:hover { transform: scale(1.05); }
-.send-btn:active { transform: scale(0.95); }
-
-/* ========== Mode Toggle (رد/مهمة) ========== */
-.mode-toggle {
-  background: rgba(108,92,231,0.1);
-  border: 1px solid rgba(108,92,231,0.3);
-  color: #a29bfe;
-  padding: 8px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-family: var(--font-body);
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.2s;
-  flex-shrink: 0;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.light .mode-toggle {
-  background: rgba(108,92,231,0.08);
-  border-color: rgba(108,92,231,0.25);
-  color: #6c5ce7;
-}
-
-.mode-toggle:hover:not(:disabled) {
-  background: rgba(108,92,231,0.2);
-  transform: scale(1.02);
-}
-
-.mode-toggle:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.mode-toggle-task {
-  background: rgba(16,185,129,0.15);
-  border-color: rgba(16,185,129,0.4);
-  color: #4ade80;
-}
-
-.light .mode-toggle-task {
-  background: rgba(16,185,129,0.1);
-  border-color: rgba(16,185,129,0.3);
-  color: #10b981;
-}
-
-.mode-toggle-task:hover:not(:disabled) {
-  background: rgba(16,185,129,0.25);
-}
-
-/* ========== History Panel ========== */
-.history-panel {
-  background: #0f0f1a;
-  box-shadow: -8px 0 32px rgba(0,0,0,0.4);
-  border-left: 1px solid rgba(255,255,255,0.08);
-}
-
-.light .history-panel {
-  background: #f4f6fb;
-  box-shadow: -8px 0 32px rgba(99,102,241,0.1);
-  border-left: 1px solid rgba(99,102,241,0.15);
-}
-
-.history-panel::-webkit-scrollbar { width: 4px; }
-.history-panel::-webkit-scrollbar-track { background: transparent; }
-.history-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-.light .history-panel::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); }
-
-/* ========== Admin Modal ========== */
-.admin-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 16px;
-}
-
-.admin-modal-content {
-  background: #1a1a2e;
-  padding: 20px;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 85vh;
-  overflow-y: auto;
-  color: #e0e0e0;
-}
-
-.admin-modal-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-
-.admin-modal-head h3 {
-  font-family: var(--font-heading);
-}
-
-.admin-modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
-}
-
-.admin-modal-save-btn {
-  flex: 1;
-  padding: 10px;
-  background: linear-gradient(135deg, #6c5ce7, #8b5cf6);
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 15px;
-}
-
-.admin-modal-cancel-btn {
-  flex: 1;
-  padding: 10px;
-  background: rgba(255,255,255,0.05);
-  color: #e0e0e0;
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 15px;
-}
-
-/* ========== Admin Panel Scroll Fixes ========== */
-.admin-keys-table-container,
-.admin-users-table-container,
-.admin-chats-table-container {
-  overflow-x: auto;
-  overflow-y: visible;
-  -webkit-overflow-scrolling: touch;
-  width: 100%;
-}
-
-@media (max-width: 767px) {
-  .admin-keys-table-container table,
-  .admin-users-table-container table,
-  .admin-chats-table-container table {
-    min-width: 650px;
-  }
-
-  .key-status-badge {
-    font-size: 11px;
-    padding: 2px 6px;
-  }
-
-  .action-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .action-buttons button {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .admin-modal-content {
-    max-width: 95%;
-    padding: 16px;
-  }
-
-  table { font-size: 13px; }
-  th, td { padding: 8px 6px !important; }
-
-  .bubble { font-size: 15px; line-height: 1.7; }
-  .msg-content-wrapper { max-width: 90%; }
-  .avatar-small { width: 28px; height: 28px; font-size: 13px; }
-  .token-info { font-size: 13px; }
-  .code-content { font-size: 13px; }
-  .code-lang { font-size: 10px; }
-
-  .mode-toggle {
-    padding: 6px 10px;
-    font-size: 12px;
-    min-height: 40px;
-  }
-}
-
-/* ========== أنيميشن Toast للـ Admin ========== */
-@keyframes adminSlideDown {
-  from {
-    opacity: 0;
-    transform: translateX(-50%) translateY(-16px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
-}
-
-/* ========== Task Message (كارت المهمة) ========== */
-.task-card {
-  background: linear-gradient(135deg, rgba(108,92,231,0.08), rgba(139,92,246,0.05));
-  border: 1px solid rgba(108,92,231,0.3);
-  border-radius: 14px;
-  padding: 14px 16px;
-  max-width: 100%;
-  font-family: var(--font-body);
-}
-
-.light .task-card {
-  background: linear-gradient(135deg, rgba(108,92,231,0.05), rgba(139,92,246,0.03));
-  border: 1px solid rgba(108,92,231,0.2);
-}
-
-.task-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  gap: 10px;
-}
-
-.task-card-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 14px;
-  color: #a29bfe;
-}
-
-.light .task-card-title {
-  color: #6c5ce7;
-}
-
-.task-card-icon {
-  font-size: 18px;
-}
-
-.task-card-label {
-  font-family: var(--font-heading);
-  font-weight: 700;
-}
-
-.task-card-cancel {
-  background: rgba(248,113,113,0.15);
-  color: #f87171;
-  border: 1px solid rgba(248,113,113,0.3);
-  padding: 5px 12px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-weight: 600;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.task-card-cancel:hover {
-  background: rgba(248,113,113,0.25);
-  transform: scale(1.02);
-}
-
-.task-card-input {
-  font-size: 15px;
-  line-height: 1.7;
-  color: inherit;
-  margin-bottom: 12px;
-  padding: 10px 12px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 8px;
-  border-right: 3px solid #6c5ce7;
-}
-
-.light .task-card-input {
-  background: rgba(108,92,231,0.05);
-}
-
-.task-card-progress {
-  margin-top: 10px;
-}
-
-.task-card-progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  margin-bottom: 8px;
-  opacity: 0.9;
-}
-
-.task-card-progress-bar {
-  width: 100%;
-  height: 8px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.light .task-card-progress-bar {
-  background: rgba(108,92,231,0.12);
-}
-
-.task-card-progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #6c5ce7, #a29bfe);
-  border-radius: 4px;
-  transition: width 0.5s ease;
-}
-
-.task-card-waiting {
-  font-size: 13px;
-  opacity: 0.7;
-  padding: 8px 12px;
-  background: rgba(255,255,255,0.04);
-  border-radius: 8px;
-  text-align: center;
-  font-style: italic;
-}
-
-.light .task-card-waiting {
-  background: rgba(108,92,231,0.05);
-}
-
-.task-card-result {
-  margin-top: 12px;
-  padding: 12px;
-  background: rgba(74,222,128,0.05);
-  border: 1px solid rgba(74,222,128,0.2);
-  border-radius: 10px;
-}
-
-.task-card-result-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4ade80;
-  margin-bottom: 10px;
-}
-
-.task-card-copy {
-  background: rgba(74,222,128,0.15);
-  color: #4ade80;
-  border: none;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  cursor: pointer;
-  font-family: var(--font-body);
-  transition: all 0.2s;
-}
-
-.task-card-copy:hover {
-  background: rgba(74,222,128,0.25);
-}
-
-.task-card-result-body {
-  font-size: 15px;
-  line-height: 1.85;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 600px;
-  overflow-y: auto;
-  padding: 8px 4px;
-  color: inherit;
-}
-
-.task-card-result-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.task-card-result-body::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
-  border-radius: 3px;
-}
-
-.light .task-card-result-body::-webkit-scrollbar-thumb {
-  background: rgba(0,0,0,0.1);
-}
-
-.task-card-error {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: rgba(248,113,113,0.1);
-  border: 1px solid rgba(248,113,113,0.3);
-  border-radius: 8px;
-  font-size: 13px;
-  color: #f87171;
-}
-
-.task-card-cancelled {
-  margin-top: 10px;
-  padding: 10px 12px;
-  background: rgba(107,114,128,0.1);
-  border: 1px solid rgba(107,114,128,0.3);
-  border-radius: 8px;
-  font-size: 13px;
-  text-align: center;
-  opacity: 0.8;
-}
-
-@media (max-width: 767px) {
-  .task-card {
-    padding: 12px;
-  }
-
-  .task-card-title {
-    font-size: 13px;
-  }
-
-  .task-card-input {
-    font-size: 14px;
-    padding: 8px 10px;
-  }
-
-  .task-card-progress-info {
-    font-size: 12px;
-  }
-
-  .task-card-result-body {
-    font-size: 14px;
-    max-height: 400px;
-  }
-
-  .task-card-cancel {
-    padding: 4px 10px;
-    font-size: 11px;
-  }
-}
-
-/* ========== ديسكتوب ========== */
-@media (min-width: 768px) {
-  body { padding: 16px; overflow: hidden; }
-  #root { padding: 0; }
-
-  .container {
-    max-width: 900px;
-    height: 100%;
-    border-radius: 24px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-  }
-
-  .header { padding: 14px 20px; min-height: 60px; }
-  .avatar { width: 44px; height: 44px; font-size: 20px; }
-  .header-name { font-size: 18px; }
-  .header-status { font-size: 13px; }
-  .token-bar { padding: 10px 20px; }
-  .messages { padding: 20px; gap: 18px; }
-  .bubble { padding: 12px 18px; font-size: 17px; }
-  .msg-content-wrapper { max-width: 80%; }
-  .input-area { padding: 16px 20px; }
-
-  #root.admin-page {
-    overflow-y: auto;
-    height: auto;
-  }
-
-  html.admin-page,
-  body.admin-page {
-    overflow: auto;
-    height: auto;
-    padding: 0;
-  }
+  const canSend = input.trim() || attachedFiles.length > 0;
+  const isDisabled = loading && !streamingText;
+  const showStop = loading;
+  const isTaskMode = sendMode === "task";
+
+  return (
+    <>
+      {/* الملفات المرفقة */}
+      {attachedFiles.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            padding: "8px 20px",
+            flexWrap: "wrap",
+          }}
+        >
+          {attachedFiles.map((f) => (
+            <div
+              key={f.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "rgba(108,92,231,0.15)",
+                borderRadius: "10px",
+                padding: "6px 10px",
+                fontSize: "12px",
+              }}
+            >
+              <span>{f.icon || "📎"}</span>
+              <span
+                style={{
+                  maxWidth: "120px",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {f.name}
+              </span>
+              <button
+                onClick={() => onRemoveFile(f.id)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "inherit",
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* منطقة الإدخال */}
+      <div className="input-area">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          className="header-btn"
+          style={{ fontSize: "20px", padding: "8px" }}
+          title="رفع ملف"
+        >
+          📎
+        </button>
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={onFileUpload}
+          multiple
+          style={{ display: "none" }}
+          accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*"
+        />
+
+        {/* زر تبديل الوضع (رد / مهمة) */}
+        <button
+          onClick={onToggleMode}
+          className={`mode-toggle ${
+            isTaskMode ? "mode-toggle-task" : "mode-toggle-chat"
+          }`}
+          title={isTaskMode ? "التبديل إلى رد سريع" : "التبديل إلى مهمة"}
+          disabled={loading}
+        >
+          {isTaskMode ? "📋 مهمة" : "💬 رد"}
+        </button>
+
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            loading
+              ? "بلاك بيكتب..."
+              : attachedFiles.length > 0
+              ? "اكتب سؤالك عن الملفات..."
+              : isTaskMode
+              ? "اكتب مهمة (سيتم تنفيذها في الخلفية)..."
+              : "اكتب لبلاك..."
+          }
+          rows={1}
+          className="textarea"
+          disabled={isDisabled}
+        />
+
+        <button
+          onClick={showStop ? onStop : onSend}
+          className="send-btn"
+          style={{
+            opacity: !canSend && !loading ? 0.4 : 1,
+            background: loading
+              ? "#f87171"
+              : isTaskMode
+              ? "linear-gradient(135deg, #10b981, #4ade80)"
+              : "",
+            cursor: "pointer",
+          }}
+          title={isTaskMode ? "إرسال كمهمة" : "إرسال كرد"}
+        >
+          {loading ? "⏹️" : "↑"}
+        </button>
+      </div>
+    </>
+  );
 }
