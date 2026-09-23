@@ -1,10 +1,9 @@
 // ============================================
 // Chat.jsx — نسخة كاملة
-// - ربط المهام بالمحادثة (chat_id)
-// - الأقدم أعلى الشاشة
-// - محادثة جديدة عند كل دخول
-// - منع تكرار المهام
-// - حذف مهام المحادثة عند حذفها
+// - إشعار المهام النشطة
+// - ربط المهام بالمحادثة
+// - آخر محادثة عند التحديث
+// - ترتيب: الأقدم أعلى
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -17,6 +16,7 @@ import ChatHistory from "../components/chat/ChatHistory";
 import ChatMessages from "../components/chat/ChatMessages";
 import ChatSettings from "../components/chat/ChatSettings";
 import ChatInput from "../components/chat/ChatInput";
+import ActiveTasksNotification from "../components/chat/ActiveTasksNotification";
 
 import { supabase } from "../lib/supabase";
 import {
@@ -115,7 +115,6 @@ function showToast(message, type = "success") {
   setTimeout(() => div.remove(), 3000);
 }
 
-// ✅ استخراج timestamp
 function getMessageTimestamp(msg) {
   if (msg.task?.created_at) {
     return new Date(msg.task.created_at).getTime();
@@ -127,14 +126,12 @@ function getMessageTimestamp(msg) {
   return 0;
 }
 
-// ✅ ترتيب: الأقدم أولًا
 function sortMessagesByTime(msgs) {
   return [...msgs].sort((a, b) => {
     return getMessageTimestamp(a) - getMessageTimestamp(b);
   });
 }
 
-// ✅ دمج بدون تكرار + ترتيب
 function mergeMessages(existing, newMsgs) {
   const seen = new Set();
   const combined = [];
@@ -155,9 +152,10 @@ function mergeMessages(existing, newMsgs) {
 // ─────────────────────────────────────────
 export default function Chat({ user, onLogout, isAdmin }) {
   const [allChats, setAllChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(() =>
-    Date.now().toString()
-  );
+  const [currentChatId, setCurrentChatId] = useState(() => {
+    return localStorage.getItem("black-last-chat-id") || Date.now().toString();
+  });
+  const [allActiveTasks, setAllActiveTasks] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -242,7 +240,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Realtime: المهام ──
+  // ── Realtime: كل المهام ──
   useEffect(() => {
     const ch = supabase
       .channel(`tasks-${user.id}`)
@@ -258,11 +256,34 @@ export default function Chat({ user, onLogout, isAdmin }) {
           const task = payload.new;
           if (!task || !task.id) return;
 
-          // ✅ فلتر: فقط مهام المحادثة الحالية
-          if (
-            task.chat_id &&
-            task.chat_id !== currentChatIdRef.current
-          ) {
+          const ACTIVE_STATUSES = [
+            "pending",
+            "planning",
+            "running",
+            "waiting",
+            "merging",
+          ];
+
+          // ✅ تحديث قائمة المهام النشطة
+          setAllActiveTasks((prev) => {
+            const isActive = ACTIVE_STATUSES.includes(task.status);
+            const exists = prev.some((t) => t.id === task.id);
+
+            if (isActive) {
+              if (exists) {
+                return prev.map((t) => (t.id === task.id ? task : t));
+              }
+              return [...prev, task];
+            }
+
+            return prev.filter((t) => t.id !== task.id);
+          });
+
+          // ✅ إذا كانت المهمة في محادثة أخرى → لا نلمس messages
+          if (task.chat_id && task.chat_id !== currentChatIdRef.current) {
+            if (task.status === "completed") {
+              showToast("✅ اكتملت مهمة في محادثة أخرى.", "success");
+            }
             return;
           }
 
@@ -434,12 +455,35 @@ export default function Chat({ user, onLogout, isAdmin }) {
   async function loadAllData() {
     const chats = await loadChatsFromSupabase();
     await loadChatTasks();
+    await loadAllActiveTasks();
     await refreshUserData();
     await checkAndShowWelcome(chats);
+    await restoreLastChat(chats);
     setIsLoaded(true);
   }
 
-  // ✅ تحميل مهام المحادثة الحالية فقط
+  async function loadAllActiveTasks() {
+    try {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", user.id)
+        .in("status", [
+          "pending",
+          "planning",
+          "running",
+          "waiting",
+          "merging",
+        ])
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+      setAllActiveTasks(data || []);
+    } catch (err) {
+      console.error("[Chat] خطأ في تحميل المهام النشطة:", err.message);
+    }
+  }
+
   async function loadChatTasks() {
     try {
       const oneDayAgo = new Date(
@@ -451,6 +495,77 @@ export default function Chat({ user, onLogout, isAdmin }) {
         .select("*")
         .eq("user_id", user.id)
         .eq("chat_id", currentChatIdRef.current)
+        .or(
+          `status.in.(pending,planning,running,waiting,merging),created_at.gte.${oneDayAgo}`
+        )
+        .order("created_at", { ascending: true })
+        .limit(20);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const taskMessages = data.map((task) => {
+          if (task.status === "completed" && task.result) {
+            return {
+              id: `completed-${task.id}`,
+              role: "assistant",
+              content: task.result,
+              task,
+            };
+          }
+          return {
+            id: `task-${task.id}`,
+            role: "assistant",
+            type: "task",
+            task,
+          };
+        });
+
+        setMessages((prev) => mergeMessages(prev, taskMessages));
+      }
+    } catch (err) {
+      console.error("[Chat] خطأ في تحميل مهام المحادثة:", err.message);
+    }
+  }
+
+  async function restoreLastChat(chats) {
+    try {
+      const lastChatId = localStorage.getItem("black-last-chat-id");
+      if (!lastChatId) return;
+
+      const exists = (chats || []).find((c) => c.id === lastChatId);
+      if (!exists) {
+        localStorage.removeItem("black-last-chat-id");
+        return;
+      }
+
+      const { data } = await supabase
+        .from("chats")
+        .select("*")
+        .eq("id", lastChatId)
+        .single();
+
+      if (data?.messages && data.messages.length > 0) {
+        setCurrentChatId(lastChatId);
+        setMessages(sortMessagesByTime(data.messages));
+        await loadChatTasksForChat(lastChatId);
+      }
+    } catch (err) {
+      console.warn("[Chat] تعذر استعادة آخر محادثة:", err.message);
+    }
+  }
+
+  async function loadChatTasksForChat(chatId) {
+    try {
+      const oneDayAgo = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
+
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("chat_id", chatId)
         .or(
           `status.in.(pending,planning,running,waiting,merging),created_at.gte.${oneDayAgo}`
         )
@@ -980,7 +1095,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     creatingTaskRef.current = true;
 
     try {
-      // ✅ تمرير chat_id
       const { data: taskId, error } = await supabase.rpc("create_task", {
         task_input: text,
         chat_id_input: currentChatIdRef.current,
@@ -1021,6 +1135,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
         ]);
       });
 
+      setAllActiveTasks((prev) => {
+        const exists = prev.some((t) => t.id === task.id);
+        if (exists) return prev;
+        return [task, ...prev];
+      });
+
       setInput("");
       setAttachedFiles([]);
       setSendMode("chat");
@@ -1045,6 +1165,48 @@ export default function Chat({ user, onLogout, isAdmin }) {
       console.error("[Chat] خطأ في cancelTask:", err);
       showToast("❌ فشل إيقاف المهمة", "error");
     }
+  }
+
+  async function openTaskInChat(chatId) {
+    if (chatId === currentChatIdRef.current) {
+      showToast("✅ أنت بالفعل في هذه المحادثة.", "info");
+      return;
+    }
+
+    await saveChatToSupabase();
+
+    const { data: chat } = await supabase
+      .from("chats")
+      .select("*")
+      .eq("id", chatId)
+      .single();
+
+    if (!chat) {
+      showToast("⚠️ المحادثة غير موجودة.", "error");
+      return;
+    }
+
+    setCurrentChatId(chatId);
+    setMessages(
+      chat.messages && chat.messages.length > 0
+        ? sortMessagesByTime(chat.messages)
+        : [
+            {
+              role: "assistant",
+              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
+              id: Date.now(),
+            },
+          ]
+    );
+
+    setShowHistory(false);
+    setShowMenu(false);
+    setInput("");
+    setAttachedFiles([]);
+
+    await loadChatTasksForChat(chatId);
+
+    setTimeout(() => inputRef.current?.focus(), 100);
   }
 
   // ─────────────────────────────────────────
@@ -1111,13 +1273,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
       .single();
     if (data?.messages) {
       setCurrentChatId(chatId);
-      setMessages((prev) => {
-        const taskMsgs = prev.filter((m) => m.type === "task");
-        return sortMessagesByTime([
-          ...data.messages.slice(-CHAT_HISTORY_LIMIT),
-          ...taskMsgs,
-        ]);
-      });
+      setMessages(sortMessagesByTime(data.messages));
+      await loadChatTasksForChat(chatId);
     }
     setShowHistory(false);
     setShowMenu(false);
@@ -1126,14 +1283,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
     inputRef.current?.focus();
   }
 
-  // ✅ محدَّث: حذف مهام المحادثة أولًا
   async function deleteChat(chatId) {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
-    // احذف مهام المحادثة أولًا
     await supabase.from("tasks").delete().eq("chat_id", chatId);
-
-    // ثم احذف المحادثة
     await supabase.from("chats").delete().eq("id", chatId);
 
     setAllChats((prev) => prev.filter((c) => c.id !== chatId));
@@ -1248,6 +1401,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
       </div>
 
       <ChatTokenBar user={currentUser} />
+
+      {/* ✅ إشعار المهام النشطة */}
+      <ActiveTasksNotification
+        tasks={allActiveTasks}
+        currentChatId={currentChatId}
+        onOpenTask={openTaskInChat}
+      />
 
       {showHistory && (
         <ChatHistory
