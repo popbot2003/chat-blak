@@ -1,6 +1,6 @@
 /* ============================================
    Chat-Blak — App.css
-   Fonts: Cairo (headings) + IBM Plex Sans Arabic (body) + JetBrains Mono (code)
+   Fonts: Cairo + IBM Plex Sans Arabic + JetBrains Mono
    ============================================ */
 
 /* ========== CSS Variables ========== */
@@ -543,6 +543,58 @@ h3 { font-size: 18px; }
 .send-btn:hover { transform: scale(1.05); }
 .send-btn:active { transform: scale(0.95); }
 
+/* ========== Mode Toggle (رد/مهمة) ========== */
+.mode-toggle {
+  background: rgba(108,92,231,0.1);
+  border: 1px solid rgba(108,92,231,0.3);
+  color: #a29bfe;
+  padding: 8px 12px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.light .mode-toggle {
+  background: rgba(108,92,231,0.08);
+  border-color: rgba(108,92,231,0.25);
+  color: #6c5ce7;
+}
+
+.mode-toggle:hover:not(:disabled) {
+  background: rgba(108,92,231,0.2);
+  transform: scale(1.02);
+}
+
+.mode-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mode-toggle-task {
+  background: rgba(16,185,129,0.15);
+  border-color: rgba(16,185,129,0.4);
+  color: #4ade80;
+}
+
+.light .mode-toggle-task {
+  background: rgba(16,185,129,0.1);
+  border-color: rgba(16,185,129,0.3);
+  color: #10b981;
+}
+
+.mode-toggle-task:hover:not(:disabled) {
+  background: rgba(16,185,129,0.25);
+}
+
 /* ========== History Panel ========== */
 .history-panel {
   background: #0f0f1a;
@@ -675,6 +727,12 @@ h3 { font-size: 18px; }
   .token-info { font-size: 13px; }
   .code-content { font-size: 13px; }
   .code-lang { font-size: 10px; }
+
+  .mode-toggle {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 40px;
+  }
 }
 
 /* ========== أنيميشن Toast للـ Admin ========== */
@@ -697,11 +755,39 @@ h3 { font-size: 18px; }
   padding: 14px 16px;
   max-width: 100%;
   font-family: var(--font-body);
+  transition: box-shadow 0.3s;
 }
 
 .light .task-card {
   background: linear-gradient(135deg, rgba(108,92,231,0.05), rgba(139,92,246,0.03));
   border: 1px solid rgba(108,92,231,0.2);
+}
+
+/* نبض خفيف للكارت النشط */
+.task-card-active {
+  animation: task-pulse 2s ease-in-out infinite;
+}
+
+@keyframes task-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(108, 92, 231, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(108, 92, 231, 0.15);
+  }
+}
+
+.light .task-card-active {
+  animation: task-pulse-light 2s ease-in-out infinite;
+}
+
+@keyframes task-pulse-light {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(108, 92, 231, 0);
+  }
+  50% {
+    box-shadow: 0 0 20px 4px rgba(108, 92, 231, 0.1);
+  }
 }
 
 .task-card-header {
@@ -732,6 +818,35 @@ h3 { font-size: 18px; }
 .task-card-label {
   font-family: var(--font-heading);
   font-weight: 700;
+}
+
+/* الحلقة الدوارة */
+.task-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(162, 155, 254, 0.25);
+  border-top-color: #a29bfe;
+  border-radius: 50%;
+  animation: task-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.light .task-spinner {
+  border-color: rgba(108, 92, 231, 0.2);
+  border-top-color: #6c5ce7;
+}
+
+.task-spinner-small {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+}
+
+@keyframes task-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .task-card-cancel {
@@ -781,12 +896,14 @@ h3 { font-size: 18px; }
   opacity: 0.9;
 }
 
+/* شريط التقدم مع الشيمر المتحرك */
 .task-card-progress-bar {
   width: 100%;
   height: 8px;
   background: rgba(255,255,255,0.1);
   border-radius: 4px;
   overflow: hidden;
+  position: relative;
 }
 
 .light .task-card-progress-bar {
@@ -798,6 +915,44 @@ h3 { font-size: 18px; }
   background: linear-gradient(90deg, #6c5ce7, #a29bfe);
   border-radius: 4px;
   transition: width 0.5s ease;
+  position: relative;
+  z-index: 2;
+}
+
+/* الشيمر المتحرك فوق الشريط */
+.task-card-progress-shimmer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: task-shimmer 1.5s ease-in-out infinite;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.light .task-card-progress-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(108, 92, 231, 0.3),
+    transparent
+  );
+}
+
+@keyframes task-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
 }
 
 .task-card-waiting {
@@ -806,7 +961,10 @@ h3 { font-size: 18px; }
   padding: 8px 12px;
   background: rgba(255,255,255,0.04);
   border-radius: 8px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-style: italic;
 }
 
