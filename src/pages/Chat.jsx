@@ -4,6 +4,7 @@
 // - الأقدم أعلى الشاشة
 // - محادثة جديدة عند كل دخول
 // - منع تكرار المهام
+// - حذف مهام المحادثة عند حذفها
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -1125,9 +1126,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
     inputRef.current?.focus();
   }
 
+  // ✅ محدَّث: حذف مهام المحادثة أولًا
   async function deleteChat(chatId) {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
+
+    // احذف مهام المحادثة أولًا
+    await supabase.from("tasks").delete().eq("chat_id", chatId);
+
+    // ثم احذف المحادثة
     await supabase.from("chats").delete().eq("id", chatId);
+
     setAllChats((prev) => prev.filter((c) => c.id !== chatId));
     if (chatId === currentChatId) newChat();
   }
