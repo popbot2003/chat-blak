@@ -22,10 +22,11 @@ export default function KeyMobileCard({
 }) {
   const [showFull, setShowFull] = useState(false);
 
-  const percent = getUsagePercent(
-    keyItem.used_today || 0,
-    keyItem.daily_limit || 1000000
-  );
+  // ✅ استخدام effective_tpd_limit أولاً
+  const realLimit =
+    keyItem.effective_tpd_limit || keyItem.tpd_limit || 200000;
+  const realUsed = keyItem.used_tpd_today || keyItem.used_today || 0;
+  const percent = getUsagePercent(realUsed, realLimit);
   const color = getUsageColor(percent);
   const status = getKeyStatus(keyItem);
   const timeLeft = getTimeUntil(keyItem.rate_limited_until);
@@ -143,8 +144,7 @@ export default function KeyMobileCard({
         >
           <span>الاستهلاك</span>
           <span style={{ fontWeight: "600" }}>
-            {(keyItem.used_today || 0).toLocaleString()} /{" "}
-            {(keyItem.daily_limit || 0).toLocaleString()}
+            {realUsed.toLocaleString()} / {realLimit.toLocaleString()}
           </span>
         </div>
         <div
