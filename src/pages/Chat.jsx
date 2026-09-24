@@ -1,10 +1,11 @@
 // ============================================
-// Chat.jsx — نسخة v2 (بعد الإصلاحات الكاملة)
+// Chat.jsx — نسخة v3 (مع حذف المهام المكتملة)
 // ✅ إصلاح 1: حذف المحادثة يوقف المهام
 // ✅ إصلاح 2: حفظ المحادثة يعمل مع مهام type='task'
 // ✅ إصلاح 3: استعادة المهمة عند التحديث
 // ✅ إصلاح 4: لا محادثة فارغة عند كل دخول
 // ✅ إصلاح 5: إنشاء ID فقط عند أول رسالة
+// ✅ إصلاح 6: حذف المهام المكتملة مع المحادثة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -434,9 +435,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ── حفظ تلقائي ──
   useEffect(() => {
     if (!isLoaded) return;
-    // ✅ لا نحفظ إذا لا يوجد chatId بعد (لم يُرسل شيء)
     if (!currentChatIdRef.current) return;
-    // ✅ لا نحفظ إذا كانت الرسائل مجرد ترحيب
     const realMsgs = messages.filter(
       (m) => m.role === "user" || m.type === "task"
     );
@@ -619,11 +618,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
   async function saveChatToSupabase() {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length === 0) return;
-
-    // ✅ لا نحفظ إذا لا يوجد chatId
     if (!currentChatIdRef.current) return;
 
-    // ✅ لا نحفظ إذا لا يوجد رسائل حقيقية
     const hasRealMessages = msgs.some(
       (m) => m.role === "user" || m.type === "task"
     );
@@ -1097,7 +1093,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     creatingTaskRef.current = true;
 
     try {
-      // ✅ إصلاح 5: إنشاء chatId عند أول مهمة
       if (!currentChatIdRef.current) {
         const newId = Date.now().toString();
         currentChatIdRef.current = newId;
@@ -1297,7 +1292,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     inputRef.current?.focus();
   }
 
-  // ✅ إصلاح 1: حذف المحادثة يوقف المهام
+  // ✅ إصلاح 1 + 6: حذف المحادثة يوقف المهام + يحذف المهام المكتملة
   async function deleteChat(chatId) {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
@@ -1323,11 +1318,25 @@ export default function Chat({ user, onLogout, isAdmin }) {
         console.warn("[Chat] خطأ في إلغاء المهام:", cancelErr.message);
       }
 
-      // ✅ 2. حذف كل المهام (نشطة + منتهية)
-      await supabase.from("tasks").delete().eq("chat_id", chatId);
+      // ✅ 2. حذف كل المهام المرتبطة (نشطة + مكتملة + ملغاة)
+      const { error: tasksErr } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("chat_id", chatId);
+
+      if (tasksErr) {
+        console.warn("[Chat] خطأ في حذف المهام:", tasksErr.message);
+      }
 
       // ✅ 3. حذف المحادثة
-      await supabase.from("chats").delete().eq("id", chatId);
+      const { error: chatErr } = await supabase
+        .from("chats")
+        .delete()
+        .eq("id", chatId);
+
+      if (chatErr) {
+        console.warn("[Chat] خطأ في حذف المحادثة:", chatErr.message);
+      }
 
       // ✅ 4. تحديث الواجهة
       setAllChats((prev) => prev.filter((c) => c.id !== chatId));
@@ -1348,7 +1357,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         ]);
       }
 
-      showToast("✅ تم حذف المحادثة وإيقاف مهامها", "success");
+      showToast("✅ تم حذف المحادثة وكل مهامها", "success");
     } catch (err) {
       console.error("[Chat] خطأ في حذف المحادثة:", err);
       showToast("❌ فشل حذف المحادثة", "error");
