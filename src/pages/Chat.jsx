@@ -1,9 +1,10 @@
 // ============================================
-// Chat.jsx — نسخة كاملة (بعد إصلاح 4 مشاكل)
+// Chat.jsx — نسخة v2 (بعد الإصلاحات الكاملة)
 // ✅ إصلاح 1: حذف المحادثة يوقف المهام
 // ✅ إصلاح 2: حفظ المحادثة يعمل مع مهام type='task'
 // ✅ إصلاح 3: استعادة المهمة عند التحديث
-// ✅ إصلاح 4: آلية حذف المحادثات القديمة (في Cron)
+// ✅ إصلاح 4: لا محادثة فارغة عند كل دخول
+// ✅ إصلاح 5: إنشاء ID فقط عند أول رسالة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -152,9 +153,12 @@ function mergeMessages(existing, newMsgs) {
 // ─────────────────────────────────────────
 export default function Chat({ user, onLogout, isAdmin }) {
   const [allChats, setAllChats] = useState([]);
+
+  // ✅ إصلاح 5: لا ننشئ ID تلقائياً — فقط من localStorage
   const [currentChatId, setCurrentChatId] = useState(() => {
-    return localStorage.getItem("black-last-chat-id") || Date.now().toString();
+    return localStorage.getItem("black-last-chat-id") || null;
   });
+
   const [allActiveTasks, setAllActiveTasks] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -193,6 +197,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
     currentChatIdRef.current = currentChatId;
     if (currentChatId) {
       localStorage.setItem("black-last-chat-id", currentChatId);
+    } else {
+      localStorage.removeItem("black-last-chat-id");
     }
   }, [currentChatId]);
   useEffect(() => {
@@ -372,8 +378,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           if (!deletedId) return;
           setAllChats((prev) => prev.filter((c) => c.id !== deletedId));
           if (currentChatIdRef.current === deletedId) {
-            const newId = Date.now().toString();
-            setCurrentChatId(newId);
+            setCurrentChatId(null);
             setMessages([
               {
                 role: "assistant",
@@ -429,6 +434,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ── حفظ تلقائي ──
   useEffect(() => {
     if (!isLoaded) return;
+    // ✅ لا نحفظ إذا لا يوجد chatId بعد (لم يُرسل شيء)
+    if (!currentChatIdRef.current) return;
+    // ✅ لا نحفظ إذا كانت الرسائل مجرد ترحيب
+    const realMsgs = messages.filter(
+      (m) => m.role === "user" || m.type === "task"
+    );
+    if (realMsgs.length === 0) return;
+
     if (!debouncedSaveRef.current) {
       debouncedSaveRef.current = debounce(
         () => saveChatToSupabase(),
@@ -441,7 +454,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   // ── حفظ عند إغلاق النافذة ──
   useEffect(() => {
-    const handle = () => saveChatToSupabase();
+    const handle = () => {
+      if (currentChatIdRef.current) saveChatToSupabase();
+    };
     window.addEventListener("beforeunload", handle);
     return () => window.removeEventListener("beforeunload", handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -452,7 +467,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ─────────────────────────────────────────
   async function loadAllData() {
     const chats = await loadChatsFromSupabase();
-    await loadChatTasks();
     await loadAllActiveTasks();
     await refreshUserData();
     await checkAndShowWelcome(chats);
@@ -482,53 +496,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  async function loadChatTasks() {
-    try {
-      const oneDayAgo = new Date(
-        Date.now() - 24 * 60 * 60 * 1000
-      ).toISOString();
-
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("user_id", user.id)
-        .eq("chat_id", currentChatIdRef.current)
-        .or(
-          `status.in.(pending,planning,running,waiting,merging),created_at.gte.${oneDayAgo}`
-        )
-        .order("created_at", { ascending: true })
-        .limit(20);
-
-      if (error) throw error;
-
-      if (data && data.length > 0) {
-        const taskMessages = data
-          .map((task) => {
-            if (task.status === "cancelled") return null;
-            if (task.status === "completed" && task.result) {
-              return {
-                id: `completed-${task.id}`,
-                role: "assistant",
-                content: task.result,
-                task,
-              };
-            }
-            return {
-              id: `task-${task.id}`,
-              role: "assistant",
-              type: "task",
-              task,
-            };
-          })
-          .filter(Boolean);
-
-        setMessages((prev) => mergeMessages(prev, taskMessages));
-      }
-    } catch (err) {
-      console.error("[Chat] خطأ في تحميل مهام المحادثة:", err.message);
-    }
-  }
-
   async function restoreLastChat(chats) {
     try {
       const lastChatId = localStorage.getItem("black-last-chat-id");
@@ -537,6 +504,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       const exists = (chats || []).find((c) => c.id === lastChatId);
       if (!exists) {
         localStorage.removeItem("black-last-chat-id");
+        setCurrentChatId(null);
         return;
       }
 
@@ -558,6 +526,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   async function loadChatTasksForChat(chatId) {
     try {
+      if (!chatId) return;
+
       const oneDayAgo = new Date(
         Date.now() - 24 * 60 * 60 * 1000
       ).toISOString();
@@ -650,7 +620,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length === 0) return;
 
-    // ✅ تحويل مهام type='task' إلى placeholders
+    // ✅ لا نحفظ إذا لا يوجد chatId
+    if (!currentChatIdRef.current) return;
+
+    // ✅ لا نحفظ إذا لا يوجد رسائل حقيقية
+    const hasRealMessages = msgs.some(
+      (m) => m.role === "user" || m.type === "task"
+    );
+    if (!hasRealMessages) return;
+
     const normalMsgs = msgs.map((m) => {
       if (m.type === "task" && m.task) {
         return {
@@ -664,8 +642,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
       return m;
     });
-
-    if (normalMsgs.length === 0) return;
 
     const title =
       normalMsgs.find((m) => m.role === "user")?.content?.slice(0, 50) ||
@@ -911,6 +887,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
         console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
       }
 
+      // ✅ إصلاح 5: إنشاء chatId عند أول رسالة حقيقية
+      if (!currentChatIdRef.current) {
+        const newId = Date.now().toString();
+        currentChatIdRef.current = newId;
+        setCurrentChatId(newId);
+      }
+
       const limitCheck = checkUserDailyLimit(currentUserRef.current);
       if (!limitCheck.canChat) {
         setMessages((prev) =>
@@ -1114,6 +1097,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
     creatingTaskRef.current = true;
 
     try {
+      // ✅ إصلاح 5: إنشاء chatId عند أول مهمة
+      if (!currentChatIdRef.current) {
+        const newId = Date.now().toString();
+        currentChatIdRef.current = newId;
+        setCurrentChatId(newId);
+      }
+
       const { data: taskId, error } = await supabase.rpc("create_task", {
         task_input: text,
         chat_id_input: currentChatIdRef.current,
@@ -1192,7 +1182,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    await saveChatToSupabase();
+    if (currentChatIdRef.current) {
+      await saveChatToSupabase();
+    }
 
     const { data: chat } = await supabase
       .from("chats")
@@ -1266,9 +1258,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }
 
   async function newChat() {
-    await saveChatToSupabase();
-    const newId = Date.now().toString();
-    setCurrentChatId(newId);
+    if (currentChatIdRef.current) {
+      await saveChatToSupabase();
+    }
+    setCurrentChatId(null);
     setMessages([
       {
         role: "assistant",
@@ -1284,7 +1277,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }
 
   async function openChat(chatId) {
-    await saveChatToSupabase();
+    if (currentChatIdRef.current) {
+      await saveChatToSupabase();
+    }
     const { data } = await supabase
       .from("chats")
       .select("*")
@@ -1340,7 +1335,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
         prev.filter((t) => t.chat_id !== chatId)
       );
 
-      if (chatId === currentChatId) newChat();
+      // ✅ 5. إذا كانت المحادثة الحالية → مسح
+      if (chatId === currentChatIdRef.current) {
+        setCurrentChatId(null);
+        localStorage.removeItem("black-last-chat-id");
+        setMessages([
+          {
+            role: "assistant",
+            content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
+            id: Date.now(),
+          },
+        ]);
+      }
 
       showToast("✅ تم حذف المحادثة وإيقاف مهامها", "success");
     } catch (err) {
