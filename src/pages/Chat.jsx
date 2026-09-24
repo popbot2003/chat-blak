@@ -1,9 +1,9 @@
 // ============================================
-// Chat.jsx — نسخة كاملة
-// - إشعار المهام النشطة
-// - ربط المهام بالمحادثة
-// - آخر محادثة عند التحديث
-// - ترتيب: الأقدم أعلى
+// Chat.jsx — نسخة كاملة (بعد إصلاح 4 مشاكل)
+// ✅ إصلاح 1: حذف المحادثة يوقف المهام
+// ✅ إصلاح 2: حفظ المحادثة يعمل مع مهام type='task'
+// ✅ إصلاح 3: استعادة المهمة عند التحديث
+// ✅ إصلاح 4: آلية حذف المحادثات القديمة (في Cron)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -428,7 +428,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   // ── حفظ تلقائي ──
   useEffect(() => {
-    if (!isLoaded || messages.length <= 1) return;
+    if (!isLoaded) return;
     if (!debouncedSaveRef.current) {
       debouncedSaveRef.current = debounce(
         () => saveChatToSupabase(),
@@ -502,22 +502,25 @@ export default function Chat({ user, onLogout, isAdmin }) {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const taskMessages = data.map((task) => {
-          if (task.status === "completed" && task.result) {
+        const taskMessages = data
+          .map((task) => {
+            if (task.status === "cancelled") return null;
+            if (task.status === "completed" && task.result) {
+              return {
+                id: `completed-${task.id}`,
+                role: "assistant",
+                content: task.result,
+                task,
+              };
+            }
             return {
-              id: `completed-${task.id}`,
+              id: `task-${task.id}`,
               role: "assistant",
-              content: task.result,
+              type: "task",
               task,
             };
-          }
-          return {
-            id: `task-${task.id}`,
-            role: "assistant",
-            type: "task",
-            task,
-          };
-        });
+          })
+          .filter(Boolean);
 
         setMessages((prev) => mergeMessages(prev, taskMessages));
       }
@@ -573,22 +576,25 @@ export default function Chat({ user, onLogout, isAdmin }) {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const taskMessages = data.map((task) => {
-          if (task.status === "completed" && task.result) {
+        const taskMessages = data
+          .map((task) => {
+            if (task.status === "cancelled") return null;
+            if (task.status === "completed" && task.result) {
+              return {
+                id: `completed-${task.id}`,
+                role: "assistant",
+                content: task.result,
+                task,
+              };
+            }
             return {
-              id: `completed-${task.id}`,
+              id: `task-${task.id}`,
               role: "assistant",
-              content: task.result,
+              type: "task",
               task,
             };
-          }
-          return {
-            id: `task-${task.id}`,
-            role: "assistant",
-            type: "task",
-            task,
-          };
-        });
+          })
+          .filter(Boolean);
 
         setMessages((prev) => mergeMessages(prev, taskMessages));
       }
@@ -639,12 +645,27 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
+  // ✅ إصلاح 2: حفظ يشمل المهام
   async function saveChatToSupabase() {
     const msgs = messagesRef.current;
-    if (!msgs || msgs.length <= 1) return;
+    if (!msgs || msgs.length === 0) return;
 
-    const normalMsgs = msgs.filter((m) => m.type !== "task");
-    if (normalMsgs.length <= 1) return;
+    // ✅ تحويل مهام type='task' إلى placeholders
+    const normalMsgs = msgs.map((m) => {
+      if (m.type === "task" && m.task) {
+        return {
+          id: m.id,
+          role: "assistant",
+          type: "task",
+          task_id: m.task.id,
+          task_status: m.task.status,
+          content: `📋 مهمة: ${m.task.input?.slice(0, 100) || ""}`,
+        };
+      }
+      return m;
+    });
+
+    if (normalMsgs.length === 0) return;
 
     const title =
       normalMsgs.find((m) => m.role === "user")?.content?.slice(0, 50) ||
@@ -1281,14 +1302,51 @@ export default function Chat({ user, onLogout, isAdmin }) {
     inputRef.current?.focus();
   }
 
+  // ✅ إصلاح 1: حذف المحادثة يوقف المهام
   async function deleteChat(chatId) {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
-    await supabase.from("tasks").delete().eq("chat_id", chatId);
-    await supabase.from("chats").delete().eq("id", chatId);
+    try {
+      // ✅ 1. إلغاء كل المهام النشطة أولاً
+      const { error: cancelErr } = await supabase
+        .from("tasks")
+        .update({
+          status: "cancelled",
+          error: "تم إلغاء المهمة بحذف المحادثة",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("chat_id", chatId)
+        .in("status", [
+          "pending",
+          "planning",
+          "running",
+          "waiting",
+          "merging",
+        ]);
 
-    setAllChats((prev) => prev.filter((c) => c.id !== chatId));
-    if (chatId === currentChatId) newChat();
+      if (cancelErr) {
+        console.warn("[Chat] خطأ في إلغاء المهام:", cancelErr.message);
+      }
+
+      // ✅ 2. حذف كل المهام (نشطة + منتهية)
+      await supabase.from("tasks").delete().eq("chat_id", chatId);
+
+      // ✅ 3. حذف المحادثة
+      await supabase.from("chats").delete().eq("id", chatId);
+
+      // ✅ 4. تحديث الواجهة
+      setAllChats((prev) => prev.filter((c) => c.id !== chatId));
+      setAllActiveTasks((prev) =>
+        prev.filter((t) => t.chat_id !== chatId)
+      );
+
+      if (chatId === currentChatId) newChat();
+
+      showToast("✅ تم حذف المحادثة وإيقاف مهامها", "success");
+    } catch (err) {
+      console.error("[Chat] خطأ في حذف المحادثة:", err);
+      showToast("❌ فشل حذف المحادثة", "error");
+    }
   }
 
   function copyMessage(content, id) {
