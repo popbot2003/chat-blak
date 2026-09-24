@@ -24,20 +24,27 @@ export default function KeyCard({
 }) {
   const [showFull, setShowFull] = useState(false);
 
-  const percent = getUsagePercent(
-    keyItem.used_today || 0,
-    keyItem.daily_limit || 1000000
-  );
+  // ✅ استخدام effective_tpd_limit أولاً
+  const realLimit =
+    keyItem.effective_tpd_limit || keyItem.tpd_limit || 200000;
+  const realUsed = keyItem.used_tpd_today || keyItem.used_today || 0;
+  const percent = getUsagePercent(realUsed, realLimit);
   const color = getUsageColor(percent);
   const status = getKeyStatus(keyItem);
   const timeLeft = getTimeUntil(keyItem.rate_limited_until);
   const isValid = keyItem.is_valid !== false;
 
+  // ✅ تحديد لون الحد حسب النسبة
+  const limitColor =
+    percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
+
   return (
     <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
       {/* الاسم */}
       <td style={{ padding: "14px 10px", fontSize: "15px" }}>
-        <div style={{ fontWeight: "600" }}>{keyItem.key_name || "مفتاح Groq"}</div>
+        <div style={{ fontWeight: "600" }}>
+          {keyItem.key_name || "مفتاح Groq"}
+        </div>
         {keyItem.org_id && (
           <div
             style={{
@@ -94,10 +101,8 @@ export default function KeyCard({
               marginBottom: "4px",
             }}
           >
-            <span>{(keyItem.used_today || 0).toLocaleString()}</span>
-            <span style={{ opacity: 0.6 }}>
-              {percent.toFixed(0)}%
-            </span>
+            <span>{realUsed.toLocaleString()}</span>
+            <span style={{ opacity: 0.6 }}>{percent.toFixed(0)}%</span>
           </div>
           <div
             style={{
@@ -125,14 +130,15 @@ export default function KeyCard({
         style={{
           padding: "14px 10px",
           fontSize: "13px",
-          opacity: 0.8,
           fontFamily: "monospace",
+          color: limitColor,
+          fontWeight: percent > 90 ? "700" : "500",
         }}
       >
-        {(keyItem.daily_limit || 0).toLocaleString()}
+        {realLimit.toLocaleString()}
       </td>
 
-      {/* ✅ الحالة الجديدة */}
+      {/* ✅ الحالة */}
       <td style={{ padding: "14px 10px" }}>
         <div
           style={{
