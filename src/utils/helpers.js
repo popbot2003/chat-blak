@@ -25,7 +25,6 @@ export async function copyToClipboard(text, onSuccess, onError) {
     await navigator.clipboard.writeText(text);
     onSuccess?.();
   } catch (err) {
-    // Fallback للطريقة القديمة
     const textarea = document.createElement("textarea");
     textarea.value = text;
     document.body.appendChild(textarea);
@@ -49,9 +48,9 @@ export function getUsagePercent(used, limit) {
  * لون شريط التقدم حسب النسبة
  */
 export function getUsageColor(percent) {
-  if (percent < 50) return "#4ade80";  // أخضر
-  if (percent < 80) return "#facc15";  // أصفر
-  return "#f87171";                     // أحمر
+  if (percent < 50) return "#10b981";  // أخضر زمردي
+  if (percent < 80) return "#f59e0b";  // أصفر
+  return "#ef4444";                     // أحمر
 }
 
 /**
@@ -62,7 +61,7 @@ export function sleep(ms) {
 }
 
 /**
- * تقطيع النص الطويل (للـ preview)
+ * تقطيع النص الطويل
  */
 export function truncate(str, maxLength = 100) {
   if (!str) return "";
@@ -71,7 +70,7 @@ export function truncate(str, maxLength = 100) {
 }
 
 /**
- * التحقق من أن اليوم تغير (لإعادة ضبط الاستهلاك)
+ * التحقق من أن اليوم تغير
  */
 export function isNewDay(lastResetDate) {
   if (!lastResetDate) return true;
@@ -89,4 +88,119 @@ export function debounce(func, delay) {
     clearTimeout(timer);
     timer = setTimeout(() => func.apply(this, args), delay);
   };
+}
+
+// ============================================
+// ✅ دوال جديدة — حالة المفتاح والوقت المتبقي
+// ============================================
+
+/**
+ * حساب حالة المفتاح
+ * @returns { label, color, bg, icon }
+ */
+export function getKeyStatus(key) {
+  if (!key) {
+    return {
+      label: '—',
+      color: '#64748b',
+      bg: 'rgba(100,116,139,0.15)',
+      icon: '—',
+    };
+  }
+
+  // ❌ معطل
+  if (!key.is_active || key.is_valid === false) {
+    return {
+      label: 'معطل',
+      color: '#ef4444',
+      bg: 'rgba(239,68,68,0.15)',
+      icon: '❌',
+    };
+  }
+
+  // ⏸️ مقيّد مؤقتاً
+  if (
+    key.rate_limited_until &&
+    new Date(key.rate_limited_until) > new Date()
+  ) {
+    return {
+      label: 'مقيّد',
+      color: '#f59e0b',
+      bg: 'rgba(245,158,11,0.15)',
+      icon: '⏸️',
+    };
+  }
+
+  // ✅ نشط
+  return {
+    label: 'نشط',
+    color: '#10b981',
+    bg: 'rgba(16,185,129,0.15)',
+    icon: '✅',
+  };
+}
+
+/**
+ * الوقت المتبقي بصيغة ذكية
+ * @returns string | null
+ */
+export function getTimeUntil(untilDate) {
+  if (!untilDate) return null;
+
+  const diff = new Date(untilDate).getTime() - Date.now();
+  if (diff <= 0) return null;
+
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) return `${days} يوم`;
+  if (hours > 0) return `${hours} ساعة`;
+  if (minutes > 0) return `${minutes} دقيقة`;
+  return `${seconds} ثانية`;
+}
+
+/**
+ * عدد المفاتيح حسب الحالة
+ */
+export function getKeysStats(keys) {
+  if (!keys || !Array.isArray(keys)) {
+    return { active: 0, limited: 0, disabled: 0, total: 0 };
+  }
+
+  let active = 0;
+  let limited = 0;
+  let disabled = 0;
+
+  for (const key of keys) {
+    if (!key.is_active || key.is_valid === false) {
+      disabled++;
+    } else if (
+      key.rate_limited_until &&
+      new Date(key.rate_limited_until) > new Date()
+    ) {
+      limited++;
+    } else {
+      active++;
+    }
+  }
+
+  return { active, limited, disabled, total: keys.length };
+}
+
+/**
+ * أقرب وقت لتحرر مفتاح
+ */
+export function getEarliestFreeTime(keys) {
+  if (!keys || !Array.isArray(keys)) return null;
+
+  const times = keys
+    .filter(k => k.rate_limited_until && new Date(k.rate_limited_until) > new Date())
+    .map(k => new Date(k.rate_limited_until).getTime())
+    .sort();
+
+  if (times.length === 0) return null;
+
+  return getTimeUntil(new Date(times[0]));
 }
