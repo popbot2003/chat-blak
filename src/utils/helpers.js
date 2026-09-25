@@ -107,7 +107,6 @@ export function getKeyStatus(key) {
     };
   }
 
-  // ❌ معطل
   if (!key.is_active || key.is_valid === false) {
     return {
       label: 'معطل',
@@ -117,7 +116,6 @@ export function getKeyStatus(key) {
     };
   }
 
-  // ⏸️ مقيّد مؤقتاً
   if (
     key.rate_limited_until &&
     new Date(key.rate_limited_until) > new Date()
@@ -130,7 +128,6 @@ export function getKeyStatus(key) {
     };
   }
 
-  // ✅ نشط
   return {
     label: 'نشط',
     color: '#10b981',
@@ -204,37 +201,44 @@ export function getEarliestFreeTime(keys) {
 }
 
 // ============================================
-// ✅ دوال "نشط الآن"
+// ✅ دوال "نشط الآن" — محسّنة
 // ============================================
 
 /**
- * هل المفتاح نشط الآن؟ (استُخدم في آخر 30 ثانية)
+ * هل المفتاح نشط الآن؟ (استُخدم في آخر 15 ثانية)
+ * @param {Object} key - بيانات المفتاح
+ * @param {number} currentTime - الوقت الحالي (Date.now())
  */
-export function isKeyActiveNow(key) {
+export function isKeyActiveNow(key, currentTime) {
   if (!key?.last_request_at) return false;
   
+  const now = currentTime || Date.now();
   const lastRequest = new Date(key.last_request_at).getTime();
-  const diff = Date.now() - lastRequest;
+  const diff = now - lastRequest;
   
-  return diff < 30000; // 30 ثانية
+  // ✅ 15 ثانية فقط
+  return diff < 15000;
 }
 
 /**
  * منذ متى آخر استخدام؟
+ * @param {string} lastRequestAt - وقت آخر استخدام
+ * @param {number} currentTime - الوقت الحالي (Date.now())
  */
-export function getLastUsedTime(lastRequestAt) {
+export function getLastUsedTime(lastRequestAt, currentTime) {
   if (!lastRequestAt) return "لم يُستخدم";
   
+  const now = currentTime || Date.now();
   const last = new Date(lastRequestAt).getTime();
-  const diff = Date.now() - last;
+  const diff = now - last;
   
   const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
   
-  // ✅ نشط الآن
-  if (seconds < 30) return "🟢 نشط الآن";
+  // ✅ نشط الآن (15 ثانية)
+  if (seconds < 15) return "🟢 نشط الآن";
   
   if (seconds < 60) return `منذ ${seconds} ثانية`;
   if (minutes < 60) return `منذ ${minutes} دقيقة`;
