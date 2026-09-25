@@ -1,8 +1,12 @@
 // ============================================
-// src/components/admin/UsersTab.jsx
+// src/components/admin/UsersTab.jsx — Responsive
+// متوافق مع:
+//   - src/config/breakpoints.js
+//   - src/hooks/useMediaQuery.js
+//   - src/App.css (media queries موحّدة)
 // ============================================
 
-import { useState, useEffect } from "react";
+import { useMemo, useCallback } from "react";
 import { getUsagePercent, getUsageColor } from "../../utils/helpers";
 import {
   PERSONALITY_LABELS,
@@ -26,76 +30,217 @@ export default function UsersTab({
   deleteUser,
   onEditUser,
   onRefresh,
+  // ✅ جديد: coming from Admin.jsx
+  isMobile = false,
+  isTablet = false,
 }) {
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // ===== كارد المدير =====
+  const adminUser = useMemo(
+    () => users.find((u) => u.id === user.id),
+    [users, user.id]
+  );
 
-  useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  const adminOnline = useMemo(
+    () => (adminUser ? isUserOnline(adminUser.id) : false),
+    [adminUser, isUserOnline]
+  );
 
-  // كارد المدير
-  const adminUser = users.find((u) => u.id === user.id);
+  // ===== ✅ أنماط كارت الأدمن (متجاوبة) =====
+  const adminCardStyle = useMemo(
+    () => ({
+      background: darkMode
+        ? "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))"
+        : "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.05))",
+      border: `2px solid ${
+        darkMode ? "rgba(16,185,129,0.4)" : "rgba(16,185,129,0.25)"
+      }`,
+      borderRadius: "16px",
+      padding: isMobile ? "12px 14px" : "16px 20px",
+      marginBottom: "12px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: isMobile ? "wrap" : "wrap",
+      gap: isMobile ? "10px" : "12px",
+    }),
+    [darkMode, isMobile]
+  );
 
+  const adminAvatarStyle = useMemo(
+    () => ({
+      width: isMobile ? "42px" : "52px",
+      height: isMobile ? "42px" : "52px",
+      borderRadius: "50%",
+      background: "linear-gradient(135deg, #10b981, #059669)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      fontSize: isMobile ? "18px" : "22px",
+      flexShrink: 0,
+      boxShadow: "0 4px 12px rgba(16,185,129,0.4)",
+    }),
+    [isMobile]
+  );
+
+  const adminNameStyle = useMemo(
+    () => ({
+      fontSize: isMobile ? "15px" : "18px",
+      fontWeight: "bold",
+    }),
+    [isMobile]
+  );
+
+  const adminEmailStyle = useMemo(
+    () => ({
+      fontSize: isMobile ? "11px" : "12px",
+      opacity: 0.6,
+      fontFamily: "monospace",
+      wordBreak: "break-all",
+    }),
+    [isMobile]
+  );
+
+  const adminUsageBlockStyle = useMemo(
+    () => ({
+      minWidth: isMobile ? "100%" : "150px",
+      marginTop: isMobile ? "4px" : 0,
+    }),
+    [isMobile]
+  );
+
+  // ===== ✅ أنماط الحاوية الرئيسية =====
+  const containerStyle = useMemo(
+    () => ({
+      background: theme.surface,
+      borderRadius: "16px",
+      padding: isMobile ? "12px" : "16px",
+      border: `1px solid ${theme.border}`,
+    }),
+    [theme.surface, theme.border, isMobile]
+  );
+
+  const headerStyle = useMemo(
+    () => ({
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "flex-start",
+      flexDirection: isMobile ? "column" : "row",
+      flexWrap: "wrap",
+      gap: isMobile ? "10px" : "12px",
+      marginBottom: isMobile ? "12px" : "16px",
+    }),
+    [isMobile]
+  );
+
+  const controlsStyle = useMemo(
+    () => ({
+      display: "flex",
+      gap: "8px",
+      flexWrap: "wrap",
+      width: isMobile ? "100%" : "auto",
+    }),
+    [isMobile]
+  );
+
+  // ✅ على الموبايل: البحث يأخذ كامل العرض
+  const searchInputStyle = useMemo(
+    () => ({
+      ...inputStyle,
+      minWidth: isMobile ? "0" : "140px",
+      flex: isMobile ? 1 : "initial",
+      width: isMobile ? "100%" : "auto",
+    }),
+    [inputStyle, isMobile]
+  );
+
+  const refreshBtnStyle = useMemo(
+    () => ({
+      background: "rgba(16,185,129,0.15)",
+      color: "#10b981",
+      border: "none",
+      padding: isMobile ? "8px 12px" : "8px 14px",
+      borderRadius: "10px",
+      cursor: "pointer",
+      fontSize: "14px",
+      fontWeight: "600",
+      fontFamily: "inherit",
+      flexShrink: 0,
+      minWidth: isMobile ? "44px" : "auto",
+      minHeight: isMobile ? "40px" : "auto",
+    }),
+    [isMobile]
+  );
+
+  const tableWrapperStyle = useMemo(
+    () => ({
+      overflowX: "auto",
+      overflowY: "auto",
+      WebkitOverflowScrolling: "touch",
+      maxHeight: isMobile ? "60vh" : "70vh",
+    }),
+    [isMobile]
+  );
+
+  // ✅ على التابلت: minWidth أصغر قليلًا
+  const tableStyle = useMemo(
+    () => ({
+      width: "100%",
+      borderCollapse: "collapse",
+      minWidth: isTablet ? "640px" : "700px",
+      fontSize: isMobile ? "13px" : "14px",
+    }),
+    [isTablet, isMobile]
+  );
+
+  const thStyle = useMemo(
+    () => ({
+      padding: isMobile ? "10px 8px" : "12px 10px",
+      textAlign: "right",
+      fontSize: isMobile ? "12px" : "14px",
+      fontWeight: "600",
+      color: darkMode ? "#6ee7b7" : "#059669",
+      whiteSpace: "nowrap",
+    }),
+    [darkMode, isMobile]
+  );
+
+  // ===== ✅ Handlers (useCallback) =====
+  const handleSearchChange = useCallback(
+    (e) => setSearchTerm(e.target.value),
+    [setSearchTerm]
+  );
+
+  const handleRefresh = useCallback(() => {
+    if (typeof onRefresh === "function") onRefresh();
+  }, [onRefresh]);
+
+  // ===== JSX =====
   return (
     <>
+      {/* ===== كارد المدير ===== */}
       {adminUser && (
-        <div
-          style={{
-            background: darkMode
-              ? "linear-gradient(135deg, rgba(16,185,129,0.15), rgba(5,150,105,0.1))"
-              : "linear-gradient(135deg, rgba(16,185,129,0.08), rgba(5,150,105,0.05))",
-            border: `2px solid ${
-              darkMode ? "rgba(16,185,129,0.4)" : "rgba(16,185,129,0.25)"
-            }`,
-            borderRadius: "16px",
-            padding: "16px 20px",
-            marginBottom: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "12px",
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div
-              style={{
-                width: "52px",
-                height: "52px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #10b981, #059669)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: "22px",
-                flexShrink: 0,
-                boxShadow: "0 4px 12px rgba(16,185,129,0.4)",
-              }}
-            >
-              👑
-            </div>
-            <div>
-              <div style={{ fontSize: "18px", fontWeight: "bold" }}>
+        <div style={adminCardStyle}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? "10px" : "14px",
+              minWidth: 0,
+            }}
+          >
+            <div style={adminAvatarStyle}>👑</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={adminNameStyle}>
                 {adminUser.name || "المدير"}
               </div>
-              <div
-                style={{
-                  fontSize: "12px",
-                  opacity: 0.6,
-                  fontFamily: "monospace",
-                  wordBreak: "break-all",
-                }}
-              >
-                {adminUser.email}
-              </div>
+              <div style={adminEmailStyle}>{adminUser.email}</div>
               <div
                 style={{
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
                   marginTop: "4px",
+                  flexWrap: "wrap",
                 }}
               >
                 <div
@@ -103,23 +248,18 @@ export default function UsersTab({
                     width: "8px",
                     height: "8px",
                     borderRadius: "50%",
-                    background: isUserOnline(adminUser.id)
-                      ? "#10b981"
-                      : "#6b7280",
-                    boxShadow: isUserOnline(adminUser.id)
-                      ? "0 0 5px #10b981"
-                      : "none",
+                    background: adminOnline ? "#10b981" : "#6b7280",
+                    boxShadow: adminOnline ? "0 0 5px #10b981" : "none",
+                    flexShrink: 0,
                   }}
                 />
                 <span
                   style={{
                     fontSize: "12px",
-                    color: isUserOnline(adminUser.id)
-                      ? "#10b981"
-                      : theme.textMuted,
+                    color: adminOnline ? "#10b981" : theme.textMuted,
                   }}
                 >
-                  {isUserOnline(adminUser.id) ? "متصل الآن" : "غير متصل"}
+                  {adminOnline ? "متصل الآن" : "غير متصل"}
                 </span>
                 <span
                   style={{
@@ -134,7 +274,8 @@ export default function UsersTab({
               </div>
             </div>
           </div>
-          <div style={{ minWidth: "150px" }}>
+
+          <div style={adminUsageBlockStyle}>
             <div
               style={{
                 fontSize: "12px",
@@ -149,7 +290,7 @@ export default function UsersTab({
                 style={{
                   fontWeight: "bold",
                   color: "#10b981",
-                  fontSize: "15px",
+                  fontSize: isMobile ? "14px" : "15px",
                 }}
               >
                 ∞
@@ -157,7 +298,7 @@ export default function UsersTab({
             </div>
             <div
               style={{
-                fontSize: "14px",
+                fontSize: isMobile ? "13px" : "14px",
                 fontWeight: "bold",
               }}
             >
@@ -167,66 +308,52 @@ export default function UsersTab({
         </div>
       )}
 
-      <div
-        style={{
-          background: theme.surface,
-          borderRadius: "16px",
-          padding: "16px",
-          border: `1px solid ${theme.border}`,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            flexWrap: "wrap",
-            gap: "12px",
-            marginBottom: "16px",
-          }}
-        >
+      {/* ===== الحاوية الرئيسية ===== */}
+      <div style={containerStyle}>
+        {/* ===== Header + Search ===== */}
+        <div style={headerStyle}>
           <div>
-            <h2 style={{ margin: 0, fontSize: "18px" }}>👥 المستخدمين</h2>
+            <h2
+              style={{
+                margin: 0,
+                fontSize: isMobile ? "16px" : "18px",
+              }}
+            >
+              👥 المستخدمين
+            </h2>
             <div
-              style={{ fontSize: "13px", opacity: 0.6, marginTop: "2px" }}
+              style={{
+                fontSize: isMobile ? "12px" : "13px",
+                opacity: 0.6,
+                marginTop: "2px",
+              }}
             >
               إجمالي: {filteredUsers.length} / {users.length - 1}
             </div>
           </div>
-          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+
+          <div style={controlsStyle}>
             <input
               type="text"
               placeholder="🔍 بحث..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              style={{ ...inputStyle, minWidth: "140px" }}
+              onChange={handleSearchChange}
+              style={searchInputStyle}
             />
-            <button
-              onClick={onRefresh}
-              style={{
-                background: "rgba(16,185,129,0.15)",
-                color: "#10b981",
-                border: "none",
-                padding: "8px 14px",
-                borderRadius: "10px",
-                cursor: "pointer",
-                fontSize: "14px",
-                fontWeight: "600",
-                fontFamily: "inherit",
-              }}
-            >
+            <button onClick={handleRefresh} style={refreshBtnStyle}>
               🔄
             </button>
           </div>
         </div>
 
+        {/* ===== المحتوى: موبايل vs ديسكتوب ===== */}
         {isMobile ? (
           <div>
             {filteredUsers.length === 0 ? (
               <div
                 style={{
                   textAlign: "center",
-                  padding: "40px",
+                  padding: "40px 20px",
                   opacity: 0.5,
                 }}
               >
@@ -248,21 +375,8 @@ export default function UsersTab({
             )}
           </div>
         ) : (
-          <div
-            style={{
-              overflowX: "auto",
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-              maxHeight: "70vh",
-            }}
-          >
-            <table
-              style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                minWidth: "700px",
-              }}
-            >
+          <div style={tableWrapperStyle}>
+            <table style={tableStyle}>
               <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
                 <tr
                   style={{
@@ -279,17 +393,7 @@ export default function UsersTab({
                     "الاتصال",
                     "الإجراءات",
                   ].map((h) => (
-                    <th
-                      key={h}
-                      style={{
-                        padding: "12px 10px",
-                        textAlign: "right",
-                        fontSize: "14px",
-                        fontWeight: "600",
-                        color: darkMode ? "#6ee7b7" : "#059669",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
+                    <th key={h} style={thStyle}>
                       {h}
                     </th>
                   ))}
@@ -302,7 +406,7 @@ export default function UsersTab({
                       colSpan="6"
                       style={{
                         textAlign: "center",
-                        padding: "40px",
+                        padding: "40px 20px",
                         opacity: 0.5,
                       }}
                     >
