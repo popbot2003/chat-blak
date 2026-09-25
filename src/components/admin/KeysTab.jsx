@@ -117,9 +117,15 @@ export default function KeysTab({
           onClick={toggleAutoValidate}
           color={autoValidate ? "#10b981" : theme.text}
           bg={autoValidate ? "rgba(16,185,129,0.15)" : theme.inputBg}
-          border={autoValidate ? "1px solid #10b981" : `1px solid ${theme.border}`}
+          border={
+            autoValidate
+              ? "1px solid #10b981"
+              : `1px solid ${theme.border}`
+          }
           icon={autoValidate ? "🟢" : "⚫"}
-          label={autoValidate ? "الفحص التلقائي مفعل" : "تفعيل الفحص التلقائي"}
+          label={
+            autoValidate ? "الفحص التلقائي مفعل" : "تفعيل الفحص التلقائي"
+          }
           theme={theme}
         />
         <ActionButton
@@ -214,7 +220,7 @@ export default function KeysTab({
             style={{
               width: "100%",
               borderCollapse: "collapse",
-              minWidth: "900px",
+              minWidth: "1000px",
             }}
           >
             <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
@@ -231,6 +237,7 @@ export default function KeysTab({
                   "الاستهلاك",
                   "الحد",
                   "الحالة",
+                  "آخر استخدام",
                   "الوقت المتبقي",
                   "الإجراءات",
                 ].map((h) => (
@@ -254,7 +261,7 @@ export default function KeysTab({
             <tbody>
               {apiKeys.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ padding: "40px" }}>
+                  <td colSpan="8" style={{ padding: "40px" }}>
                     <EmptyState theme={theme} />
                   </td>
                 </tr>
