@@ -1,6 +1,6 @@
 // ============================================
-// src/pages/Admin.jsx — النسخة المُحدَّثة (Responsive)
-// مع إحصائيات المفاتيح + عرض الهاتف + ألوان جديدة
+// src/pages/Admin.jsx — النسخة المُحدَّثة (Responsive + Folders)
+// مع إحصائيات المفاتيح + عرض الهاتف + مجلدات محادثات المستخدمين
 // متوافق مع:
 //   - src/config/breakpoints.js
 //   - src/hooks/useMediaQuery.js
@@ -16,7 +16,7 @@ import MessageContent from "../components/MessageContent";
 import { MEDIA } from "../config/breakpoints";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 
-// ✅ جديد: استيراد الثوابت (DEFAULT_KEY_DAILY_LIMIT)
+// ✅ استيراد الثوابت
 import { DEFAULT_KEY_DAILY_LIMIT } from "../config/constants";
 
 import {
@@ -121,10 +121,7 @@ export default function Admin({ user, onLogout }) {
 
   const [newKeyValue, setNewKeyValue] = useState("");
   const [newKeyName, setNewKeyName] = useState("");
-
-  // ✅ التعديل 1: استخدام DEFAULT_KEY_DAILY_LIMIT بدل 1000000
   const [newKeyLimit, setNewKeyLimit] = useState(DEFAULT_KEY_DAILY_LIMIT);
-
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
 
   const [darkMode, setDarkMode] = useState(() => {
@@ -132,9 +129,9 @@ export default function Admin({ user, onLogout }) {
     return saved !== null ? saved === "true" : true;
   });
 
-  const [chatFilterUser, setChatFilterUser] = useState("");
-  const [chatFilterDate, setChatFilterDate] = useState("all");
-  const [chatSearchTerm, setChatSearchTerm] = useState("");
+  // ✅ States قديمة تم نقلها إلى ChatsTab كـ state محلي
+  // (chatFilterUser / chatFilterDate / chatSearchTerm) — محذوفة
+
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportType, setExportType] = useState("users");
   const [toast, setToast] = useState(null);
@@ -155,7 +152,7 @@ export default function Admin({ user, onLogout }) {
   });
   const [onlineUsers, setOnlineUsers] = useState({});
 
-  // ===== ✅ Theme (useMemo) =====
+  // ===== ✅ Theme =====
   const theme = useMemo(() => buildTheme(darkMode), [darkMode]);
 
   // ===== ✅ أنماط مشتقة =====
@@ -212,6 +209,17 @@ export default function Admin({ user, onLogout }) {
         { event: "INSERT", schema: "public", table: "chats" },
         (payload) => {
           setAllChats((prev) => [payload.new, ...prev]);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "chats" },
+        (payload) => {
+          setAllChats((prev) =>
+            prev.map((c) =>
+              c.id === payload.new.id ? { ...c, ...payload.new } : c
+            )
+          );
         }
       )
       .on(
@@ -430,14 +438,18 @@ export default function Admin({ user, onLogout }) {
           الاسم: k.key_name || "",
           المفتاح: k.key_value || "",
           "الاستهلاك اليومي": k.used_today || 0,
-          // ✅ التعديل: استخدام DEFAULT_KEY_DAILY_LIMIT
           "الحد اليومي": k.daily_limit || DEFAULT_KEY_DAILY_LIMIT,
         }));
       case "chats":
-        return filteredChats.map((c) => ({
+        // ✅ التعديل: استخدام allChats بدل filteredChats
+        return allChats.map((c) => ({
           المستخدم: getUserById(c.user_id)?.name || "محذوف",
+          "البريد الإلكتروني": getUserById(c.user_id)?.email || "—",
           العنوان: c.title || "بدون عنوان",
           الرسائل: c.messages?.length || 0,
+          "آخر تحديث": c.updated_at
+            ? new Date(c.updated_at).toLocaleString("ar-EG")
+            : "—",
         }));
       default:
         return [];
@@ -449,7 +461,6 @@ export default function Admin({ user, onLogout }) {
     const exportData = apiKeys.map((k) => ({
       الاسم: k.key_name || "",
       المفتاح: k.key_value || "",
-      // ✅ التعديل: استخدام DEFAULT_KEY_DAILY_LIMIT
       "الحد اليومي": k.daily_limit || DEFAULT_KEY_DAILY_LIMIT,
       "الاستهلاك اليومي": k.used_today || 0,
       الحالة: k.is_active ? "نشط" : "معطل",
@@ -568,7 +579,6 @@ export default function Admin({ user, onLogout }) {
       setShowAddKeyModal(false);
       setNewKeyValue("");
       setNewKeyName("");
-      // ✅ التعديل: استخدام DEFAULT_KEY_DAILY_LIMIT بدل 1000000
       setNewKeyLimit(DEFAULT_KEY_DAILY_LIMIT);
       loadApiKeys();
     }
@@ -665,26 +675,9 @@ export default function Admin({ user, onLogout }) {
     );
   }
 
-  // ===== Filtered chats =====
-  const filteredChats = allChats.filter((chat) => {
-    if (chatFilterUser && chat.user_id !== chatFilterUser) return false;
-    if (chatFilterDate !== "all") {
-      const chatDate = new Date(chat.updated_at);
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      if (chatFilterDate === "today" && chatDate < today) return false;
-      if (chatFilterDate === "week" && chatDate < weekAgo) return false;
-      if (chatFilterDate === "month" && chatDate < monthStart) return false;
-    }
-    if (
-      chatSearchTerm &&
-      !(chat.title || "").toLowerCase().includes(chatSearchTerm.toLowerCase())
-    )
-      return false;
-    return true;
-  });
+  // ===== ✅ Filtered chats: احتفظنا بها لحساب العدد فقط =====
+  // (ChatsTab يفلتر داخليًا)
+  const filteredChats = allChats;
 
   // ===== ✅ Padding متجاوب =====
   const contentPadding = isMobile ? "12px" : isTablet ? "14px" : "16px";
@@ -761,7 +754,7 @@ export default function Admin({ user, onLogout }) {
         counts={{
           users: users.length,
           keys: `${apiKeys.filter((k) => k.is_active).length}/${apiKeys.length}`,
-          chats: `${filteredChats.length}/${allChats.length}`,
+          chats: allChats.length,
         }}
       />
 
@@ -821,24 +814,15 @@ export default function Admin({ user, onLogout }) {
         {activeTab === "chats" && (
           <ChatsTab
             allChats={allChats}
-            filteredChats={filteredChats}
             users={users}
-            chatFilterUser={chatFilterUser}
-            setChatFilterUser={setChatFilterUser}
-            chatFilterDate={chatFilterDate}
-            setChatFilterDate={setChatFilterDate}
-            chatSearchTerm={chatSearchTerm}
-            setChatSearchTerm={setChatSearchTerm}
             theme={theme}
             darkMode={darkMode}
             isMobile={isMobile}
             isTablet={isTablet}
             inputStyle={inputStyle}
-            formatDate={formatDate}
             getUserById={getUserById}
             onRefresh={loadAllChats}
-            onOpenChat={openChatViewer}
-            onDeleteChat={deleteSingleChat}
+            onOpenUserChats={openUserChatsModal}
             onDeleteAll={deleteAllChatsConfirm}
           />
         )}
