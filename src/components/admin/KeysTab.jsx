@@ -28,6 +28,18 @@ export default function KeysTab({
 }) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  // ✅ الوقت الحالي — لتحديث "نشط الآن"
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  useEffect(() => {
+    // ✅ تحديث الوقت كل 3 ثواني
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener("resize", handleResize);
@@ -187,7 +199,7 @@ export default function KeysTab({
         </div>
       )}
 
-      {/* عرض المفاتيح: جدول أو بطاقات */}
+      {/* عرض المفاتيح */}
       {isMobile ? (
         <div>
           {apiKeys.length === 0 ? (
@@ -198,6 +210,7 @@ export default function KeysTab({
                 key={keyItem.id}
                 keyItem={keyItem}
                 theme={theme}
+                currentTime={currentTime}
                 onTest={onTestKey}
                 onReset={onResetKey}
                 onToggle={onToggleKey}
@@ -272,6 +285,7 @@ export default function KeysTab({
                     keyItem={keyItem}
                     theme={theme}
                     darkMode={darkMode}
+                    currentTime={currentTime}
                     onTest={onTestKey}
                     onReset={onResetKey}
                     onToggle={onToggleKey}
