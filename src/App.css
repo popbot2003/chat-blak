@@ -1,6 +1,7 @@
 /* ============================================
    Chat-Blak — App.css
    Fonts: Cairo + IBM Plex Sans Arabic + JetBrains Mono
+   Breakpoints: synchronized with src/config/breakpoints.js
    ============================================ */
 
 /* ========== CSS Variables ========== */
@@ -8,6 +9,18 @@
   --font-heading: 'Cairo', 'IBM Plex Sans Arabic', system-ui, sans-serif;
   --font-body: 'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+
+  /* ---------- Breakpoints (px) — sync with breakpoints.js ---------- */
+  --bp-sm: 480px;
+  --bp-md: 640px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+  --bp-xxl: 1536px;
+
+  /* ---------- Breakpoints (max-width) ---------- */
+  --bp-below-sm: 479px;
+  --bp-below-md: 639px;   /* موبايل */
+  --bp-below-lg: 1023px;  /* موبايل + تابلت */
 }
 
 /* ========== Reset ========== */
@@ -73,38 +86,6 @@ h3 { font-size: 18px; }
   flex-direction: column;
   position: relative;
   overflow: hidden;
-}
-
-@media (max-width: 767px) {
-  html.admin-page,
-  body.admin-page {
-    overflow: auto !important;
-    height: auto !important;
-    min-height: 100%;
-  }
-
-  #root.admin-page {
-    height: auto !important;
-    min-height: 100%;
-    overflow-y: auto !important;
-    align-items: flex-start;
-  }
-
-  html:not(.admin-page),
-  body:not(.admin-page) {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  #root:not(.admin-page) {
-    height: 100%;
-    overflow: hidden;
-  }
-
-  .container {
-    height: 100dvh;
-    max-height: 100dvh;
-  }
 }
 
 .container.dark { background: #0f0f1a; color: #e0e0e0; }
@@ -564,37 +545,6 @@ h3 { font-size: 18px; }
   transform: translateY(-1px);
 }
 
-/* Responsive */
-@media (max-width: 767px) {
-  .active-tasks-header {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-
-  .active-tasks-body {
-    padding: 0 8px 8px 8px;
-    gap: 6px;
-    max-height: 240px;
-  }
-
-  .active-task-item {
-    padding: 8px 10px;
-  }
-
-  .active-task-title {
-    font-size: 12px;
-  }
-
-  .active-task-progress-info {
-    font-size: 10px;
-  }
-
-  .active-task-open-btn {
-    padding: 5px 10px;
-    font-size: 11px;
-  }
-}
-
 /* ========== شريط البحث/السجل ========== */
 .search-bar {
   display: flex;
@@ -1025,51 +975,6 @@ h3 { font-size: 18px; }
   width: 100%;
 }
 
-@media (max-width: 767px) {
-  .admin-keys-table-container table,
-  .admin-users-table-container table,
-  .admin-chats-table-container table {
-    min-width: 650px;
-  }
-
-  .key-status-badge {
-    font-size: 11px;
-    padding: 2px 6px;
-  }
-
-  .action-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-  }
-
-  .action-buttons button {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .admin-modal-content {
-    max-width: 95%;
-    padding: 16px;
-  }
-
-  table { font-size: 13px; }
-  th, td { padding: 8px 6px !important; }
-
-  .bubble { font-size: 15px; line-height: 1.7; }
-  .msg-content-wrapper { max-width: 90%; }
-  .avatar-small { width: 28px; height: 28px; font-size: 13px; }
-  .token-info { font-size: 13px; }
-  .code-content { font-size: 13px; }
-  .code-lang { font-size: 10px; }
-
-  .mode-toggle {
-    padding: 6px 10px;
-    font-size: 12px;
-    min-height: 40px;
-  }
-}
-
 /* ========== أنيميشن Toast للـ Admin ========== */
 @keyframes adminSlideDown {
   from {
@@ -1382,37 +1287,150 @@ h3 { font-size: 18px; }
   opacity: 0.8;
 }
 
-@media (max-width: 767px) {
-  .task-card {
-    padding: 12px;
+/* ============================================================
+   ========== RESPONSIVE (Mobile First: sm → md → lg) =========
+   ============================================================
+   ترتيب الأقسام:
+     - SMALL  (<= 479px)  → تحسينات موبايل صغير
+     - MOBILE (<= 639px)  → موبايل  (يطابق BREAKPOINTS.md - 1)
+     - TABLET (640-1023)  → تابلت  (يطابق BREAKPOINTS.md → lg-1)
+     - DESKTOP (>= 1024)  → ديسكتوب (يطابق BREAKPOINTS.lg)
+   ============================================================ */
+
+/* ---------- MOBILE & SMALL (<= 639px) ---------- */
+@media (max-width: 639px) {
+  /* Admin scroll behavior on mobile */
+  html.admin-page,
+  body.admin-page {
+    overflow: auto !important;
+    height: auto !important;
+    min-height: 100%;
   }
 
-  .task-card-title {
-    font-size: 13px;
+  #root.admin-page {
+    height: auto !important;
+    min-height: 100%;
+    overflow-y: auto !important;
+    align-items: flex-start;
   }
 
-  .task-card-input {
-    font-size: 14px;
-    padding: 8px 10px;
+  html:not(.admin-page),
+  body:not(.admin-page) {
+    height: 100%;
+    overflow: hidden;
   }
 
-  .task-card-progress-info {
+  #root:not(.admin-page) {
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .container {
+    height: 100dvh;
+    max-height: 100dvh;
+  }
+
+  /* Active tasks */
+  .active-tasks-header {
+    padding: 8px 12px;
     font-size: 12px;
   }
 
-  .task-card-result-body {
-    font-size: 14px;
-    max-height: 400px;
+  .active-tasks-body {
+    padding: 0 8px 8px 8px;
+    gap: 6px;
+    max-height: 240px;
   }
 
-  .task-card-cancel {
-    padding: 4px 10px;
+  .active-task-item {
+    padding: 8px 10px;
+  }
+
+  .active-task-title {
+    font-size: 12px;
+  }
+
+  .active-task-progress-info {
+    font-size: 10px;
+  }
+
+  .active-task-open-btn {
+    padding: 5px 10px;
     font-size: 11px;
   }
+
+  /* Admin tables: horizontal scroll */
+  .admin-keys-table-container table,
+  .admin-users-table-container table,
+  .admin-chats-table-container table {
+    min-width: 650px;
+  }
+
+  .key-status-badge {
+    font-size: 11px;
+    padding: 2px 6px;
+  }
+
+  .action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .action-buttons button {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+
+  .admin-modal-content {
+    max-width: 95%;
+    padding: 16px;
+  }
+
+  table { font-size: 13px; }
+  th, td { padding: 8px 6px !important; }
+
+  /* Chat */
+  .bubble { font-size: 15px; line-height: 1.7; }
+  .msg-content-wrapper { max-width: 90%; }
+  .avatar-small { width: 28px; height: 28px; font-size: 13px; }
+  .token-info { font-size: 13px; }
+  .code-content { font-size: 13px; }
+  .code-lang { font-size: 10px; }
+
+  .mode-toggle {
+    padding: 6px 10px;
+    font-size: 12px;
+    min-height: 40px;
+  }
+
+  /* Task card */
+  .task-card { padding: 12px; }
+  .task-card-title { font-size: 13px; }
+  .task-card-input { font-size: 14px; padding: 8px 10px; }
+  .task-card-progress-info { font-size: 12px; }
+  .task-card-result-body { font-size: 14px; max-height: 400px; }
+  .task-card-cancel { padding: 4px 10px; font-size: 11px; }
 }
 
-/* ========== ديسكتوب ========== */
-@media (min-width: 768px) {
+/* ---------- TABLET (640px – 1023px) ---------- */
+@media (min-width: 640px) and (max-width: 1023px) {
+  .container {
+    max-width: 100%;
+    height: 100%;
+  }
+
+  .messages { padding: 18px; gap: 16px; }
+  .bubble { font-size: 16px; }
+  .msg-content-wrapper { max-width: 85%; }
+
+  .admin-modal-content { max-width: 640px; }
+
+  .task-card-result-body { max-height: 500px; }
+}
+
+/* ---------- DESKTOP (>= 1024px) ---------- */
+@media (min-width: 1024px) {
   body { padding: 16px; overflow: hidden; }
   #root { padding: 0; }
 
@@ -1445,3 +1463,9 @@ h3 { font-size: 18px; }
     padding: 0;
   }
 }
+
+/* ---------- LARGE DESKTOP (>= 1280px) ---------- */
+@media (min-width: 1280px) {
+  .container {
+    max-width: 960px;
+  }
