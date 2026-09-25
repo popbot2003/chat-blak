@@ -6,7 +6,7 @@
 //   - src/App.css (media queries موحّدة)
 // ============================================
 
-import { useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";   // ✅ useState مضاف
 import ChatsMobileCard from "./ChatsMobileCard";
 
 export default function ChatsTab({
@@ -72,8 +72,6 @@ export default function ChatsTab({
     [isMobile]
   );
 
-  // ✅ الفلاتر: على الموبايل → عمود واحد
-  //              على الديسكتوب → صف واحد مع wrap
   const filtersRowStyle = useMemo(
     () => ({
       display: "flex",
@@ -85,7 +83,6 @@ export default function ChatsTab({
     [isMobile]
   );
 
-  // ✅ على الموبايل: كل عنصر بعرض كامل
   const filterControlStyle = useMemo(
     () => ({
       ...inputStyle,
@@ -96,12 +93,11 @@ export default function ChatsTab({
     [inputStyle, isMobile]
   );
 
-  // ✅ صف الأزرار (تحديث + حذف الكل)
   const buttonsRowStyle = useMemo(
     () => ({
       display: "flex",
       gap: isMobile ? "8px" : "6px",
-      flexDirection: isMobile ? "row" : "row",
+      flexDirection: "row",
       width: isMobile ? "100%" : "auto",
     }),
     [isMobile]
@@ -131,7 +127,7 @@ export default function ChatsTab({
       padding: isMobile ? "10px 14px" : "8px 14px",
       borderRadius: "10px",
       cursor: "pointer",
-      fontSize: isMobile ? "13px" : "13px",
+      fontSize: "13px",
       fontWeight: "600",
       fontFamily: "inherit",
       flex: isMobile ? 1 : "initial",
@@ -243,7 +239,6 @@ export default function ChatsTab({
           style={filterControlStyle}
         />
 
-        {/* ✅ صف الأزرار: على الموبايل → تحت بعض في صف أفقي */}
         <div style={buttonsRowStyle}>
           <button onClick={handleRefresh} style={refreshBtnStyle}>
             🔄
@@ -342,7 +337,7 @@ export default function ChatsTab({
 }
 
 // ============================================================
-//  ChatRow — صف جدول منفصل لتحسين الأداء
+//  ChatRow — صف جدول منفصل (يستخدم useState للـ hover)
 // ============================================================
 function ChatRow({
   chat,
@@ -353,7 +348,7 @@ function ChatRow({
   onDeleteChat,
   isMobile = false,
 }) {
-  const [hover, setHover] = useState(false);
+  const [hover, setHover] = useState(false);   // ← ← ← يحتاج useState
 
   return (
     <tr
