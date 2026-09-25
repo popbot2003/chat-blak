@@ -1,9 +1,12 @@
 // ============================================
-// src/components/admin/KeyCard.jsx
+// src/components/admin/KeyCard.jsx — Responsive
 // كارت مفتاح — للشاشات الكبيرة (جدول)
+// متوافق مع:
+//   - src/config/breakpoints.js
+//   - src/App.css (media queries موحّدة)
 // ============================================
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   formatDate,
   getUsagePercent,
@@ -24,48 +27,194 @@ export default function KeyCard({
   onToggle,
   onDelete,
   onReactivate,
+  // ✅ جديد: coming from KeysTab
+  isTablet = false,
 }) {
   const [showFull, setShowFull] = useState(false);
 
-  // ✅ استخدام effective_tpd_limit أولاً
-  const realLimit =
-    keyItem.effective_tpd_limit || keyItem.tpd_limit || 200000;
-  const realUsed = keyItem.used_tpd_today || keyItem.used_today || 0;
-  const percent = getUsagePercent(realUsed, realLimit);
-  const color = getUsageColor(percent);
-  const status = getKeyStatus(keyItem);
-  const timeLeft = getTimeUntil(keyItem.rate_limited_until);
-  const isValid = keyItem.is_valid !== false;
+  // ===== ✅ الحسابات (useMemo) =====
+  const metrics = useMemo(() => {
+    const realLimit =
+      keyItem.effective_tpd_limit || keyItem.tpd_limit || 200000;
+    const realUsed = keyItem.used_tpd_today || keyItem.used_today || 0;
+    const percent = getUsagePercent(realUsed, realLimit);
+    const color = getUsageColor(percent);
+    const status = getKeyStatus(keyItem);
+    const timeLeft = getTimeUntil(keyItem.rate_limited_until);
+    const isValid = keyItem.is_valid !== false;
+    const activeNow = isKeyActiveNow(keyItem, currentTime);
+    const lastUsed = getLastUsedTime(keyItem.last_request_at, currentTime);
+    const limitColor =
+      percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
 
-  // ✅ هل نشط الآن؟ (مع الوقت المحدَّث)
-  const activeNow = isKeyActiveNow(keyItem, currentTime);
-  const lastUsed = getLastUsedTime(keyItem.last_request_at, currentTime);
+    return {
+      realLimit,
+      realUsed,
+      percent,
+      color,
+      status,
+      timeLeft,
+      isValid,
+      activeNow,
+      lastUsed,
+      limitColor,
+    };
+  }, [
+    keyItem.effective_tpd_limit,
+    keyItem.tpd_limit,
+    keyItem.used_tpd_today,
+    keyItem.used_today,
+    keyItem.rate_limited_until,
+    keyItem.last_request_at,
+    keyItem.is_valid,
+    keyItem.is_active,
+    currentTime,
+    theme.text,
+  ]);
 
-  // ✅ لون الحد
-  const limitColor =
-    percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
+  const {
+    realLimit,
+    realUsed,
+    percent,
+    color,
+    status,
+    timeLeft,
+    isValid,
+    activeNow,
+    lastUsed,
+    limitColor,
+  } = metrics;
 
+  // ===== ✅ أنماط الخلايا (useMemo) =====
+  const cellStyle = useMemo(
+    () => ({
+      padding: isTablet ? "10px 8px" : "14px 10px",
+      verticalAlign: "middle",
+    }),
+    [isTablet]
+  );
+
+  const rowStyle = useMemo(
+    () => ({
+      borderBottom: `1px solid ${theme.border}`,
+      background: activeNow
+        ? darkMode
+          ? "rgba(16,185,129,0.08)"
+          : "rgba(16,185,129,0.05)"
+        : "transparent",
+      transition: "background 0.3s",
+    }),
+    [theme.border, activeNow, darkMode]
+  );
+
+  const nameStyle = useMemo(
+    () => ({
+      fontWeight: "600",
+      fontSize: isTablet ? "14px" : "15px",
+    }),
+    [isTablet]
+  );
+
+  const keyTextStyle = useMemo(
+    () => ({
+      fontFamily: "monospace",
+      fontSize: isTablet ? "11px" : "12px",
+      wordBreak: "break-all",
+      opacity: 0.8,
+    }),
+    [isTablet]
+  );
+
+  const limitStyle = useMemo(
+    () => ({
+      padding: isTablet ? "10px 8px" : "14px 10px",
+      fontSize: isTablet ? "12px" : "13px",
+      fontFamily: "monospace",
+      color: limitColor,
+      fontWeight: percent > 90 ? "700" : "500",
+    }),
+    [isTablet, limitColor, percent]
+  );
+
+  const statusBadgeStyle = useMemo(
+    () => ({
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "6px",
+      padding: isTablet ? "5px 10px" : "6px 12px",
+      borderRadius: "20px",
+      background: status.bg,
+      color: status.color,
+      fontSize: isTablet ? "12px" : "13px",
+      fontWeight: "600",
+      whiteSpace: "nowrap",
+    }),
+    [status.bg, status.color, isTablet]
+  );
+
+  const lastUsedStyle = useMemo(
+    () => ({
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+      padding: activeNow ? "4px 10px" : "0",
+      borderRadius: "12px",
+      background: activeNow ? "rgba(16,185,129,0.15)" : "transparent",
+      color: activeNow ? "#10b981" : theme.textMuted,
+      fontSize: isTablet ? "11px" : "12px",
+      fontWeight: activeNow ? "700" : "500",
+      whiteSpace: "nowrap",
+    }),
+    [activeNow, theme.textMuted, isTablet]
+  );
+
+  const timeLeftStyle = useMemo(
+    () => ({
+      display: "inline-flex",
+      alignItems: "center",
+      gap: "4px",
+      padding: "4px 10px",
+      borderRadius: "12px",
+      background: "rgba(245,158,11,0.12)",
+      color: "#f59e0b",
+      fontSize: isTablet ? "11px" : "12px",
+      fontWeight: "600",
+      whiteSpace: "nowrap",
+    }),
+    [isTablet]
+  );
+
+  // ===== ✅ Handlers (useCallback) =====
+  const handleToggleShowFull = useCallback(() => {
+    setShowFull((v) => !v);
+  }, []);
+
+  const handleTest = useCallback(() => {
+    onTest(keyItem);
+  }, [onTest, keyItem]);
+
+  const handleReset = useCallback(() => {
+    onReset(keyItem.id);
+  }, [onReset, keyItem.id]);
+
+  const handleToggle = useCallback(() => {
+    onToggle(keyItem.id, keyItem.is_active);
+  }, [onToggle, keyItem.id, keyItem.is_active]);
+
+  const handleReactivate = useCallback(() => {
+    onReactivate(keyItem.id);
+  }, [onReactivate, keyItem.id]);
+
+  const handleDelete = useCallback(() => {
+    onDelete(keyItem.id);
+  }, [onDelete, keyItem.id]);
+
+  // ===== JSX =====
   return (
-    <tr
-      style={{
-        borderBottom: `1px solid ${theme.border}`,
-        background: activeNow
-          ? darkMode
-            ? "rgba(16,185,129,0.08)"
-            : "rgba(16,185,129,0.05)"
-          : "transparent",
-        transition: "background 0.3s",
-      }}
-    >
-      {/* الاسم */}
-      <td style={{ padding: "14px 10px", fontSize: "15px" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-          }}
-        >
+    <tr style={rowStyle}>
+      {/* ===== الاسم ===== */}
+      <td style={cellStyle}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {activeNow && (
             <div
               style={{
@@ -80,7 +229,7 @@ export default function KeyCard({
               title="نشط الآن"
             />
           )}
-          <div style={{ fontWeight: "600" }}>
+          <div style={nameStyle}>
             {keyItem.key_name || "مفتاح Groq"}
           </div>
         </div>
@@ -98,23 +247,16 @@ export default function KeyCard({
         )}
       </td>
 
-      {/* المفتاح */}
-      <td style={{ padding: "14px 10px" }}>
+      {/* ===== المفتاح ===== */}
+      <td style={cellStyle}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <span
-            style={{
-              fontFamily: "monospace",
-              fontSize: "12px",
-              wordBreak: "break-all",
-              opacity: 0.8,
-            }}
-          >
+          <span style={keyTextStyle}>
             {showFull
               ? keyItem.key_value
               : keyItem.key_value?.slice(0, 20) + "..."}
           </span>
           <button
-            onClick={() => setShowFull(!showFull)}
+            onClick={handleToggleShowFull}
             style={{
               background: "transparent",
               border: "none",
@@ -122,21 +264,26 @@ export default function KeyCard({
               fontSize: "14px",
               flexShrink: 0,
               opacity: 0.7,
+              padding: "4px",
+              minWidth: "28px",
+              minHeight: "28px",
             }}
+            title={showFull ? "إخفاء المفتاح" : "إظهار المفتاح"}
+            aria-label={showFull ? "إخفاء المفتاح" : "إظهار المفتاح"}
           >
             {showFull ? "🙈" : "👁️"}
           </button>
         </div>
       </td>
 
-      {/* الاستهلاك */}
-      <td style={{ padding: "14px 10px" }}>
-        <div style={{ minWidth: "150px" }}>
+      {/* ===== الاستهلاك ===== */}
+      <td style={cellStyle}>
+        <div style={{ minWidth: isTablet ? "130px" : "150px" }}>
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              fontSize: "13px",
+              fontSize: isTablet ? "12px" : "13px",
               marginBottom: "4px",
             }}
           >
@@ -164,77 +311,26 @@ export default function KeyCard({
         </div>
       </td>
 
-      {/* الحد */}
-      <td
-        style={{
-          padding: "14px 10px",
-          fontSize: "13px",
-          fontFamily: "monospace",
-          color: limitColor,
-          fontWeight: percent > 90 ? "700" : "500",
-        }}
-      >
-        {realLimit.toLocaleString()}
-      </td>
+      {/* ===== الحد ===== */}
+      <td style={limitStyle}>{realLimit.toLocaleString()}</td>
 
-      {/* الحالة */}
-      <td style={{ padding: "14px 10px" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "6px 12px",
-            borderRadius: "20px",
-            background: status.bg,
-            color: status.color,
-            fontSize: "13px",
-            fontWeight: "600",
-            whiteSpace: "nowrap",
-          }}
-        >
+      {/* ===== الحالة ===== */}
+      <td style={cellStyle}>
+        <div style={statusBadgeStyle}>
           <span>{status.icon}</span>
           <span>{status.label}</span>
         </div>
       </td>
 
-      {/* آخر استخدام */}
-      <td style={{ padding: "14px 10px" }}>
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "4px",
-            padding: activeNow ? "4px 10px" : "0",
-            borderRadius: "12px",
-            background: activeNow ? "rgba(16,185,129,0.15)" : "transparent",
-            color: activeNow ? "#10b981" : theme.textMuted,
-            fontSize: "12px",
-            fontWeight: activeNow ? "700" : "500",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {lastUsed}
-        </div>
+      {/* ===== آخر استخدام ===== */}
+      <td style={cellStyle}>
+        <div style={lastUsedStyle}>{lastUsed}</div>
       </td>
 
-      {/* الوقت المتبقي */}
-      <td style={{ padding: "14px 10px" }}>
+      {/* ===== الوقت المتبقي ===== */}
+      <td style={cellStyle}>
         {timeLeft ? (
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "4px",
-              padding: "4px 10px",
-              borderRadius: "12px",
-              background: "rgba(245,158,11,0.12)",
-              color: "#f59e0b",
-              fontSize: "12px",
-              fontWeight: "600",
-              whiteSpace: "nowrap",
-            }}
-          >
+          <div style={timeLeftStyle}>
             <span>⏱️</span>
             <span>{timeLeft}</span>
           </div>
@@ -243,22 +339,22 @@ export default function KeyCard({
         )}
       </td>
 
-      {/* الإجراءات */}
-      <td style={{ padding: "14px 10px" }}>
+      {/* ===== الإجراءات ===== */}
+      <td style={cellStyle}>
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
           <IconBtn
             icon="🔍"
             title="فحص المفتاح"
             color="#a29bfe"
             bg="rgba(108,92,231,0.15)"
-            onClick={() => onTest(keyItem)}
+            onClick={handleTest}
           />
           <IconBtn
             icon="🔄"
             title="تصفير الاستهلاك"
             color="#fbbf24"
             bg="rgba(251,191,36,0.15)"
-            onClick={() => onReset(keyItem.id)}
+            onClick={handleReset}
           />
           <IconBtn
             icon={keyItem.is_active ? "⏸️" : "▶️"}
@@ -269,7 +365,7 @@ export default function KeyCard({
                 ? "rgba(248,113,113,0.15)"
                 : "rgba(74,222,128,0.15)"
             }
-            onClick={() => onToggle(keyItem.id, keyItem.is_active)}
+            onClick={handleToggle}
           />
           {!isValid && !keyItem.is_active && (
             <IconBtn
@@ -277,7 +373,7 @@ export default function KeyCard({
               title="إعادة تفعيل"
               color="#22c55e"
               bg="rgba(34,197,94,0.15)"
-              onClick={() => onReactivate(keyItem.id)}
+              onClick={handleReactivate}
             />
           )}
           <IconBtn
@@ -285,7 +381,7 @@ export default function KeyCard({
             title="حذف"
             color="#f87171"
             bg="rgba(248,113,113,0.15)"
-            onClick={() => onDelete(keyItem.id)}
+            onClick={handleDelete}
           />
         </div>
         {keyItem.last_checked_at && (
@@ -305,11 +401,22 @@ export default function KeyCard({
   );
 }
 
+// ============================================================
+//  IconBtn — زر أيقونة بحالة pressed
+// ============================================================
 function IconBtn({ icon, title, color, bg, onClick }) {
+  const [pressed, setPressed] = useState(false);
+
   return (
     <button
       onClick={onClick}
       title={title}
+      aria-label={title}
+      onMouseDown={() => setPressed(true)}
+      onMouseUp={() => setPressed(false)}
+      onMouseLeave={() => setPressed(false)}
+      onTouchStart={() => setPressed(true)}
+      onTouchEnd={() => setPressed(false)}
       style={{
         background: bg,
         color: color,
@@ -321,13 +428,11 @@ function IconBtn({ icon, title, color, bg, onClick }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        transition: "all 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = "scale(1.1)";
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = "scale(1)";
+        // ✅ هدف لمس مريح
+        minWidth: "32px",
+        minHeight: "32px",
+        transform: pressed ? "scale(0.92)" : "scale(1)",
+        transition: "transform 0.1s, opacity 0.1s",
       }}
     >
       {icon}
