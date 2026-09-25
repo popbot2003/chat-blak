@@ -1,11 +1,19 @@
 // ============================================
-// src/pages/Admin.jsx — النسخة المُحدَّثة
+// src/pages/Admin.jsx — النسخة المُحدَّثة (Responsive)
 // مع إحصائيات المفاتيح + عرض الهاتف + ألوان جديدة
+// متوافق مع:
+//   - src/config/breakpoints.js
+//   - src/hooks/useMediaQuery.js
+//   - src/App.css (media queries موحّدة)
 // ============================================
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import MessageContent from "../components/MessageContent";
+
+// ✅ جديد: استيراد البريك بوينتس والهوك
+import { MEDIA } from "../config/breakpoints";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 import {
   AdminHeader,
@@ -34,7 +42,63 @@ import {
 } from "../config/personalities";
 import { validateGroqKey, validateAllKeys } from "../utils/groqValidator";
 
+// ============================================================
+//  Helper: بناء theme حسب الوضع الحالي
+//  (ملف خارجي لتجنب إعادة الإنشاء داخل الـ component)
+// ============================================================
+const buildTheme = (darkMode) => ({
+  bg: darkMode ? "#0f172a" : "#f8fafc",
+  surface: darkMode ? "#1e293b" : "#ffffff",
+  surface2: darkMode ? "#334155" : "#f1f5f9",
+  border: darkMode ? "#334155" : "#e2e8f0",
+  borderStrong: darkMode ? "#475569" : "#cbd5e1",
+  text: darkMode ? "#f1f5f9" : "#0f172a",
+  textMuted: darkMode ? "#94a3b8" : "#64748b",
+  inputBg: darkMode ? "#0f172a" : "#f9fafb",
+  rowHover: darkMode ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)",
+  barBg: darkMode ? "#334155" : "#e2e8f0",
+  tabActiveBg: darkMode ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)",
+  tabActiveColor: darkMode ? "#6ee7b7" : "#059669",
+  tabInactiveColor: darkMode ? "#94a3b8" : "#64748b",
+});
+
+// ============================================================
+//  Helper: أنماط input جاهزة (لتمريرها للأبناء)
+// ============================================================
+const buildInputStyle = (theme, isMobile) => ({
+  padding: isMobile ? "8px 10px" : "8px 12px",
+  borderRadius: "8px",
+  border: `1px solid ${theme.border}`,
+  background: theme.inputBg,
+  color: theme.text,
+  fontSize: isMobile ? "13px" : "14px",
+  outline: "none",
+  fontFamily: "inherit",
+  width: "100%",
+});
+
+const buildModalInputStyle = (theme, isMobile) => ({
+  width: "100%",
+  padding: isMobile ? "9px" : "10px",
+  marginBottom: "12px",
+  borderRadius: "10px",
+  background: theme.inputBg,
+  color: theme.text,
+  border: `1px solid ${theme.border}`,
+  outline: "none",
+  fontFamily: "inherit",
+  fontSize: isMobile ? "13px" : "14px",
+});
+
+// ============================================================
+//  المكوّن الرئيسي
+// ============================================================
 export default function Admin({ user, onLogout }) {
+  // ===== ✅ Responsive hooks =====
+  const isMobile = useMediaQuery(MEDIA.belowMd);   // <= 639px
+  const isTablet = useMediaQuery(MEDIA.tablet);    // 640–1023
+  const isDesktop = useMediaQuery(MEDIA.desktop);  // >= 1024
+
   // ===== States =====
   const [users, setUsers] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
@@ -85,22 +149,19 @@ export default function Admin({ user, onLogout }) {
   });
   const [onlineUsers, setOnlineUsers] = useState({});
 
-  // ===== Theme الجديد (Slate + Emerald) =====
-  const theme = {
-    bg: darkMode ? "#0f172a" : "#f8fafc",
-    surface: darkMode ? "#1e293b" : "#ffffff",
-    surface2: darkMode ? "#334155" : "#f1f5f9",
-    border: darkMode ? "#334155" : "#e2e8f0",
-    borderStrong: darkMode ? "#475569" : "#cbd5e1",
-    text: darkMode ? "#f1f5f9" : "#0f172a",
-    textMuted: darkMode ? "#94a3b8" : "#64748b",
-    inputBg: darkMode ? "#0f172a" : "#f9fafb",
-    rowHover: darkMode ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)",
-    barBg: darkMode ? "#334155" : "#e2e8f0",
-    tabActiveBg: darkMode ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)",
-    tabActiveColor: darkMode ? "#6ee7b7" : "#059669",
-    tabInactiveColor: darkMode ? "#94a3b8" : "#64748b",
-  };
+  // ===== ✅ Theme (useMemo بدل const عادي) =====
+  const theme = useMemo(() => buildTheme(darkMode), [darkMode]);
+
+  // ===== ✅ أنماط مشتقة (useMemo) =====
+  const inputStyle = useMemo(
+    () => buildInputStyle(theme, isMobile),
+    [theme, isMobile]
+  );
+
+  const modalInputStyle = useMemo(
+    () => buildModalInputStyle(theme, isMobile),
+    [theme, isMobile]
+  );
 
   // ===== Effects =====
   useEffect(() => {
@@ -170,10 +231,12 @@ export default function Admin({ user, onLogout }) {
       chatsChannel.unsubscribe();
       apiKeysChannel.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     loadAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -187,7 +250,7 @@ export default function Admin({ user, onLogout }) {
 
   useEffect(() => {
     document.body.style.backgroundColor = theme.bg;
-  }, [darkMode]);
+  }, [theme.bg, darkMode]);
 
   // ✅ تحديث تلقائي كل 10 ثواني (للمفاتيح المقيّدة)
   useEffect(() => {
@@ -195,6 +258,7 @@ export default function Admin({ user, onLogout }) {
       loadApiKeys();
     }, 10000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Presence
@@ -220,6 +284,7 @@ export default function Admin({ user, onLogout }) {
     return () => {
       if (interval) clearInterval(interval);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoValidate]);
 
   // ===== Helpers =====
@@ -370,6 +435,7 @@ export default function Admin({ user, onLogout }) {
       default:
         return [];
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }
 
   function exportKeysToCSV() {
@@ -532,7 +598,10 @@ export default function Admin({ user, onLogout }) {
       })
       .eq("id", keyItem.id);
     loadApiKeys();
-    showToast(result.valid ? "✅ صالح" : `❌ ${result.reason}`, result.valid ? "success" : "error");
+    showToast(
+      result.valid ? "✅ صالح" : `❌ ${result.reason}`,
+      result.valid ? "success" : "error"
+    );
     setValidating(false);
   }
 
@@ -608,6 +677,12 @@ export default function Admin({ user, onLogout }) {
     return true;
   });
 
+  // ===== ✅ Padding متجاوب للـ content =====
+  const contentPadding = isMobile ? "12px" : isTablet ? "14px" : "16px";
+  const toastPadding = isMobile ? "10px 16px" : "12px 22px";
+  const toastFontSize = isMobile ? "13px" : "14px";
+  const toastMaxWidth = isMobile ? "calc(100vw - 24px)" : "auto";
+
   // ===== JSX =====
   return (
     <div
@@ -620,12 +695,12 @@ export default function Admin({ user, onLogout }) {
         direction: "rtl",
       }}
     >
-      {/* Toast */}
+      {/* Toast (متجاوب) */}
       {toast && (
         <div
           style={{
             position: "fixed",
-            top: "20px",
+            top: isMobile ? "12px" : "20px",
             left: "50%",
             transform: "translateX(-50%)",
             background:
@@ -635,13 +710,16 @@ export default function Admin({ user, onLogout }) {
                 ? "#3b82f6"
                 : "#10b981",
             color: "#fff",
-            padding: "12px 22px",
+            padding: toastPadding,
             borderRadius: "12px",
             zIndex: 9999,
             boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            fontSize: "14px",
+            fontSize: toastFontSize,
             fontWeight: "600",
-            whiteSpace: "nowrap",
+            whiteSpace: isMobile ? "normal" : "nowrap",
+            maxWidth: toastMaxWidth,
+            textAlign: "center",
+            wordBreak: "break-word",
           }}
         >
           {toast.type === "error" ? "❌ " : toast.type === "info" ? "ℹ️ " : "✅ "}
@@ -657,6 +735,8 @@ export default function Admin({ user, onLogout }) {
         setDarkMode={setDarkMode}
         onLogout={onLogout}
         exportKeysToCSV={exportKeysToCSV}
+        isMobile={isMobile}
+        isTablet={isTablet}
         onShowExport={() => {
           setExportType("users");
           setShowExportModal(true);
@@ -668,6 +748,7 @@ export default function Admin({ user, onLogout }) {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         theme={theme}
+        isMobile={isMobile}
         counts={{
           users: users.length,
           keys: `${apiKeys.filter((k) => k.is_active).length}/${apiKeys.length}`,
@@ -676,7 +757,7 @@ export default function Admin({ user, onLogout }) {
       />
 
       {/* Content */}
-      <div style={{ padding: "16px" }}>
+      <div style={{ padding: contentPadding }}>
         {activeTab === "users" && (
           <UsersTab
             user={user}
@@ -686,16 +767,9 @@ export default function Admin({ user, onLogout }) {
             setSearchTerm={setSearchTerm}
             theme={theme}
             darkMode={darkMode}
-            inputStyle={{
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${theme.border}`,
-              background: theme.inputBg,
-              color: theme.text,
-              fontSize: "14px",
-              outline: "none",
-              fontFamily: "inherit",
-            }}
+            isMobile={isMobile}
+            isTablet={isTablet}
+            inputStyle={inputStyle}
             isUserOnline={isUserOnline}
             changePersonality={changePersonality}
             toggleUserBlock={toggleUserBlock}
@@ -714,6 +788,8 @@ export default function Admin({ user, onLogout }) {
             apiKeys={apiKeys}
             theme={theme}
             darkMode={darkMode}
+            isMobile={isMobile}
+            isTablet={isTablet}
             validating={validating}
             validationProgress={validationProgress}
             autoValidate={autoValidate}
@@ -746,16 +822,9 @@ export default function Admin({ user, onLogout }) {
             setChatSearchTerm={setChatSearchTerm}
             theme={theme}
             darkMode={darkMode}
-            inputStyle={{
-              padding: "8px 12px",
-              borderRadius: "8px",
-              border: `1px solid ${theme.border}`,
-              background: theme.inputBg,
-              color: theme.text,
-              fontSize: "14px",
-              outline: "none",
-              fontFamily: "inherit",
-            }}
+            isMobile={isMobile}
+            isTablet={isTablet}
+            inputStyle={inputStyle}
             formatDate={formatDate}
             getUserById={getUserById}
             onRefresh={loadAllChats}
@@ -779,18 +848,8 @@ export default function Admin({ user, onLogout }) {
         setNewKeyLimit={setNewKeyLimit}
         validating={validating}
         theme={theme}
-        modalInputStyle={{
-          width: "100%",
-          padding: "10px",
-          marginBottom: "12px",
-          borderRadius: "10px",
-          background: theme.inputBg,
-          color: theme.text,
-          border: `1px solid ${theme.border}`,
-          outline: "none",
-          fontFamily: "inherit",
-          fontSize: "14px",
-        }}
+        isMobile={isMobile}
+        modalInputStyle={modalInputStyle}
       />
 
       <EditUserModal
@@ -801,17 +860,8 @@ export default function Admin({ user, onLogout }) {
         editDailyLimit={editDailyLimit}
         setEditDailyLimit={setEditDailyLimit}
         theme={theme}
-        modalInputStyle={{
-          width: "100%",
-          padding: "10px",
-          marginBottom: "12px",
-          borderRadius: "10px",
-          background: theme.inputBg,
-          color: theme.text,
-          border: `1px solid ${theme.border}`,
-          outline: "none",
-          fontFamily: "inherit",
-        }}
+        isMobile={isMobile}
+        modalInputStyle={modalInputStyle}
       />
 
       <ExportModal
@@ -822,17 +872,8 @@ export default function Admin({ user, onLogout }) {
         prepareExportData={prepareExportData}
         exportToCSV={exportToCSV}
         theme={theme}
-        modalInputStyle={{
-          width: "100%",
-          padding: "10px",
-          marginBottom: "12px",
-          borderRadius: "10px",
-          background: theme.inputBg,
-          color: theme.text,
-          border: `1px solid ${theme.border}`,
-          outline: "none",
-          fontFamily: "inherit",
-        }}
+        isMobile={isMobile}
+        modalInputStyle={modalInputStyle}
       />
 
       <ValidationModal
@@ -840,6 +881,7 @@ export default function Admin({ user, onLogout }) {
         onClose={() => setShowValidationModal(false)}
         validationResults={validationResults}
         theme={theme}
+        isMobile={isMobile}
       />
 
       <LogsModal
@@ -847,6 +889,7 @@ export default function Admin({ user, onLogout }) {
         onClose={() => setShowLogsModal(false)}
         validationLogs={validationLogs}
         theme={theme}
+        isMobile={isMobile}
       />
 
       <UserChatsModal
@@ -855,6 +898,7 @@ export default function Admin({ user, onLogout }) {
         selectedUserForChats={selectedUserForChats}
         userChatsList={userChatsList}
         theme={theme}
+        isMobile={isMobile}
         formatDate={formatDate}
         onOpenChat={openChatViewer}
         onDeleteChat={deleteChatFromModal}
@@ -867,6 +911,7 @@ export default function Admin({ user, onLogout }) {
         selectedChat={selectedChat}
         theme={theme}
         darkMode={darkMode}
+        isMobile={isMobile}
       />
     </div>
   );
