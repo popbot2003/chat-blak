@@ -10,6 +10,8 @@ import {
   getUsageColor,
   getKeyStatus,
   getTimeUntil,
+  getLastUsedTime,
+  isKeyActiveNow,
 } from "../../utils/helpers";
 
 export default function KeyCard({
@@ -34,16 +36,52 @@ export default function KeyCard({
   const timeLeft = getTimeUntil(keyItem.rate_limited_until);
   const isValid = keyItem.is_valid !== false;
 
-  // ✅ تحديد لون الحد حسب النسبة
+  // ✅ هل نشط الآن؟
+  const activeNow = isKeyActiveNow(keyItem);
+  const lastUsed = getLastUsedTime(keyItem.last_request_at);
+
+  // ✅ لون الحد
   const limitColor =
     percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
 
   return (
-    <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
+    <tr
+      style={{
+        borderBottom: `1px solid ${theme.border}`,
+        background: activeNow
+          ? darkMode
+            ? "rgba(16,185,129,0.08)"
+            : "rgba(16,185,129,0.05)"
+          : "transparent",
+        transition: "background 0.3s",
+      }}
+    >
       {/* الاسم */}
       <td style={{ padding: "14px 10px", fontSize: "15px" }}>
-        <div style={{ fontWeight: "600" }}>
-          {keyItem.key_name || "مفتاح Groq"}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          {activeNow && (
+            <div
+              style={{
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                background: "#10b981",
+                boxShadow: "0 0 8px #10b981",
+                animation: "pulse 1.5s infinite",
+                flexShrink: 0,
+              }}
+              title="نشط الآن"
+            />
+          )}
+          <div style={{ fontWeight: "600" }}>
+            {keyItem.key_name || "مفتاح Groq"}
+          </div>
         </div>
         {keyItem.org_id && (
           <div
@@ -156,6 +194,26 @@ export default function KeyCard({
         >
           <span>{status.icon}</span>
           <span>{status.label}</span>
+        </div>
+      </td>
+
+      {/* ✅ آخر استخدام — جديد */}
+      <td style={{ padding: "14px 10px" }}>
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: activeNow ? "4px 10px" : "0",
+            borderRadius: "12px",
+            background: activeNow ? "rgba(16,185,129,0.15)" : "transparent",
+            color: activeNow ? "#10b981" : theme.textMuted,
+            fontSize: "12px",
+            fontWeight: activeNow ? "700" : "500",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {lastUsed}
         </div>
       </td>
 
