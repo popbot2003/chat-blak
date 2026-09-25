@@ -48,26 +48,6 @@ select {
 }
 
 /* ─────────────────────────────────────────
-   Container
-   ───────────────────────────────────────── */
-.container {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  transition: background 0.3s, color 0.3s;
-}
-
-.container.dark {
-  background: #0f172a;
-  color: #f1f5f9;
-}
-
-.container.light {
-  background: #f8fafc;
-  color: #0f172a;
-}
-
-/* ─────────────────────────────────────────
    Scrollbar
    ───────────────────────────────────────── */
 ::-webkit-scrollbar {
@@ -214,7 +194,7 @@ body.admin-page #root {
   textarea,
   select,
   button {
-    font-size: 16px; /* لمنع zoom على iOS */
+    font-size: 16px;
   }
 }
 
