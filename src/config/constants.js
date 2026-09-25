@@ -6,8 +6,9 @@
 // الحد المبدئي للمستخدم الجديد (توكن/يوم)
 export const DEFAULT_USER_DAILY_LIMIT = 50000;
 
-// الحد اليومي الافتراضي للمفتاح العام
-export const DEFAULT_KEY_DAILY_LIMIT = 1000000;
+// ✅ الحد اليومي الافتراضي للمفتاح العام
+// يطابق Groq Free Tier لنموذج openai/gpt-oss-120b (TPD = 200,000)
+export const DEFAULT_KEY_DAILY_LIMIT = 200000;
 
 // إعدادات Groq API
 export const GROQ_MODEL = "openai/gpt-oss-120b";
