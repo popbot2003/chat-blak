@@ -18,6 +18,7 @@ export default function KeyCard({
   keyItem,
   theme,
   darkMode,
+  currentTime,
   onTest,
   onReset,
   onToggle,
@@ -36,9 +37,9 @@ export default function KeyCard({
   const timeLeft = getTimeUntil(keyItem.rate_limited_until);
   const isValid = keyItem.is_valid !== false;
 
-  // ✅ هل نشط الآن؟
-  const activeNow = isKeyActiveNow(keyItem);
-  const lastUsed = getLastUsedTime(keyItem.last_request_at);
+  // ✅ هل نشط الآن؟ (مع الوقت المحدَّث)
+  const activeNow = isKeyActiveNow(keyItem, currentTime);
+  const lastUsed = getLastUsedTime(keyItem.last_request_at, currentTime);
 
   // ✅ لون الحد
   const limitColor =
@@ -176,7 +177,7 @@ export default function KeyCard({
         {realLimit.toLocaleString()}
       </td>
 
-      {/* ✅ الحالة */}
+      {/* الحالة */}
       <td style={{ padding: "14px 10px" }}>
         <div
           style={{
@@ -197,7 +198,7 @@ export default function KeyCard({
         </div>
       </td>
 
-      {/* ✅ آخر استخدام — جديد */}
+      {/* آخر استخدام */}
       <td style={{ padding: "14px 10px" }}>
         <div
           style={{
@@ -217,7 +218,7 @@ export default function KeyCard({
         </div>
       </td>
 
-      {/* ✅ الوقت المتبقي */}
+      {/* الوقت المتبقي */}
       <td style={{ padding: "14px 10px" }}>
         {timeLeft ? (
           <div
