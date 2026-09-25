@@ -18,7 +18,7 @@ export function formatDate(dateString) {
 }
 
 /**
- * نسخ النص إلى الحافظة (مع fallback للمتصفحات القديمة)
+ * نسخ النص إلى الحافظة
  */
 export async function copyToClipboard(text, onSuccess, onError) {
   try {
@@ -48,9 +48,9 @@ export function getUsagePercent(used, limit) {
  * لون شريط التقدم حسب النسبة
  */
 export function getUsageColor(percent) {
-  if (percent < 50) return "#10b981";  // أخضر زمردي
-  if (percent < 80) return "#f59e0b";  // أصفر
-  return "#ef4444";                     // أحمر
+  if (percent < 50) return "#10b981";
+  if (percent < 80) return "#f59e0b";
+  return "#ef4444";
 }
 
 /**
@@ -91,12 +91,11 @@ export function debounce(func, delay) {
 }
 
 // ============================================
-// ✅ دوال جديدة — حالة المفتاح والوقت المتبقي
+// ✅ دوال حالة المفتاح
 // ============================================
 
 /**
  * حساب حالة المفتاح
- * @returns { label, color, bg, icon }
  */
 export function getKeyStatus(key) {
   if (!key) {
@@ -142,7 +141,6 @@ export function getKeyStatus(key) {
 
 /**
  * الوقت المتبقي بصيغة ذكية
- * @returns string | null
  */
 export function getTimeUntil(untilDate) {
   if (!untilDate) return null;
@@ -203,4 +201,43 @@ export function getEarliestFreeTime(keys) {
   if (times.length === 0) return null;
 
   return getTimeUntil(new Date(times[0]));
+}
+
+// ============================================
+// ✅ دوال "نشط الآن"
+// ============================================
+
+/**
+ * هل المفتاح نشط الآن؟ (استُخدم في آخر 30 ثانية)
+ */
+export function isKeyActiveNow(key) {
+  if (!key?.last_request_at) return false;
+  
+  const lastRequest = new Date(key.last_request_at).getTime();
+  const diff = Date.now() - lastRequest;
+  
+  return diff < 30000; // 30 ثانية
+}
+
+/**
+ * منذ متى آخر استخدام؟
+ */
+export function getLastUsedTime(lastRequestAt) {
+  if (!lastRequestAt) return "لم يُستخدم";
+  
+  const last = new Date(lastRequestAt).getTime();
+  const diff = Date.now() - last;
+  
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  // ✅ نشط الآن
+  if (seconds < 30) return "🟢 نشط الآن";
+  
+  if (seconds < 60) return `منذ ${seconds} ثانية`;
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  return `منذ ${days} يوم`;
 }
