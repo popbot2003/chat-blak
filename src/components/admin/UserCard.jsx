@@ -1,10 +1,17 @@
 // ============================================
-// src/components/admin/UserCard.jsx
-// صف مستخدم — لجدول الكمبيوتر
+// src/components/admin/UserCard.jsx — Responsive
+// صف مستخدم — لجدول الكمبيوتر والتابلت
+// متوافق مع:
+//   - src/config/breakpoints.js
+//   - src/App.css (media queries موحّدة)
 // ============================================
 
+import { useState, useMemo, useCallback } from "react";
 import { getUsagePercent, getUsageColor } from "../../utils/helpers";
-import { PERSONALITY_LABELS, DEFAULT_PERSONALITY } from "../../config/personalities";
+import {
+  PERSONALITY_LABELS,
+  DEFAULT_PERSONALITY,
+} from "../../config/personalities";
 
 export default function UserCard({
   u,
@@ -14,30 +21,161 @@ export default function UserCard({
   toggleUserBlock,
   deleteUser,
   onEditUser,
+  // ✅ جديد: coming from UsersTab
+  isTablet = false,
 }) {
-  const used = u.used_today || 0;
-  const limit = u.daily_limit || 5000;
-  const percent = getUsagePercent(used, limit);
-  const color = getUsageColor(percent);
+  const [hover, setHover] = useState(false);
+
+  // ===== ✅ حساب الاستهلاك (useMemo) =====
+  const { used, limit, percent, color } = useMemo(() => {
+    const u_used = u.used_today || 0;
+    const u_limit = u.daily_limit || 5000;
+    const u_percent = getUsagePercent(u_used, u_limit);
+    return {
+      used: u_used,
+      limit: u_limit,
+      percent: u_percent,
+      color: getUsageColor(u_percent),
+    };
+  }, [u.used_today, u.daily_limit]);
+
+  // ===== ✅ أنماط الخلايا (متجاوبة مع التابلت) =====
+  const cellStyle = useMemo(
+    () => ({
+      padding: isTablet ? "10px 8px" : "14px 10px",
+      verticalAlign: "middle",
+    }),
+    [isTablet]
+  );
+
+  const rowStyle = useMemo(
+    () => ({
+      borderBottom: `1px solid ${theme.border}`,
+      background: hover ? theme.rowHover : "transparent",
+      transition: "background 0.15s",
+    }),
+    [theme.border, theme.rowHover, hover]
+  );
+
+  const nameStyle = useMemo(
+    () => ({
+      fontSize: isTablet ? "14px" : "16px",
+    }),
+    [isTablet]
+  );
+
+  const emailStyle = useMemo(
+    () => ({
+      fontFamily: "monospace",
+      fontSize: "12px",
+      opacity: 0.5,
+    }),
+    []
+  );
+
+  const statusBadgeStyle = useMemo(
+    () => ({
+      padding: "4px 12px",
+      borderRadius: "20px",
+      fontSize: isTablet ? "12px" : "13px",
+      fontWeight: "600",
+      background: u.is_blocked
+        ? "rgba(239,68,68,0.15)"
+        : "rgba(16,185,129,0.15)",
+      color: u.is_blocked ? "#ef4444" : "#10b981",
+      whiteSpace: "nowrap",
+    }),
+    [u.is_blocked, isTablet]
+  );
+
+  const selectStyle = useMemo(
+    () => ({
+      background: theme.inputBg,
+      color: theme.text,
+      border: `1px solid ${theme.border}`,
+      borderRadius: "6px",
+      padding: isTablet ? "5px 8px" : "6px 10px",
+      fontSize: isTablet ? "12px" : "13px",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      maxWidth: "140px",
+    }),
+    [theme.inputBg, theme.text, theme.border, isTablet]
+  );
+
+  const iconBtnStyle = useMemo(
+    () => ({
+      border: "none",
+      padding: isTablet ? "5px 10px" : "6px 12px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontSize: isTablet ? "12px" : "13px",
+      fontFamily: "inherit",
+      minHeight: isTablet ? "32px" : "auto",
+      transition: "transform 0.1s",
+    }),
+    [isTablet]
+  );
+
+  const blockBtnStyle = useMemo(
+    () => ({
+      border: "none",
+      padding: isTablet ? "5px 10px" : "6px 12px",
+      borderRadius: "8px",
+      cursor: "pointer",
+      fontSize: isTablet ? "11px" : "12px",
+      fontWeight: "600",
+      fontFamily: "inherit",
+      background: u.is_blocked
+        ? "rgba(16,185,129,0.15)"
+        : "rgba(239,68,68,0.15)",
+      color: u.is_blocked ? "#10b981" : "#ef4444",
+      minHeight: isTablet ? "32px" : "auto",
+      whiteSpace: "nowrap",
+    }),
+    [u.is_blocked, isTablet]
+  );
+
+  // ===== ✅ Handlers (useCallback) =====
+  const handlePersonalityChange = useCallback(
+    (e) => changePersonality(u.id, e.target.value),
+    [changePersonality, u.id]
+  );
+
+  const handleEdit = useCallback(() => {
+    onEditUser(u);
+  }, [onEditUser, u]);
+
+  const handleToggleBlock = useCallback(() => {
+    toggleUserBlock(u.id, u.is_blocked);
+  }, [toggleUserBlock, u.id, u.is_blocked]);
+
+  const handleDelete = useCallback(() => {
+    deleteUser(u.id, u.name || u.email);
+  }, [deleteUser, u.id, u.name, u.email]);
 
   return (
-    <tr style={{ borderBottom: `1px solid ${theme.border}` }}>
-      <td style={{ padding: "14px 10px" }}>
-        <strong style={{ fontSize: "16px" }}>{u.name || "مستخدم"}</strong>
+    <tr
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={rowStyle}
+    >
+      {/* ===== الاسم + البريد ===== */}
+      <td style={cellStyle}>
+        <strong style={nameStyle}>{u.name || "مستخدم"}</strong>
         <br />
-        <span
-          style={{
-            fontFamily: "monospace",
-            fontSize: "12px",
-            opacity: 0.5,
-          }}
-        >
-          {u.email}
-        </span>
+        <span style={emailStyle}>{u.email}</span>
       </td>
-      <td style={{ padding: "14px 10px" }}>
-        <div style={{ minWidth: "140px" }}>
-          <div style={{ fontSize: "13px", marginBottom: "4px" }}>
+
+      {/* ===== الاستهلاك ===== */}
+      <td style={cellStyle}>
+        <div style={{ minWidth: isTablet ? "120px" : "140px" }}>
+          <div
+            style={{
+              fontSize: isTablet ? "12px" : "13px",
+              marginBottom: "4px",
+            }}
+          >
             {used.toLocaleString()} / {limit.toLocaleString()}
           </div>
           <div
@@ -69,20 +207,13 @@ export default function UserCard({
           </div>
         </div>
       </td>
-      <td style={{ padding: "14px 10px" }}>
+
+      {/* ===== الشخصية ===== */}
+      <td style={cellStyle}>
         <select
           value={u.personality || DEFAULT_PERSONALITY}
-          onChange={(e) => changePersonality(u.id, e.target.value)}
-          style={{
-            background: theme.inputBg,
-            color: theme.text,
-            border: `1px solid ${theme.border}`,
-            borderRadius: "6px",
-            padding: "6px 10px",
-            fontSize: "13px",
-            cursor: "pointer",
-            fontFamily: "inherit",
-          }}
+          onChange={handlePersonalityChange}
+          style={selectStyle}
         >
           {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (
             <option key={key} value={key} style={{ background: theme.surface }}>
@@ -91,24 +222,24 @@ export default function UserCard({
           ))}
         </select>
       </td>
-      <td style={{ padding: "14px 10px" }}>
-        <span
-          style={{
-            padding: "4px 12px",
-            borderRadius: "20px",
-            fontSize: "13px",
-            fontWeight: "600",
-            background: u.is_blocked
-              ? "rgba(239,68,68,0.15)"
-              : "rgba(16,185,129,0.15)",
-            color: u.is_blocked ? "#ef4444" : "#10b981",
-          }}
-        >
+
+      {/* ===== الحالة ===== */}
+      <td style={cellStyle}>
+        <span style={statusBadgeStyle}>
           {u.is_blocked ? "محظور" : "نشط"}
         </span>
       </td>
-      <td style={{ padding: "14px 10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+
+      {/* ===== الاتصال ===== */}
+      <td style={cellStyle}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            whiteSpace: "nowrap",
+          }}
+        >
           <div
             style={{
               width: "10px",
@@ -116,60 +247,47 @@ export default function UserCard({
               borderRadius: "50%",
               background: online ? "#10b981" : "#6b7280",
               boxShadow: online ? "0 0 5px #10b981" : "none",
+              flexShrink: 0,
             }}
           />
-          <span style={{ fontSize: "13px" }}>
+          <span style={{ fontSize: isTablet ? "12px" : "13px" }}>
             {online ? "متصل" : "غير متصل"}
           </span>
         </div>
       </td>
-      <td style={{ padding: "14px 10px" }}>
+
+      {/* ===== الإجراءات ===== */}
+      <td style={cellStyle}>
         <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
           <button
-            onClick={() => onEditUser(u)}
+            onClick={handleEdit}
             style={{
+              ...iconBtnStyle,
               background: "rgba(245,158,11,0.15)",
               color: "#f59e0b",
-              border: "none",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "13px",
             }}
-            title="تعديل"
+            title="تعديل الحد اليومي"
+            aria-label={`تعديل ${u.name || u.email}`}
           >
             ⚙️
           </button>
           <button
-            onClick={() => toggleUserBlock(u.id, u.is_blocked)}
-            style={{
-              background: u.is_blocked
-                ? "rgba(16,185,129,0.15)"
-                : "rgba(239,68,68,0.15)",
-              color: u.is_blocked ? "#10b981" : "#ef4444",
-              border: "none",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: "600",
-              fontFamily: "inherit",
-            }}
+            onClick={handleToggleBlock}
+            style={blockBtnStyle}
+            title={u.is_blocked ? "فك حظر المستخدم" : "حظر المستخدم"}
+            aria-label={u.is_blocked ? "فك حظر المستخدم" : "حظر المستخدم"}
           >
             {u.is_blocked ? "فك الحظر" : "حظر"}
           </button>
           <button
-            onClick={() => deleteUser(u.id, u.name || u.email)}
+            onClick={handleDelete}
             style={{
+              ...iconBtnStyle,
               background: "rgba(239,68,68,0.15)",
               color: "#ef4444",
-              border: "none",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "13px",
             }}
-            title="حذف"
+            title="حذف المستخدم نهائيًا"
+            aria-label={`حذف ${u.name || u.email}`}
           >
             🗑️
           </button>
