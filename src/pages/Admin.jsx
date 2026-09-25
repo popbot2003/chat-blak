@@ -5,15 +5,19 @@
 //   - src/config/breakpoints.js
 //   - src/hooks/useMediaQuery.js
 //   - src/App.css (media queries موحّدة)
+//   - src/config/constants.js (DEFAULT_KEY_DAILY_LIMIT)
 // ============================================
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import MessageContent from "../components/MessageContent";
 
-// ✅ جديد: استيراد البريك بوينتس والهوك
+// ✅ استيراد البريك بوينتس والهوك
 import { MEDIA } from "../config/breakpoints";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+
+// ✅ جديد: استيراد الثوابت (DEFAULT_KEY_DAILY_LIMIT)
+import { DEFAULT_KEY_DAILY_LIMIT } from "../config/constants";
 
 import {
   AdminHeader,
@@ -44,7 +48,6 @@ import { validateGroqKey, validateAllKeys } from "../utils/groqValidator";
 
 // ============================================================
 //  Helper: بناء theme حسب الوضع الحالي
-//  (ملف خارجي لتجنب إعادة الإنشاء داخل الـ component)
 // ============================================================
 const buildTheme = (darkMode) => ({
   bg: darkMode ? "#0f172a" : "#f8fafc",
@@ -63,7 +66,7 @@ const buildTheme = (darkMode) => ({
 });
 
 // ============================================================
-//  Helper: أنماط input جاهزة (لتمريرها للأبناء)
+//  Helper: أنماط input جاهزة
 // ============================================================
 const buildInputStyle = (theme, isMobile) => ({
   padding: isMobile ? "8px 10px" : "8px 12px",
@@ -95,9 +98,9 @@ const buildModalInputStyle = (theme, isMobile) => ({
 // ============================================================
 export default function Admin({ user, onLogout }) {
   // ===== ✅ Responsive hooks =====
-  const isMobile = useMediaQuery(MEDIA.belowMd);   // <= 639px
-  const isTablet = useMediaQuery(MEDIA.tablet);    // 640–1023
-  const isDesktop = useMediaQuery(MEDIA.desktop);  // >= 1024
+  const isMobile = useMediaQuery(MEDIA.belowMd);
+  const isTablet = useMediaQuery(MEDIA.tablet);
+  const isDesktop = useMediaQuery(MEDIA.desktop);
 
   // ===== States =====
   const [users, setUsers] = useState([]);
@@ -118,7 +121,10 @@ export default function Admin({ user, onLogout }) {
 
   const [newKeyValue, setNewKeyValue] = useState("");
   const [newKeyName, setNewKeyName] = useState("");
-  const [newKeyLimit, setNewKeyLimit] = useState(1000000);
+
+  // ✅ التعديل 1: استخدام DEFAULT_KEY_DAILY_LIMIT بدل 1000000
+  const [newKeyLimit, setNewKeyLimit] = useState(DEFAULT_KEY_DAILY_LIMIT);
+
   const [editDailyLimit, setEditDailyLimit] = useState(5000);
 
   const [darkMode, setDarkMode] = useState(() => {
@@ -149,10 +155,10 @@ export default function Admin({ user, onLogout }) {
   });
   const [onlineUsers, setOnlineUsers] = useState({});
 
-  // ===== ✅ Theme (useMemo بدل const عادي) =====
+  // ===== ✅ Theme (useMemo) =====
   const theme = useMemo(() => buildTheme(darkMode), [darkMode]);
 
-  // ===== ✅ أنماط مشتقة (useMemo) =====
+  // ===== ✅ أنماط مشتقة =====
   const inputStyle = useMemo(
     () => buildInputStyle(theme, isMobile),
     [theme, isMobile]
@@ -252,7 +258,7 @@ export default function Admin({ user, onLogout }) {
     document.body.style.backgroundColor = theme.bg;
   }, [theme.bg, darkMode]);
 
-  // ✅ تحديث تلقائي كل 10 ثواني (للمفاتيح المقيّدة)
+  // ✅ تحديث تلقائي كل 10 ثواني
   useEffect(() => {
     const interval = setInterval(() => {
       loadApiKeys();
@@ -424,7 +430,8 @@ export default function Admin({ user, onLogout }) {
           الاسم: k.key_name || "",
           المفتاح: k.key_value || "",
           "الاستهلاك اليومي": k.used_today || 0,
-          "الحد اليومي": k.daily_limit || 1000000,
+          // ✅ التعديل: استخدام DEFAULT_KEY_DAILY_LIMIT
+          "الحد اليومي": k.daily_limit || DEFAULT_KEY_DAILY_LIMIT,
         }));
       case "chats":
         return filteredChats.map((c) => ({
@@ -442,7 +449,8 @@ export default function Admin({ user, onLogout }) {
     const exportData = apiKeys.map((k) => ({
       الاسم: k.key_name || "",
       المفتاح: k.key_value || "",
-      "الحد اليومي": k.daily_limit || 1000000,
+      // ✅ التعديل: استخدام DEFAULT_KEY_DAILY_LIMIT
+      "الحد اليومي": k.daily_limit || DEFAULT_KEY_DAILY_LIMIT,
       "الاستهلاك اليومي": k.used_today || 0,
       الحالة: k.is_active ? "نشط" : "معطل",
       "صحة المفتاح": k.is_valid ? "صالح" : k.invalid_reason || "غير صالح",
@@ -560,7 +568,8 @@ export default function Admin({ user, onLogout }) {
       setShowAddKeyModal(false);
       setNewKeyValue("");
       setNewKeyName("");
-      setNewKeyLimit(1000000);
+      // ✅ التعديل: استخدام DEFAULT_KEY_DAILY_LIMIT بدل 1000000
+      setNewKeyLimit(DEFAULT_KEY_DAILY_LIMIT);
       loadApiKeys();
     }
   }
@@ -677,7 +686,7 @@ export default function Admin({ user, onLogout }) {
     return true;
   });
 
-  // ===== ✅ Padding متجاوب للـ content =====
+  // ===== ✅ Padding متجاوب =====
   const contentPadding = isMobile ? "12px" : isTablet ? "14px" : "16px";
   const toastPadding = isMobile ? "10px 16px" : "12px 22px";
   const toastFontSize = isMobile ? "13px" : "14px";
@@ -695,7 +704,7 @@ export default function Admin({ user, onLogout }) {
         direction: "rtl",
       }}
     >
-      {/* Toast (متجاوب) */}
+      {/* Toast */}
       {toast && (
         <div
           style={{
