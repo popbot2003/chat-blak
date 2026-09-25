@@ -16,12 +16,13 @@ export default function AdminHeader({
   onLogout,
   exportKeysToCSV,
   onShowExport,
+  // ✅ جديد: coming from Admin.jsx
   isMobile = false,
   isTablet = false,
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
-  // ===== أنماط الهيدر =====
+  // ===== ✅ أنماط متجاوبة (useMemo لتفادي إعادة الحساب) =====
   const headerStyle = useMemo(
     () => ({
       display: "flex",
@@ -83,51 +84,43 @@ export default function AdminHeader({
       gap: "6px",
       fontWeight: "500",
       whiteSpace: "nowrap",
-      minHeight: isMobile ? "36px" : "auto",
+      // ✅ هدف لمس مريح على الموبايل
+      minHeight: isMobile ? "40px" : "auto",
     }),
     [theme.surface2, theme.border, theme.text, isMobile]
   );
 
-  // ✅ الحل: fixed على الموبايل + absolute على الديسكتوب
-  const dropdownStyle = useMemo(() => {
-    if (isMobile) {
-      return {
-        position: "fixed",
-        top: "56px",
-        right: "12px",
-        left: "12px",
-        background: theme.surface2,
-        border: `1px solid ${theme.border}`,
-        borderRadius: "12px",
-        padding: "8px",
-        zIndex: 9999,
-        boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
-        maxHeight: "calc(100vh - 80px)",
-        overflowY: "auto",
-      };
-    }
-    return {
-      position: "absolute",
-      top: "48px",
-      left: "0",
-      right: "auto",
+  // ===== ✅ القائمة المنسدلة (مُصلحة للموبايل) =====
+  const dropdownStyle = useMemo(
+    () => ({
+      // ✅ على الموبايل: fixed بدل absolute (يمنع الخروج عن الشاشة)
+      position: isMobile ? "fixed" : "absolute",
+      // ✅ على الموبايل: من أعلى الشاشة بمسافة تناسب ارتفاع الهيدر
+      top: isMobile ? "58px" : "48px",
+      left: isMobile ? "auto" : "0",
+      // ✅ على الموبايل: 8px من يمين الشاشة
+      right: isMobile ? "8px" : "auto",
       background: theme.surface2,
       border: `1px solid ${theme.border}`,
       borderRadius: "12px",
       padding: "8px",
-      minWidth: "200px",
+      // ✅ على الموبايل: عرض محدود بعدم تجاوز عرض الشاشة
+      minWidth: isMobile ? "min(220px, calc(100vw - 16px))" : "200px",
+      maxWidth: isMobile ? "calc(100vw - 16px)" : "none",
       zIndex: 201,
       boxShadow: "0 12px 32px rgba(0,0,0,0.25)",
-    };
-  }, [theme.surface2, theme.border, isMobile]);
+    }),
+    [theme.surface2, theme.border, isMobile]
+  );
 
-  // ===== Handlers =====
+  // ===== ✅ Toggle handlers (useCallback) =====
   const toggleMenu = useCallback(() => setShowMenu((v) => !v), []);
   const closeMenu = useCallback(() => setShowMenu(false), []);
 
   const handleToggleTheme = useCallback(() => {
     const next = !darkMode;
     setDarkMode(next);
+    // ✅ fix: خزّن string بدل boolean (متوافق مع useState الأولي)
     localStorage.setItem("adminDarkMode", String(next));
     setShowMenu(false);
   }, [darkMode, setDarkMode]);
@@ -187,8 +180,7 @@ export default function AdminHeader({
               style={{
                 position: "fixed",
                 inset: 0,
-                zIndex: 201,
-                background: isMobile ? "rgba(0,0,0,0.3)" : "transparent",
+                zIndex: 200,
               }}
             />
 
