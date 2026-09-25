@@ -9,6 +9,8 @@ import {
   getUsageColor,
   getKeyStatus,
   getTimeUntil,
+  getLastUsedTime,
+  isKeyActiveNow,
 } from "../../utils/helpers";
 
 export default function KeyMobileCard({
@@ -32,17 +34,27 @@ export default function KeyMobileCard({
   const timeLeft = getTimeUntil(keyItem.rate_limited_until);
   const isValid = keyItem.is_valid !== false;
 
+  // ✅ هل نشط الآن؟
+  const activeNow = isKeyActiveNow(keyItem);
+  const lastUsed = getLastUsedTime(keyItem.last_request_at);
+
   return (
     <div
       style={{
         background: theme.surface,
-        border: `1px solid ${theme.border}`,
+        border: activeNow
+          ? `2px solid #10b981`
+          : `1px solid ${theme.border}`,
         borderRadius: "14px",
         padding: "14px",
         marginBottom: "10px",
         display: "flex",
         flexDirection: "column",
         gap: "12px",
+        boxShadow: activeNow
+          ? "0 0 12px rgba(16,185,129,0.3)"
+          : "none",
+        transition: "all 0.3s",
       }}
     >
       {/* الرأس: الاسم + الحالة */}
@@ -55,8 +67,29 @@ export default function KeyMobileCard({
         }}
       >
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: "600", fontSize: "16px" }}>
-            {keyItem.key_name || "مفتاح Groq"}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            {activeNow && (
+              <div
+                style={{
+                  width: "10px",
+                  height: "10px",
+                  borderRadius: "50%",
+                  background: "#10b981",
+                  boxShadow: "0 0 8px #10b981",
+                  animation: "pulse 1.5s infinite",
+                  flexShrink: 0,
+                }}
+              />
+            )}
+            <div style={{ fontWeight: "600", fontSize: "16px" }}>
+              {keyItem.key_name || "مفتاح Groq"}
+            </div>
           </div>
           {keyItem.org_id && (
             <div
@@ -175,6 +208,24 @@ export default function KeyMobileCard({
         >
           {percent.toFixed(0)}%
         </div>
+      </div>
+
+      {/* ✅ آخر استخدام */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: activeNow ? "8px 12px" : "6px 0",
+          borderRadius: "10px",
+          background: activeNow ? "rgba(16,185,129,0.12)" : "transparent",
+          color: activeNow ? "#10b981" : theme.textMuted,
+          fontSize: "13px",
+          fontWeight: activeNow ? "700" : "500",
+          justifyContent: "center",
+        }}
+      >
+        {lastUsed}
       </div>
 
       {/* الوقت المتبقي */}
