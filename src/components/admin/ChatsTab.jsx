@@ -1,38 +1,121 @@
 // ============================================
 // src/components/admin/ChatsTab.jsx — Responsive
+// عرض محادثات المستخدمين كـ مجلدات (Folders)
 // متوافق مع:
 //   - src/config/breakpoints.js
 //   - src/hooks/useMediaQuery.js
 //   - src/App.css (media queries موحّدة)
 // ============================================
 
-import { useState, useMemo, useCallback } from "react";   // ✅ useState مضاف
-import ChatsMobileCard from "./ChatsMobileCard";
+import { useState, useMemo, useCallback } from "react";
+import UserFolderCard from "./UserFolderCard";
 
 export default function ChatsTab({
   allChats,
-  filteredChats,
   users,
-  chatFilterUser,
-  setChatFilterUser,
-  chatFilterDate,
-  setChatFilterDate,
-  chatSearchTerm,
-  setChatSearchTerm,
   theme,
   darkMode,
   inputStyle,
-  formatDate,
   getUserById,
   onRefresh,
-  onOpenChat,
-  onDeleteChat,
-  onDeleteAll,
-  // ✅ جديد: coming from Admin.jsx
+  onOpenUserChats,   // ✅ جديد: يفتح مودال محادثات المستخدم
+  onDeleteAll,       // ✅ حذف كل المحادثات
   isMobile = false,
   isTablet = false,
 }) {
-  // ===== ✅ أنماط الحاوية =====
+  // ===== ✅ حالات محلية =====
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activityFilter, setActivityFilter] = useState("all");
+
+  // ===== ✅ تجميع المحادثات حسب المستخدم =====
+  const userFolders = useMemo(() => {
+    if (!allChats || allChats.length === 0) return [];
+
+    // 1. تجميع المحادثات حسب user_id
+    const grouped = {};
+    for (const chat of allChats) {
+      const uid = chat.user_id;
+      if (!uid) continue;
+      if (!grouped[uid]) grouped[uid] = [];
+      grouped[uid].push(chat);
+    }
+
+    // 2. تحويلها لمصفوفة من كائنات { user, chats, lastActivity }
+    const folders = Object.keys(grouped).map((userId) => {
+      const chats = grouped[userId];
+      const user = getUserById(userId);
+
+      // آخر نشاط
+      const lastActivity = chats.reduce((latest, chat) => {
+        const t = new Date(chat.updated_at).getTime();
+        return t > latest ? t : latest;
+      }, 0);
+
+      return {
+        user: user || {
+          id: userId,
+          name: "مستخدم محذوف",
+          email: userId?.slice(0, 8) || "—",
+        },
+        chats,
+        lastActivity,
+      };
+    });
+
+    // 3. ترتيب حسب آخر نشاط (الأحدث أولًا)
+    folders.sort((a, b) => b.lastActivity - a.lastActivity);
+
+    return folders;
+  }, [allChats, getUserById]);
+
+  // ===== ✅ تطبيق البحث + الفلتر =====
+  const filteredFolders = useMemo(() => {
+    let result = userFolders;
+
+    // فلتر آخر نشاط
+    if (activityFilter !== "all") {
+      const now = Date.now();
+      const thresholds = {
+        today: 24 * 60 * 60 * 1000,          // 24 ساعة
+        week: 7 * 24 * 60 * 60 * 1000,        // أسبوع
+        month: 30 * 24 * 60 * 60 * 1000,      // شهر
+      };
+
+      if (activityFilter === "inactive") {
+        // غير نشط = أكثر من 30 يوم
+        result = result.filter(
+          (f) => now - f.lastActivity > thresholds.month
+        );
+      } else if (thresholds[activityFilter]) {
+        result = result.filter(
+          (f) => now - f.lastActivity <= thresholds[activityFilter]
+        );
+      }
+    }
+
+    // بحث بالاسم/البريد
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase().trim();
+      result = result.filter((f) => {
+        const name = (f.user.name || "").toLowerCase();
+        const email = (f.user.email || "").toLowerCase();
+        return name.includes(term) || email.includes(term);
+      });
+    }
+
+    return result;
+  }, [userFolders, searchTerm, activityFilter]);
+
+  // ===== ✅ إحصائيات علوية =====
+  const stats = useMemo(() => {
+    const totalUsers = userFolders.length;
+    const totalChats = allChats.length;
+    const mostRecent = userFolders[0]?.lastActivity;
+
+    return { totalUsers, totalChats, mostRecent };
+  }, [userFolders, allChats]);
+
+  // ===== ✅ أنماط =====
   const containerStyle = useMemo(
     () => ({
       background: theme.surface,
@@ -68,8 +151,34 @@ export default function ChatsTab({
     () => ({
       fontSize: isMobile ? "12px" : "13px",
       opacity: 0.6,
+      marginTop: "2px",
     }),
     [isMobile]
+  );
+
+  const statsBarStyle = useMemo(
+    () => ({
+      display: "flex",
+      gap: isMobile ? "6px" : "8px",
+      flexWrap: "wrap",
+      marginBottom: isMobile ? "10px" : "14px",
+    }),
+    [isMobile]
+  );
+
+  const statBadgeStyle = useMemo(
+    () => ({
+      background: theme.inputBg,
+      padding: isMobile ? "5px 10px" : "6px 12px",
+      borderRadius: "10px",
+      fontSize: isMobile ? "11px" : "12px",
+      color: theme.text,
+      display: "flex",
+      alignItems: "center",
+      gap: "4px",
+      whiteSpace: "nowrap",
+    }),
+    [theme.inputBg, theme.text, isMobile]
   );
 
   const filtersRowStyle = useMemo(
@@ -88,19 +197,9 @@ export default function ChatsTab({
       ...inputStyle,
       flex: isMobile ? "initial" : 1,
       width: isMobile ? "100%" : "auto",
-      minWidth: isMobile ? "0" : "120px",
+      minWidth: isMobile ? "0" : "140px",
     }),
     [inputStyle, isMobile]
-  );
-
-  const buttonsRowStyle = useMemo(
-    () => ({
-      display: "flex",
-      gap: isMobile ? "8px" : "6px",
-      flexDirection: "row",
-      width: isMobile ? "100%" : "auto",
-    }),
-    [isMobile]
   );
 
   const refreshBtnStyle = useMemo(
@@ -113,59 +212,31 @@ export default function ChatsTab({
       cursor: "pointer",
       fontSize: "14px",
       fontFamily: "inherit",
-      flex: isMobile ? 1 : "initial",
       minHeight: isMobile ? "40px" : "auto",
     }),
     [isMobile]
   );
 
-  const deleteAllBtnStyle = useMemo(
+  const foldersContainerStyle = useMemo(
     () => ({
-      background: "rgba(239,68,68,0.15)",
-      color: "#ef4444",
-      border: "none",
-      padding: isMobile ? "10px 14px" : "8px 14px",
-      borderRadius: "10px",
-      cursor: "pointer",
-      fontSize: "13px",
-      fontWeight: "600",
-      fontFamily: "inherit",
-      flex: isMobile ? 1 : "initial",
-      minHeight: isMobile ? "40px" : "auto",
-      whiteSpace: "nowrap",
+      display: "grid",
+      gridTemplateColumns: isMobile
+        ? "1fr"
+        : isTablet
+        ? "repeat(2, 1fr)"
+        : "repeat(auto-fill, minmax(320px, 1fr))",
+      gap: isMobile ? "8px" : "12px",
+    }),
+    [isMobile, isTablet]
+  );
+
+  const emptyStateStyle = useMemo(
+    () => ({
+      textAlign: "center",
+      padding: isMobile ? "40px 20px" : "60px 20px",
+      opacity: 0.5,
     }),
     [isMobile]
-  );
-
-  const tableWrapperStyle = useMemo(
-    () => ({
-      overflowX: "auto",
-      overflowY: "auto",
-      WebkitOverflowScrolling: "touch",
-      maxHeight: isMobile ? "60vh" : "70vh",
-    }),
-    [isMobile]
-  );
-
-  const tableStyle = useMemo(
-    () => ({
-      width: "100%",
-      borderCollapse: "collapse",
-      minWidth: isTablet ? "560px" : "600px",
-      fontSize: isMobile ? "13px" : "14px",
-    }),
-    [isTablet, isMobile]
-  );
-
-  const thStyle = useMemo(
-    () => ({
-      padding: isMobile ? "10px 8px" : "12px 10px",
-      textAlign: "right",
-      fontSize: isMobile ? "12px" : "14px",
-      fontWeight: "600",
-      color: darkMode ? "#6ee7b7" : "#059669",
-    }),
-    [darkMode, isMobile]
   );
 
   // ===== ✅ Handlers =====
@@ -173,24 +244,29 @@ export default function ChatsTab({
     if (typeof onRefresh === "function") onRefresh();
   }, [onRefresh]);
 
-  const handleDeleteAll = useCallback(() => {
-    if (typeof onDeleteAll === "function") onDeleteAll();
-  }, [onDeleteAll]);
-
-  const handleUserFilterChange = useCallback(
-    (e) => setChatFilterUser(e.target.value),
-    [setChatFilterUser]
-  );
-
-  const handleDateFilterChange = useCallback(
-    (e) => setChatFilterDate(e.target.value),
-    [setChatFilterDate]
+  const handleOpenUser = useCallback(
+    (userId, userName) => {
+      if (typeof onOpenUserChats === "function") {
+        onOpenUserChats(userId, userName);
+      }
+    },
+    [onOpenUserChats]
   );
 
   const handleSearchChange = useCallback(
-    (e) => setChatSearchTerm(e.target.value),
-    [setChatSearchTerm]
+    (e) => setSearchTerm(e.target.value),
+    []
   );
+
+  const handleActivityChange = useCallback(
+    (e) => setActivityFilter(e.target.value),
+    []
+  );
+
+  const handleClearFilters = useCallback(() => {
+    setSearchTerm("");
+    setActivityFilter("all");
+  }, []);
 
   // ===== JSX =====
   return (
@@ -198,246 +274,118 @@ export default function ChatsTab({
       {/* ===== الرأس ===== */}
       <div style={headerStyle}>
         <div>
-          <h2 style={titleStyle}>💬 المحادثات</h2>
+          <h2 style={titleStyle}>💬 محادثات المستخدمين</h2>
           <div style={subtitleStyle}>
-            معروض: {filteredChats.length} / {allChats.length}
+            اضغط على أي مستخدم لعرض محادثاته
           </div>
         </div>
       </div>
 
-      {/* ===== الفلاتر ===== */}
-      <div style={filtersRowStyle}>
-        <select
-          value={chatFilterUser}
-          onChange={handleUserFilterChange}
-          style={filterControlStyle}
-        >
-          <option value="">👥 الكل</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.name || u.email?.split("@")[0]}
-            </option>
-          ))}
-        </select>
-
-        <select
-          value={chatFilterDate}
-          onChange={handleDateFilterChange}
-          style={filterControlStyle}
-        >
-          <option value="all">📅 الكل</option>
-          <option value="today">اليوم</option>
-          <option value="week">الأسبوع</option>
-          <option value="month">الشهر</option>
-        </select>
-
-        <input
-          type="text"
-          placeholder="🔍 بحث..."
-          value={chatSearchTerm}
-          onChange={handleSearchChange}
-          style={filterControlStyle}
-        />
-
-        <div style={buttonsRowStyle}>
-          <button onClick={handleRefresh} style={refreshBtnStyle}>
-            🔄
-          </button>
-          <button onClick={handleDeleteAll} style={deleteAllBtnStyle}>
-            🗑️ الكل
-          </button>
+      {/* ===== إحصائيات ===== */}
+      <div style={statsBarStyle}>
+        <div style={statBadgeStyle}>
+          👥 <strong>{stats.totalUsers}</strong> مستخدم
         </div>
+        <div style={statBadgeStyle}>
+          💬 <strong>{stats.totalChats}</strong> محادثة
+        </div>
+        {filteredFolders.length !== stats.totalUsers && (
+          <div
+            style={{
+              ...statBadgeStyle,
+              background: "rgba(16,185,129,0.15)",
+              color: "#10b981",
+            }}
+          >
+            🔍 معروض: <strong>{filteredFolders.length}</strong>
+          </div>
+        )}
       </div>
 
-      {/* ===== العرض: موبايل vs ديسكتوب ===== */}
-      {isMobile ? (
-        <div>
-          {filteredChats.length === 0 ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "40px 20px",
-                opacity: 0.5,
-              }}
-            >
-              لا توجد محادثات
-            </div>
+      {/* ===== الفلاتر ===== */}
+      <div style={filtersRowStyle}>
+        <input
+          type="text"
+          placeholder="🔍 ابحث بالاسم أو البريد..."
+          value={searchTerm}
+          onChange={handleSearchChange}
+          style={filterControlStyle}
+          aria-label="بحث عن مستخدم"
+        />
+
+        <select
+          value={activityFilter}
+          onChange={handleActivityChange}
+          style={filterControlStyle}
+          aria-label="فلتر آخر نشاط"
+        >
+          <option value="all">🕐 الكل</option>
+          <option value="today">نشط اليوم</option>
+          <option value="week">آخر أسبوع</option>
+          <option value="month">آخر شهر</option>
+          <option value="inactive">غير نشط (+30 يوم)</option>
+        </select>
+
+        <button
+          onClick={handleRefresh}
+          style={refreshBtnStyle}
+          aria-label="تحديث"
+          title="تحديث"
+        >
+          🔄
+        </button>
+      </div>
+
+      {/* ===== قائمة المجلدات ===== */}
+      {filteredFolders.length === 0 ? (
+        <div style={emptyStateStyle}>
+          {userFolders.length === 0 ? (
+            <>
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>💬</div>
+              <div style={{ fontSize: "15px" }}>لا توجد محادثات بعد</div>
+              <div style={{ fontSize: "13px", marginTop: "6px" }}>
+                عندما يبدأ المستخدمون بالدردشة، ستظهر محادثاتهم هنا
+              </div>
+            </>
           ) : (
-            filteredChats.map((chat) => (
-              <ChatsMobileCard
-                key={chat.id}
-                chat={chat}
-                chatUser={getUserById(chat.user_id)}
-                theme={theme}
-                formatDate={formatDate}
-                onOpenChat={onOpenChat}
-                onDeleteChat={onDeleteChat}
-              />
-            ))
+            <>
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>🔍</div>
+              <div style={{ fontSize: "15px" }}>لا توجد نتائج مطابقة</div>
+              <button
+                onClick={handleClearFilters}
+                style={{
+                  marginTop: "12px",
+                  background: "rgba(16,185,129,0.15)",
+                  color: "#10b981",
+                  border: "1px solid rgba(16,185,129,0.3)",
+                  padding: "8px 16px",
+                  borderRadius: "10px",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  fontFamily: "inherit",
+                }}
+              >
+                🔄 مسح الفلاتر
+              </button>
+            </>
           )}
         </div>
       ) : (
-        <div style={tableWrapperStyle}>
-          <table style={tableStyle}>
-            <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
-              <tr
-                style={{
-                  background: darkMode
-                    ? "rgba(16,185,129,0.08)"
-                    : "rgba(16,185,129,0.06)",
-                }}
-              >
-                {[
-                  "المستخدم",
-                  "العنوان",
-                  "الرسائل",
-                  "آخر تحديث",
-                  "الإجراءات",
-                ].map((h) => (
-                  <th key={h} style={thStyle}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredChats.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="5"
-                    style={{
-                      textAlign: "center",
-                      padding: "40px 20px",
-                      opacity: 0.5,
-                    }}
-                  >
-                    لا توجد محادثات
-                  </td>
-                </tr>
-              ) : (
-                filteredChats.map((chat) => (
-                  <ChatRow
-                    key={chat.id}
-                    chat={chat}
-                    chatUser={getUserById(chat.user_id)}
-                    theme={theme}
-                    formatDate={formatDate}
-                    onOpenChat={onOpenChat}
-                    onDeleteChat={onDeleteChat}
-                    isMobile={isMobile}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+        <div style={foldersContainerStyle}>
+          {filteredFolders.map((folder) => (
+            <UserFolderCard
+              key={folder.user.id}
+              user={folder.user}
+              userChats={folder.chats}
+              theme={theme}
+              isMobile={isMobile}
+              isTablet={isTablet}
+              onOpen={handleOpenUser}
+            />
+          ))}
         </div>
       )}
     </div>
-  );
-}
-
-// ============================================================
-//  ChatRow — صف جدول منفصل (يستخدم useState للـ hover)
-// ============================================================
-function ChatRow({
-  chat,
-  chatUser,
-  theme,
-  formatDate,
-  onOpenChat,
-  onDeleteChat,
-  isMobile = false,
-}) {
-  const [hover, setHover] = useState(false);   // ← ← ← يحتاج useState
-
-  return (
-    <tr
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        borderBottom: `1px solid ${theme.border}`,
-        background: hover ? theme.rowHover : "transparent",
-        transition: "background 0.15s",
-      }}
-    >
-      <td style={{ padding: "12px 10px" }}>
-        <strong style={{ fontSize: "14px" }}>
-          {chatUser?.name || "محذوف"}
-        </strong>
-        <br />
-        <span style={{ fontSize: "12px", opacity: 0.5 }}>
-          {chatUser?.email?.slice(0, 20) || chat.user_id?.slice(0, 8)}
-        </span>
-      </td>
-
-      <td
-        style={{
-          padding: "12px 10px",
-          maxWidth: "180px",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          fontSize: "13px",
-        }}
-      >
-        {chat.title || "بدون عنوان"}
-      </td>
-
-      <td style={{ padding: "12px 10px", textAlign: "center" }}>
-        <span
-          style={{
-            background: "rgba(16,185,129,0.15)",
-            color: "#10b981",
-            padding: "4px 12px",
-            borderRadius: "20px",
-            fontSize: "12px",
-            fontWeight: "600",
-          }}
-        >
-          {chat.messages?.length || 0}
-        </span>
-      </td>
-
-      <td style={{ padding: "12px 10px", fontSize: "12px", opacity: 0.7 }}>
-        {formatDate(chat.updated_at)}
-      </td>
-
-      <td style={{ padding: "12px 10px" }}>
-        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-          <button
-            onClick={() => onOpenChat(chat)}
-            style={{
-              background: "rgba(59,130,246,0.15)",
-              color: "#3b82f6",
-              border: "none",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: "600",
-              fontFamily: "inherit",
-            }}
-          >
-            👁️
-          </button>
-          <button
-            onClick={() => onDeleteChat(chat.id)}
-            style={{
-              background: "rgba(239,68,68,0.15)",
-              color: "#ef4444",
-              border: "none",
-              padding: "6px 12px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "12px",
-              fontWeight: "600",
-              fontFamily: "inherit",
-            }}
-          >
-            🗑️
-          </button>
-        </div>
-      </td>
-    </tr>
   );
 }
