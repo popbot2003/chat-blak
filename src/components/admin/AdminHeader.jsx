@@ -1,6 +1,7 @@
 // ============================================
 // src/components/admin/AdminHeader.jsx
 // رأس لوحة التحكم + قائمة منسدلة (Responsive)
+// القائمة تظهر من يسار الشاشة على الموبايل
 // متوافق مع:
 //   - src/config/breakpoints.js
 //   - src/App.css (media queries موحّدة)
@@ -90,16 +91,17 @@ export default function AdminHeader({
     [theme.surface2, theme.border, theme.text, isMobile]
   );
 
-  // ===== ✅ القائمة المنسدلة (مُصلحة للموبايل) =====
+  // ===== ✅ القائمة المنسدلة (على اليسار) =====
   const dropdownStyle = useMemo(
     () => ({
       // ✅ على الموبايل: fixed بدل absolute (يمنع الخروج عن الشاشة)
       position: isMobile ? "fixed" : "absolute",
       // ✅ على الموبايل: من أعلى الشاشة بمسافة تناسب ارتفاع الهيدر
       top: isMobile ? "58px" : "48px",
-      left: isMobile ? "auto" : "0",
-      // ✅ على الموبايل: 8px من يمين الشاشة
-      right: isMobile ? "8px" : "auto",
+      // ✅ على الموبايل: 8px من يسار الشاشة
+      left: isMobile ? "8px" : "0",
+      // ✅ على الموبايل: لا نحتاج right
+      right: isMobile ? "auto" : "auto",
       background: theme.surface2,
       border: `1px solid ${theme.border}`,
       borderRadius: "12px",
