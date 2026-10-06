@@ -860,7 +860,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }
 
   const executeRequest = useCallback(
-    async (text, isRetry = false) => {
+    async (text) => {
       try {
         const { data: freshUser, error } = await supabase
           .from("profiles")
@@ -907,15 +907,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
 
       const userMsg = { role: "user", content: text, id: Date.now() };
-      const updatedMessages = isRetry
-        ? messagesRef.current
-        : [...messagesRef.current, userMsg];
+      const updatedMessages = [...messagesRef.current, userMsg];
 
-      if (!isRetry) {
-        setMessages(updatedMessages);
-        setInput("");
-        setAttachedFiles([]);
-      }
+      setMessages(updatedMessages);
+      setInput("");
+      setAttachedFiles([]);
 
       setLoading(true);
       setStreamingText("");
@@ -998,16 +994,27 @@ export default function Chat({ user, onLogout, isAdmin }) {
         const data = await res.json();
 
         if (!res.ok) {
-          if (res.status === 401 && !isRetry) {
-            showToast("⚠️ خطأ في المصادقة، حاول مرة أخرى", "error");
+          if (res.status === 401) {
+            showToast("⚠️ خطأ في المصادقة، حاول تسجيل الدخول مرة أخرى", "error");
           } else if (
-            (res.status === 429 ||
-              data.error?.code === "rate_limit_exceeded") &&
-            !isRetry
+            res.status === 429 ||
+            data.error?.code === "rate_limit_exceeded" ||
+            data.error?.code === "all_keys_rate_limited"
           ) {
-            setTimeout(() => executeRequest(text, true), 1500);
-            return;
+            const retryAfter = Number(
+              data.error?.retry_after_seconds ||
+              data.retry_after_seconds ||
+              0
+            );
+
+            showToast(
+              retryAfter > 0
+                ? `⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول بعد ${retryAfter} ثانية.`
+                : "⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول مرة أخرى لاحقًا.",
+              "error"
+            );
           }
+
           throw new Error(
             data.error?.message || data.error || `خطأ: ${res.status}`
           );
