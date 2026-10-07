@@ -1,14 +1,13 @@
 // ============================================
-// Chat.jsx — نسخة v4 (دعم الرؤية + الصور)
+// Chat.jsx — نسخة v5 (OCR للصور)
 // ✅ إصلاح 1: حذف المحادثة يوقف المهام
 // ✅ إصلاح 2: حفظ المحادثة يعمل مع مهام type='task'
 // ✅ إصلاح 3: استعادة المهمة عند التحديث
 // ✅ إصلاح 4: لا محادثة فارغة عند كل دخول
 // ✅ إصلاح 5: إنشاء ID فقط عند أول رسالة
 // ✅ إصلاح 6: حذف المهام المكتملة مع المحادثة
-// ✅ جديد 7: دعم إرسال الصور كنموذج رؤية (Vision)
-// ✅ جديد 8: ضغط الصور تلقائياً قبل الإرسال
-// ✅ جديد 9: فصل مسار الرؤية عن المسار النصي
+// ✅ جديد 7: استخراج النص من الصور محلياً (Tesseract.js)
+// ✅ جديد 8: لا يستهلك توكنات Groq للصور
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -37,26 +36,11 @@ import {
 } from "../config/personalities";
 import { formatDate, copyToClipboard, debounce } from "../utils/helpers";
 import { checkUserDailyLimit } from "../utils/validators";
-
-// ─────────────────────────────────────────
-// Vision model
-// ─────────────────────────────────────────
-
-const GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
-
-// حد أقصى لأبعاد الصورة قبل الإرسال
-const IMAGE_MAX_DIM = 1024;
-
-// جودة ضغط JPEG
-const IMAGE_JPEG_QUALITY = 0.82;
-
-// حد أقصى لحجم base64 للصورة الواحدة (تقريبي)
-const IMAGE_MAX_BYTES = 3.5 * 1024 * 1024; // ~3.5MB
+import { extractTextFromImage } from "../utils/ocr";
 
 // ─────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────
-
 async function searchDuckDuckGo(query) {
   try {
     const res = await fetch(
@@ -85,100 +69,18 @@ function cleanResponse(text) {
     .trim();
 }
 
-// ✅ ضغط الصور قبل الإرسال
-async function compressImage(file, maxDim = IMAGE_MAX_DIM, quality = IMAGE_JPEG_QUALITY) {
+async function readFileAsText(file) {
   return new Promise((resolve) => {
-    // لو الصورة SVG أو GIF، لا نضغط (احتمال فقدان الحركة)
-    if (file.type === "image/svg+xml" || file.type === "image/gif") {
-      const reader = new FileReader();
-      reader.onload = () =>
-        resolve({
-          dataUrl: reader.result,
-          mimeType: file.type,
-        });
-      reader.onerror = () =>
-        resolve({ dataUrl: null, mimeType: file.type });
-      reader.readAsDataURL(file);
+    const reader = new FileReader();
+    reader.onerror = () => resolve("❌ خطأ في قراءة الملف");
+
+    if (file.type === "application/pdf") {
+      reader.onload = () => resolve("📄 PDF: " + file.name);
+      reader.readAsArrayBuffer(file);
       return;
     }
 
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      try {
-        let { width, height } = img;
-
-        if (width > maxDim || height > maxDim) {
-          const ratio = Math.min(maxDim / width, maxDim / height);
-          width = Math.round(width * ratio);
-          height = Math.round(height * ratio);
-        }
-
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-
-        URL.revokeObjectURL(url);
-
-        const dataUrl = canvas.toDataURL("image/jpeg", quality);
-
-        resolve({
-          dataUrl,
-          mimeType: "image/jpeg",
-        });
-      } catch (err) {
-        URL.revokeObjectURL(url);
-        resolve({ dataUrl: null, mimeType: file.type });
-      }
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve({ dataUrl: null, mimeType: file.type });
-    };
-
-    img.src = url;
-  });
-}
-
-// ✅ قراءة الملفات: الآن ترجع كائنات موصوفة
-async function readFileAsText(file) {
-  // الصور: نرجعها base64 مضغوطة
-  if (file.type.startsWith("image/")) {
-    const compressed = await compressImage(file);
-    return {
-      kind: "image",
-      dataUrl: compressed.dataUrl,
-      mimeType: compressed.mimeType,
-    };
-  }
-
-  // PDF: نص وصفي فقط حالياً
-  if (file.type === "application/pdf") {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onerror = () =>
-        resolve({ kind: "text", content: "❌ خطأ في قراءة الملف" });
-      reader.onload = () =>
-        resolve({ kind: "text", content: "📄 PDF: " + file.name });
-      reader.readAsArrayBuffer(file);
-    });
-  }
-
-  // باقي الملفات: نص
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onerror = () =>
-      resolve({ kind: "text", content: "❌ خطأ في قراءة الملف" });
-    reader.onload = () =>
-      resolve({
-        kind: "text",
-        content: String(reader.result || ""),
-      });
+    reader.onload = () => resolve(reader.result);
     reader.readAsText(file);
   });
 }
@@ -247,23 +149,12 @@ function mergeMessages(existing, newMsgs) {
   return sortMessagesByTime(combined);
 }
 
-// ✅ تقدير حجم base64
-function estimateBase64Bytes(dataUrl) {
-  if (!dataUrl) return 0;
-  const idx = dataUrl.indexOf(",");
-  if (idx === -1) return 0;
-  const b64 = dataUrl.slice(idx + 1);
-  return Math.floor((b64.length * 3) / 4);
-}
-
 // ─────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────
-
 export default function Chat({ user, onLogout, isAdmin }) {
   const [allChats, setAllChats] = useState([]);
 
-  // ✅ إصلاح 5: لا ننشئ ID تلقائياً — فقط من localStorage
   const [currentChatId, setCurrentChatId] = useState(() => {
     return localStorage.getItem("black-last-chat-id") || null;
   });
@@ -302,7 +193,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
     if (currentChatId) {
@@ -311,7 +201,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       localStorage.removeItem("black-last-chat-id");
     }
   }, [currentChatId]);
-
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
@@ -724,7 +613,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ✅ إصلاح 2: حفظ يشمل المهام
   async function saveChatToSupabase() {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length === 0) return;
@@ -746,7 +634,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
           content: `📋 مهمة: ${m.task.input?.slice(0, 100) || ""}`,
         };
       }
-      // ✅ لا نحفظ base64 للصور في المحادثة (ضخم جداً)
       return m;
     });
 
@@ -970,117 +857,51 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ✅ فحص مشترك قبل أي طلب
-  const preflightCheck = useCallback(async () => {
-    try {
-      const { data: freshUser, error } = await supabase
-        .from("profiles")
-        .select("id, is_blocked")
-        .eq("id", user.id)
-        .single();
+  const executeRequest = useCallback(
+    async (text) => {
+      try {
+        const { data: freshUser, error } = await supabase
+          .from("profiles")
+          .select("id, is_blocked")
+          .eq("id", user.id)
+          .single();
 
-      if (error || !freshUser) {
-        localStorage.removeItem("black-user");
-        window.location.reload();
-        return { ok: false };
+        if (error || !freshUser) {
+          localStorage.removeItem("black-user");
+          window.location.reload();
+          return;
+        }
+        if (freshUser.is_blocked) {
+          showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
+          localStorage.removeItem("black-user");
+          setTimeout(() => window.location.reload(), 2000);
+          return;
+        }
+      } catch (err) {
+        console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
       }
-      if (freshUser.is_blocked) {
-        showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
-        localStorage.removeItem("black-user");
-        setTimeout(() => window.location.reload(), 2000);
-        return { ok: false };
+
+      if (!currentChatIdRef.current) {
+        const newId = Date.now().toString();
+        currentChatIdRef.current = newId;
+        setCurrentChatId(newId);
       }
-    } catch (err) {
-      console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
-    }
 
-    // ✅ إنشاء chatId عند أول رسالة حقيقية
-    if (!currentChatIdRef.current) {
-      const newId = Date.now().toString();
-      currentChatIdRef.current = newId;
-      setCurrentChatId(newId);
-    }
-
-    const limitCheck = checkUserDailyLimit(currentUserRef.current);
-    if (!limitCheck.canChat) {
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content: limitCheck.reason,
-            id: Date.now(),
-          },
-        ])
-      );
-      setLoading(false);
-      return { ok: false };
-    }
-
-    return { ok: true };
-  }, [user.id]);
-
-  // ✅ streaming مشترك
-  const streamReply = useCallback((reply) => {
-    let i = 0;
-    function type() {
-      if (abortControllerRef.current === null) return;
-      if (i <= reply.length) {
-        setStreamingText(reply.slice(0, i));
-        i++;
-        setTimeout(type, 15);
-      } else {
-        setStreamingText("");
+      const limitCheck = checkUserDailyLimit(currentUserRef.current);
+      if (!limitCheck.canChat) {
         setMessages((prev) =>
           sortMessagesByTime([
             ...prev,
-            { role: "assistant", content: reply, id: Date.now() },
+            {
+              role: "assistant",
+              content: limitCheck.reason,
+              id: Date.now(),
+            },
           ])
         );
         setLoading(false);
-        abortControllerRef.current = null;
-        setTimeout(() => inputRef.current?.focus(), 100);
+        return;
       }
-    }
-    type();
-  }, []);
-
-  const handleRequestError = useCallback((err) => {
-    if (err.name === "AbortError") {
-      console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content: "⏹️ تم إيقاف التوليد.",
-            id: Date.now(),
-          },
-        ])
-      );
-    } else {
-      console.error("[Chat] خطأ:", err.message);
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content: "❌ حدث خطأ: " + err.message,
-            id: Date.now(),
-          },
-        ])
-      );
-    }
-    setLoading(false);
-    setStreamingText("");
-    abortControllerRef.current = null;
-  }, []);
-
-  // ✅ مسار الطلب النصي
-  const executeRequest = useCallback(
-    async (text) => {
-      const check = await preflightCheck();
-      if (!check.ok) return;
 
       const userMsg = { role: "user", content: text, id: Date.now() };
       const updatedMessages = [...messagesRef.current, userMsg];
@@ -1197,98 +1018,62 @@ export default function Chat({ user, onLogout, isAdmin }) {
         }
 
         const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-        streamReply(reply);
-      } catch (err) {
-        handleRequestError(err);
-      }
-    },
-    [preflightCheck, streamReply, handleRequestError]
-  );
 
-  // ✅ جديد: مسار الرؤية (الصور)
-  const executeVisionRequest = useCallback(
-    async (contentParts, textOnlyForUI) => {
-      const check = await preflightCheck();
-      if (!check.ok) return;
+        let i = 0;
+        function type() {
+          if (abortControllerRef.current === null) return;
 
-      const userMsg = {
-        role: "user",
-        content: textOnlyForUI || "🖼️ صورة مرفقة",
-        id: Date.now(),
-      };
-      const updatedMessages = [...messagesRef.current, userMsg];
-
-      setMessages(updatedMessages);
-      setInput("");
-      setAttachedFiles([]);
-
-      setLoading(true);
-      setStreamingText("");
-
-      try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
-        // ✅ نأخذ آخر 4 رسائل نصية فقط (لا نرسل صور قديمة)
-        const recentMsgs = updatedMessages
-          .filter((m) => m.type !== "task" && typeof m.content === "string")
-          .slice(-5, -1);
-
-        const chatHistory = recentMsgs.map((m) => ({
-          role: m.role,
-          content: m.content.slice(0, 500),
-        }));
-
-        abortControllerRef.current = new AbortController();
-
-        const res = await fetch(
-          "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${session?.access_token}`,
-            },
-            signal: abortControllerRef.current.signal,
-            body: JSON.stringify({
-              model: GROQ_VISION_MODEL,
-              max_tokens: GROQ_MAX_TOKENS,
-              temperature: GROQ_TEMPERATURE,
-              systemPrompt: getPersonalityPrompt(
-                currentUserRef.current?.personality || DEFAULT_PERSONALITY,
-                currentUserRef.current?.gender || "ولد"
-              ),
-              messages: [
-                ...chatHistory,
-                // ✅ آخر رسالة: array متعدد الوسائط
-                { role: "user", content: contentParts },
-              ],
-            }),
-          }
-        );
-
-        const data = await res.json();
-
-        if (!res.ok) {
-          if (res.status === 429) {
-            showToast(
-              "⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول لاحقًا.",
-              "error"
+          if (i <= reply.length) {
+            setStreamingText(reply.slice(0, i));
+            i++;
+            setTimeout(type, 15);
+          } else {
+            setStreamingText("");
+            setMessages((prev) =>
+              sortMessagesByTime([
+                ...prev,
+                { role: "assistant", content: reply, id: Date.now() },
+              ])
             );
+            setLoading(false);
+            abortControllerRef.current = null;
+            setTimeout(() => inputRef.current?.focus(), 100);
           }
-          throw new Error(
-            data.error?.message || data.error || `خطأ: ${res.status}`
+        }
+        type();
+      } catch (err) {
+        if (err.name === "AbortError") {
+          console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
+          setMessages((prev) =>
+            sortMessagesByTime([
+              ...prev,
+              {
+                role: "assistant",
+                content: "⏹️ تم إيقاف التوليد.",
+                id: Date.now(),
+              },
+            ])
+          );
+        } else {
+          console.error("[Chat] خطأ في executeRequest:", err.message);
+          setMessages((prev) =>
+            sortMessagesByTime([
+              ...prev,
+              {
+                role: "assistant",
+                content: "❌ حدث خطأ: " + err.message,
+                id: Date.now(),
+              },
+            ])
           );
         }
-
-        const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-        streamReply(reply);
-      } catch (err) {
-        handleRequestError(err);
+        setLoading(false);
+        setStreamingText("");
+        abortControllerRef.current = null;
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     },
-    [preflightCheck, streamReply, handleRequestError]
+    [user.id]
   );
 
   function handleStop() {
@@ -1435,7 +1220,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }
 
   // ─────────────────────────────────────────
-  // Send — الآن يدعم الصور
+  // Send
   // ─────────────────────────────────────────
   async function sendMessage() {
     if (loading) return;
@@ -1443,22 +1228,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const text = input.trim();
     if (!text && !attachedFiles.length) return;
 
-    // المهام: نص فقط
     if (sendMode === "task" && !attachedFiles.length) {
       await createTask(text);
       return;
     }
 
-    const MAX_FILE_CHARS = 3000;
+    const MAX_FILE_CHARS = 5000;
+    let finalText = text;
 
-    // ✅ فصل الصور عن الملفات النصية
-    const images = attachedFiles.filter((f) => f.isImage);
-    const textFiles = attachedFiles.filter((f) => !f.isImage);
-
-    // بناء نص الملفات النصية
-    let filesText = "";
-    if (textFiles.length > 0) {
-      filesText = textFiles
+    if (attachedFiles.length > 0) {
+      const filesText = attachedFiles
         .map((f) => {
           const content = f.content || "";
           const truncated = content.length > MAX_FILE_CHARS;
@@ -1471,33 +1250,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
           }\n\`\`\`\n${body}\n\`\`\``;
         })
         .join("");
+      finalText = (text || "الملفات المرفقة:") + filesText;
     }
 
-    // ✅ إذا فيه صور: مسار الرؤية
-    if (images.length > 0) {
-      const userText =
-        (text || "حلل هذه الصورة.") + filesText;
-
-      const contentParts = [
-        { type: "text", text: userText },
-        ...images.map((img) => ({
-          type: "image_url",
-          image_url: { url: img.dataUrl },
-        })),
-      ];
-
-      // نص وصفي مختصر للواجهة
-      const uiText = text
-        ? `${text}  🖼️ (${images.length} صورة)`
-        : `🖼️ (${images.length} صورة)`;
-
-      await executeVisionRequest(contentParts, uiText);
-      return;
-    }
-
-    // نص فقط
-    const finalText = (text || "الملفات المرفقة:") + filesText;
-    await executeRequest(finalText);
+    executeRequest(finalText);
   }
 
   async function newChat() {
@@ -1540,7 +1296,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     inputRef.current?.focus();
   }
 
-  // ✅ إصلاح 1 + 6
+  // ✅ إصلاح 1 + 6: حذف المحادثة يوقف المهام + يحذف المهام المكتملة
   async function deleteChat(chatId) {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
@@ -1614,7 +1370,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     });
   }
 
-  // ✅ رفع ملفات: يميز الصور
+  // ✅ رفع الملفات: الصور تُعالج بـ OCR تلقائياً
   async function handleFileUpload(e) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -1623,23 +1379,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const newFiles = [];
 
     for (const file of files) {
-      try {
-        const result = await readFileAsText(file);
+      // ✅ الصور: استخراج النص عبر Tesseract.js
+      if (file.type.startsWith("image/")) {
+        try {
+          showToast(`🔍 جاري استخراج النص من ${file.name}...`, "info");
 
-        if (result.kind === "image") {
-          // ✅ فحص الحجم
-          const bytes = estimateBase64Bytes(result.dataUrl);
+          const ocrText = await extractTextFromImage(file);
 
-          if (!result.dataUrl) {
-            showToast(`⚠️ تعذر معالجة الصورة: ${file.name}`, "error");
-            continue;
-          }
-
-          if (bytes > IMAGE_MAX_BYTES) {
+          if (!ocrText || ocrText.length < 3) {
             showToast(
-              `⚠️ الصورة كبيرة جداً: ${file.name} (${Math.round(
-                bytes / 1024
-              )}KB)`,
+              `⚠️ لم يتم العثور على نص واضح في ${file.name}`,
               "error"
             );
             continue;
@@ -1648,34 +1397,40 @@ export default function Chat({ user, onLogout, isAdmin }) {
           newFiles.push({
             id: Date.now() + Math.random(),
             name: file.name,
-            type: file.type,
+            type: "text/ocr",
             size: file.size,
-            icon: "🖼️",
-            isImage: true,
-            mimeType: result.mimeType,
-            dataUrl: result.dataUrl,
-            content: "",
+            icon: "📝",
+            content: `[نص مستخرج من صورة: ${file.name}]\n\n${ocrText}`,
           });
-        } else {
-          newFiles.push({
-            id: Date.now() + Math.random(),
-            name: file.name,
-            type: file.type,
-            size: file.size,
-            icon: getFileIcon(file),
-            isImage: false,
-            content: result.content || "",
-          });
+
+          showToast(
+            `✅ تم استخراج النص من ${file.name} (${ocrText.length} حرف)`,
+            "success"
+          );
+        } catch (err) {
+          console.error("[OCR] خطأ:", err);
+          showToast(`❌ فشل استخراج النص من ${file.name}`, "error");
         }
-      } catch (err) {
-        console.error("[Chat] خطأ في رفع ملف:", err);
+        continue;
+      }
+
+      // ✅ باقي الملفات: تُقرأ كنص عادي
+      try {
+        newFiles.push({
+          id: Date.now() + Math.random(),
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          icon: getFileIcon(file),
+          content: await readFileAsText(file),
+        });
+      } catch {
         newFiles.push({
           id: Date.now() + Math.random(),
           name: file.name,
           type: file.type,
           size: file.size,
           icon: "❌",
-          isImage: false,
           content: "خطأ",
         });
       }
@@ -1778,4 +1533,33 @@ export default function Chat({ user, onLogout, isAdmin }) {
         copiedId={copiedId}
         onCopy={copyMessage}
         onCancelTask={cancelTask}
-        bottomRef={bottomRef
+        bottomRef={bottomRef}
+      />
+
+      <ChatInput
+        input={input}
+        setInput={setInput}
+        loading={loading}
+        streamingText={streamingText}
+        attachedFiles={attachedFiles}
+        sendMode={sendMode}
+        onSend={sendMessage}
+        onStop={handleStop}
+        onFileUpload={handleFileUpload}
+        onRemoveFile={removeFile}
+        onToggleMode={() =>
+          setSendMode((m) => (m === "chat" ? "task" : "chat"))
+        }
+      />
+
+      {showSettings && (
+        <ChatSettings
+          user={currentUser}
+          onClose={() => setShowSettings(false)}
+          onSave={handleSaveSettings}
+          onDeleteAccount={handleDeleteAccount}
+        />
+      )}
+    </div>
+  );
+      }
