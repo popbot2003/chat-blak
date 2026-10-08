@@ -1,9 +1,6 @@
 // ============================================
 // src/components/admin/KeyCard.jsx — Responsive
 // كارت مفتاح — للشاشات الكبيرة (جدول)
-// متوافق مع:
-//   - src/config/breakpoints.js
-//   - src/App.css (media queries موحّدة)
 // ============================================
 
 import { useState, useMemo, useCallback } from "react";
@@ -47,8 +44,11 @@ export default function KeyCard({
     const limitColor =
       percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
 
-    // ✅ عدّاد تجديد الحصة اليومية
-    const countdown = getTpdResetCountdown(keyItem.tpd_reset_at, currentTime);
+    // ✅ عدّاد تجديد الحصة — يظهر بس عند 95%+
+    const countdown =
+      percent >= 95
+        ? getTpdResetCountdown(keyItem.tpd_reset_at, currentTime)
+        : null;
 
     return {
       realLimit,
@@ -174,7 +174,7 @@ export default function KeyCard({
     [activeNow, theme.textMuted, isTablet]
   );
 
-  // ✅ نمط العدّاد التنازلي
+  // ✅ نمط العدّاد
   const countdownStyle = useMemo(
     () => ({
       display: "inline-flex",
@@ -337,7 +337,7 @@ export default function KeyCard({
         <div style={lastUsedStyle}>{lastUsed}</div>
       </td>
 
-      {/* ===== العدّاد التنازلي (تجديد الحصة) ===== */}
+      {/* ===== العدّاد (95%+) ===== */}
       <td style={cellStyle}>
         {countdown ? (
           <div style={countdownStyle}>
