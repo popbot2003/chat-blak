@@ -1,9 +1,6 @@
 // ============================================
 // src/components/admin/KeyMobileCard.jsx — Responsive
 // كارت مفتاح — للهاتف (بطاقات)
-// متوافق مع:
-//   - src/config/breakpoints.js
-//   - src/App.css (media queries موحّدة)
 // ============================================
 
 import { useState, useMemo, useCallback } from "react";
@@ -15,12 +12,13 @@ import {
   getTimeUntil,
   getLastUsedTime,
   isKeyActiveNow,
+  getTpdResetCountdown,
 } from "../../utils/helpers";
 
 export default function KeyMobileCard({
   keyItem,
   theme,
-  currentTime, // ✅ نستخدمه بدل Date.now() المباشر
+  currentTime,
   onTest,
   onReset,
   onToggle,
@@ -29,7 +27,7 @@ export default function KeyMobileCard({
 }) {
   const [showFull, setShowFull] = useState(false);
 
-  // ===== ✅ الحسابات (useMemo) =====
+  // ===== ✅ الحسابات =====
   const metrics = useMemo(() => {
     const realLimit =
       keyItem.effective_tpd_limit || keyItem.tpd_limit || 200000;
@@ -42,6 +40,9 @@ export default function KeyMobileCard({
     const activeNow = isKeyActiveNow(keyItem, currentTime);
     const lastUsed = getLastUsedTime(keyItem.last_request_at, currentTime);
 
+    // ✅ عدّاد تجديد الحصة اليومية
+    const countdown = getTpdResetCountdown(keyItem.tpd_reset_at, currentTime);
+
     return {
       realLimit,
       realUsed,
@@ -52,6 +53,7 @@ export default function KeyMobileCard({
       isValid,
       activeNow,
       lastUsed,
+      countdown,
     };
   }, [
     keyItem.effective_tpd_limit,
@@ -62,6 +64,7 @@ export default function KeyMobileCard({
     keyItem.last_request_at,
     keyItem.is_valid,
     keyItem.is_active,
+    keyItem.tpd_reset_at,
     currentTime,
   ]);
 
@@ -75,6 +78,7 @@ export default function KeyMobileCard({
     isValid,
     activeNow,
     lastUsed,
+    countdown,
   } = metrics;
 
   // ===== ✅ أنماط الكارت =====
@@ -138,7 +142,7 @@ export default function KeyMobileCard({
     [status.bg, status.color]
   );
 
-  // ===== ✅ Handlers (useCallback) =====
+  // ===== ✅ Handlers =====
   const handleToggleShowFull = useCallback(() => {
     setShowFull((v) => !v);
   }, []);
@@ -166,7 +170,7 @@ export default function KeyMobileCard({
   // ===== JSX =====
   return (
     <div style={cardStyle}>
-      {/* ===== الرأس: الاسم + الحالة ===== */}
+      {/* ===== الرأس ===== */}
       <div
         style={{
           display: "flex",
@@ -322,8 +326,33 @@ export default function KeyMobileCard({
         {lastUsed}
       </div>
 
-      {/* ===== الوقت المتبقي ===== */}
-      {timeLeft && (
+      {/* ===== العدّاد التنازلي (تجديد الحصة) ===== */}
+      {countdown ? (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "8px 12px",
+            borderRadius: "10px",
+            background: countdown.ready
+              ? "rgba(16,185,129,0.12)"
+              : "rgba(59,130,246,0.12)",
+            color: countdown.ready ? "#10b981" : "#3b82f6",
+            fontSize: "13px",
+            fontWeight: "600",
+            justifyContent: "center",
+            fontFamily: "monospace",
+          }}
+        >
+          <span>{countdown.ready ? "✅" : "⏳"}</span>
+          <span>
+            {countdown.ready
+              ? "جاهز للتجديد"
+              : `تجديد الحصة: ${countdown.text}`}
+          </span>
+        </div>
+      ) : timeLeft ? (
         <div
           style={{
             display: "flex",
@@ -335,12 +364,13 @@ export default function KeyMobileCard({
             color: "#f59e0b",
             fontSize: "13px",
             fontWeight: "600",
+            justifyContent: "center",
           }}
         >
           <span>⏱️</span>
           <span>الوقت المتبقي: {timeLeft}</span>
         </div>
-      )}
+      ) : null}
 
       {/* ===== آخر فحص ===== */}
       {keyItem.last_checked_at && (
@@ -410,7 +440,7 @@ export default function KeyMobileCard({
 }
 
 // ============================================================
-//  ActionBtn — زر بأيقونة فوق النص بحالة pressed
+//  ActionBtn
 // ============================================================
 function ActionBtn({ icon, label, color, bg, onClick }) {
   const [pressed, setPressed] = useState(false);
@@ -440,7 +470,6 @@ function ActionBtn({ icon, label, color, bg, onClick }) {
         justifyContent: "center",
         gap: "2px",
         fontWeight: "600",
-        // ✅ هدف لمس مريح
         minHeight: "56px",
         transform: pressed ? "scale(0.95)" : "scale(1)",
         transition: "transform 0.1s",
