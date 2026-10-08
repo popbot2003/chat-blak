@@ -245,3 +245,40 @@ export function getLastUsedTime(lastRequestAt, currentTime) {
   if (hours < 24) return `منذ ${hours} ساعة`;
   return `منذ ${days} يوم`;
 }
+
+// ============================================
+// ✅ دوال العدّاد التنازلي (جديد)
+// ============================================
+
+/**
+ * العدّاد التنازلي لتجديد الحصة اليومية (TPD)
+ * يحوّل tpd_reset_at إلى عدّاد HH:MM:SS
+ * @param {string} tpdResetAt - وقت تجديد الحصة (ISO timestamp)
+ * @param {number} now - الوقت الحالي (Date.now())
+ * @returns {{text: string, ready: boolean} | null}
+ */
+export function getTpdResetCountdown(tpdResetAt, now = Date.now()) {
+  if (!tpdResetAt) return null;
+
+  const resetTime = new Date(tpdResetAt).getTime();
+  if (!Number.isFinite(resetTime)) return null;
+
+  const diff = resetTime - now;
+
+  // انتهى العدّاد — جاهز للتجديد
+  if (diff <= 0) {
+    return { text: "جاهز للتجديد", ready: true };
+  }
+
+  const totalSec = Math.floor(diff / 1000);
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+
+  const pad = (n) => String(n).padStart(2, "0");
+
+  return {
+    text: `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`,
+    ready: false,
+  };
+}
