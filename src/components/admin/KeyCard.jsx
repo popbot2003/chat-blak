@@ -15,6 +15,7 @@ import {
   getTimeUntil,
   getLastUsedTime,
   isKeyActiveNow,
+  getTpdResetCountdown,
 } from "../../utils/helpers";
 
 export default function KeyCard({
@@ -27,7 +28,6 @@ export default function KeyCard({
   onToggle,
   onDelete,
   onReactivate,
-  // ✅ جديد: coming from KeysTab
   isTablet = false,
 }) {
   const [showFull, setShowFull] = useState(false);
@@ -47,6 +47,9 @@ export default function KeyCard({
     const limitColor =
       percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
 
+    // ✅ عدّاد تجديد الحصة اليومية
+    const countdown = getTpdResetCountdown(keyItem.tpd_reset_at, currentTime);
+
     return {
       realLimit,
       realUsed,
@@ -58,6 +61,7 @@ export default function KeyCard({
       activeNow,
       lastUsed,
       limitColor,
+      countdown,
     };
   }, [
     keyItem.effective_tpd_limit,
@@ -68,6 +72,7 @@ export default function KeyCard({
     keyItem.last_request_at,
     keyItem.is_valid,
     keyItem.is_active,
+    keyItem.tpd_reset_at,
     currentTime,
     theme.text,
   ]);
@@ -83,9 +88,10 @@ export default function KeyCard({
     activeNow,
     lastUsed,
     limitColor,
+    countdown,
   } = metrics;
 
-  // ===== ✅ أنماط الخلايا (useMemo) =====
+  // ===== ✅ أنماط الخلايا =====
   const cellStyle = useMemo(
     () => ({
       padding: isTablet ? "10px 8px" : "14px 10px",
@@ -168,23 +174,27 @@ export default function KeyCard({
     [activeNow, theme.textMuted, isTablet]
   );
 
-  const timeLeftStyle = useMemo(
+  // ✅ نمط العدّاد التنازلي
+  const countdownStyle = useMemo(
     () => ({
       display: "inline-flex",
       alignItems: "center",
       gap: "4px",
       padding: "4px 10px",
       borderRadius: "12px",
-      background: "rgba(245,158,11,0.12)",
-      color: "#f59e0b",
+      background: countdown?.ready
+        ? "rgba(16,185,129,0.15)"
+        : "rgba(59,130,246,0.12)",
+      color: countdown?.ready ? "#10b981" : "#3b82f6",
       fontSize: isTablet ? "11px" : "12px",
       fontWeight: "600",
+      fontFamily: "monospace",
       whiteSpace: "nowrap",
     }),
-    [isTablet]
+    [countdown, isTablet]
   );
 
-  // ===== ✅ Handlers (useCallback) =====
+  // ===== ✅ Handlers =====
   const handleToggleShowFull = useCallback(() => {
     setShowFull((v) => !v);
   }, []);
@@ -327,10 +337,28 @@ export default function KeyCard({
         <div style={lastUsedStyle}>{lastUsed}</div>
       </td>
 
-      {/* ===== الوقت المتبقي ===== */}
+      {/* ===== العدّاد التنازلي (تجديد الحصة) ===== */}
       <td style={cellStyle}>
-        {timeLeft ? (
-          <div style={timeLeftStyle}>
+        {countdown ? (
+          <div style={countdownStyle}>
+            <span>{countdown.ready ? "✅" : "⏳"}</span>
+            <span>{countdown.text}</span>
+          </div>
+        ) : timeLeft ? (
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "4px 10px",
+              borderRadius: "12px",
+              background: "rgba(245,158,11,0.12)",
+              color: "#f59e0b",
+              fontSize: isTablet ? "11px" : "12px",
+              fontWeight: "600",
+              whiteSpace: "nowrap",
+            }}
+          >
             <span>⏱️</span>
             <span>{timeLeft}</span>
           </div>
@@ -402,7 +430,7 @@ export default function KeyCard({
 }
 
 // ============================================================
-//  IconBtn — زر أيقونة بحالة pressed
+//  IconBtn
 // ============================================================
 function IconBtn({ icon, title, color, bg, onClick }) {
   const [pressed, setPressed] = useState(false);
@@ -428,7 +456,6 @@ function IconBtn({ icon, title, color, bg, onClick }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        // ✅ هدف لمس مريح
         minWidth: "32px",
         minHeight: "32px",
         transform: pressed ? "scale(0.92)" : "scale(1)",
