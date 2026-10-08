@@ -40,8 +40,11 @@ export default function KeyMobileCard({
     const activeNow = isKeyActiveNow(keyItem, currentTime);
     const lastUsed = getLastUsedTime(keyItem.last_request_at, currentTime);
 
-    // ✅ عدّاد تجديد الحصة اليومية
-    const countdown = getTpdResetCountdown(keyItem.tpd_reset_at, currentTime);
+    // ✅ عدّاد تجديد الحصة — يظهر بس عند 95%+
+    const countdown =
+      percent >= 95
+        ? getTpdResetCountdown(keyItem.tpd_reset_at, currentTime)
+        : null;
 
     return {
       realLimit,
@@ -326,7 +329,7 @@ export default function KeyMobileCard({
         {lastUsed}
       </div>
 
-      {/* ===== العدّاد التنازلي (تجديد الحصة) ===== */}
+      {/* ===== العدّاد (95%+) ===== */}
       {countdown ? (
         <div
           style={{
