@@ -8,6 +8,7 @@
 // ✅ إصلاح 6: حذف المهام المكتملة مع المحادثة
 // ✅ جديد 7: استخراج النص من الصور محلياً (Tesseract.js)
 // ✅ جديد 8: لا يستهلك توكنات Groq للصور
+// ✅ جديد 9: رفع حد الملفات المرفقة إلى 100,000 حرف
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -612,7 +613,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return [];
     }
   }
-
+  
   async function saveChatToSupabase() {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length === 0) return;
@@ -1233,7 +1234,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    const MAX_FILE_CHARS = 5000;
+    // ✅ الحد الأقصى لمحتوى الملفات المرفقة (100,000 حرف)
+    const MAX_FILE_CHARS = 100000;
     let finalText = text;
 
     if (attachedFiles.length > 0) {
@@ -1243,7 +1245,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           const truncated = content.length > MAX_FILE_CHARS;
           const body = truncated
             ? content.slice(0, MAX_FILE_CHARS) +
-              "\n\n... [تم اقتصار الملف، الحجم كبير]"
+              "\n\n... [تم اقتصار الملف: تجاوز 100,000 حرف]"
             : content;
           return `\n\n📎 ${f.name}${
             truncated ? " ⚠️ (تم اقتصاره)" : ""
@@ -1562,4 +1564,5 @@ export default function Chat({ user, onLogout, isAdmin }) {
       )}
     </div>
   );
-      }
+}
+  
