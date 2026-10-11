@@ -5,7 +5,10 @@
 // ✅ جديد 1: الفهرس الكامل (20,000 حرف)
 // ✅ جديد 2: البحث باسم الفصل/الدرس في الفهرس
 // ✅ جديد 3: استخراج نص الدفعات (للصفحات الكبيرة)
+// ✅ جديد 4: تحميل PDF من URL (Supabase Storage)
 // ============================================
+
+import { supabase } from "../lib/supabase";
 
 /**
  * التأكد من تحميل pdfjsLib
@@ -20,15 +23,38 @@ function getPdfLib() {
 }
 
 /**
- * قراءة ملف PDF وإرجاع كائن PDFDocument
+ * تحميل PDF من File object (الطريقة القديمة)
  * @param {File} file - ملف PDF
  * @returns {Promise<PDFDocumentProxy>}
  */
-async function loadPdf(file) {
+async function loadPdfFromFile(file) {
   const pdfjsLib = getPdfLib();
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   return await loadingTask.promise;
+}
+
+/**
+ * ✅ جديد: تحميل PDF من URL (Supabase Storage)
+ * @param {string} url - رابط الملف في Storage
+ * @returns {Promise<PDFDocumentProxy>}
+ */
+async function loadPdfFromUrl(url) {
+  const pdfjsLib = getPdfLib();
+  const loadingTask = pdfjsLib.getDocument({ url });
+  return await loadingTask.promise;
+}
+
+/**
+ * ✅ دالة موحّدة: تُحدد تلقائيًا إذا كان الملف File أو URL
+ * @param {File|string} source - File object أو URL
+ * @returns {Promise<PDFDocumentProxy>}
+ */
+async function loadPdf(source) {
+  if (typeof source === "string") {
+    return await loadPdfFromUrl(source);
+  }
+  return await loadPdfFromFile(source);
 }
 
 /**
@@ -59,24 +85,24 @@ async function extractPageText(page) {
 
 /**
  * إرجاع عدد صفحات PDF
- * @param {File} file
+ * @param {File|string} source - File أو URL
  * @returns {Promise<number>}
  */
-export async function getPdfPageCount(file) {
-  const pdf = await loadPdf(file);
+export async function getPdfPageCount(source) {
+  const pdf = await loadPdf(source);
   return pdf.numPages;
 }
 
 /**
  * استخراج النص من نطاق صفحات محدد
- * @param {File} file - ملف PDF
+ * @param {File|string} source - File أو URL
  * @param {number} startPage - من صفحة (1-indexed)
  * @param {number} endPage - إلى صفحة (1-indexed)
  * @param {(current: number, total: number) => void} [onProgress]
  * @returns {Promise<string>} النص المستخرج
  */
-export async function extractPdfText(file, startPage, endPage, onProgress) {
-  const pdf = await loadPdf(file);
+export async function extractPdfText(source, startPage, endPage, onProgress) {
+  const pdf = await loadPdf(source);
 
   const from = Math.max(1, Math.min(startPage, pdf.numPages));
   const to = Math.max(from, Math.min(endPage, pdf.numPages));
@@ -97,13 +123,13 @@ export async function extractPdfText(file, startPage, endPage, onProgress) {
 
 /**
  * البحث عن الفهرس في أول 20 وآخر 10 صفحات
- * ✅ جديد: يحاول جمع الفهرس كاملًا عبر عدة صفحات
- * @param {File} file
+ * ✅ يحاول جمع الفهرس كاملًا عبر عدة صفحات (حتى 20,000 حرف)
+ * @param {File|string} source
  * @param {(current: number, total: number) => void} [onProgress]
  * @returns {Promise<{found: boolean, text: string, page: number}>}
  */
-export async function findToc(file, onProgress) {
-  const pdf = await loadPdf(file);
+export async function findToc(source, onProgress) {
+  const pdf = await loadPdf(source);
   const numPages = pdf.numPages;
 
   const firstPages = Math.min(20, numPages);
@@ -143,11 +169,11 @@ export async function findToc(file, onProgress) {
       if (lowerText.includes(kw.toLowerCase())) {
         const idx = lowerText.indexOf(kw.toLowerCase());
 
-        // ✅ الفهرس الكامل: نأخذ من بداية الكلمة إلى 20,000 حرف بعدها
+        // ✅ الفهرس الكامل: من بداية الكلمة إلى 20,000 حرف بعدها
         const start = Math.max(0, idx - 200);
         let combined = pageText.slice(start);
 
-        // ✅ نجمع مع الصفحة التالية إذا كان الفهرس طويلًا
+        // نجمع مع الصفحات التالية إذا كان الفهرس طويلًا
         let nextPageNum = pageNum + 1;
         while (
           combined.length < 20000 &&
@@ -173,23 +199,19 @@ export async function findToc(file, onProgress) {
 }
 
 /**
- * ✅ جديد: البحث عن فصل/درس بالاسم في الفهرس
- * @param {File} file
+ * البحث عن فصل/درس بالاسم في الفهرس
+ * @param {File|string} source
  * @param {string} title - اسم الفصل/الدرس (مثل "الفصل الأول")
- * @returns {Promise<{found: boolean, pages: string, title: string}>}
+ * @returns {Promise<{found: boolean, pages: string, title: string, startPage?: number, endPage?: number}>}
  */
-export async function findSectionByTitle(file, title) {
-  const pdf = await loadPdf(file);
+export async function findSectionByTitle(source, title) {
+  const pdf = await loadPdf(source);
   const numPages = pdf.numPages;
 
   // نبحث في أول 30 وآخر 15 صفحة
   const pagesToCheck = new Set();
   for (let i = 1; i <= Math.min(30, numPages); i++) pagesToCheck.add(i);
-  for (
-    let i = Math.max(1, numPages - 15);
-    i <= numPages;
-    i++
-  )
+  for (let i = Math.max(1, numPages - 15); i <= numPages; i++)
     pagesToCheck.add(i);
 
   const sortedPages = Array.from(pagesToCheck).sort((a, b) => a - b);
@@ -227,13 +249,12 @@ export async function findSectionByTitle(file, title) {
     return { found: false, pages: "", title: "" };
   }
 
-  // استخرج النص حول العنوان (200 حرف قبل، 500 حرف بعد)
+  // استخرج النص حول العنوان
   const start = Math.max(0, idx - 200);
   const end = Math.min(fullTocText.length, idx + 500);
   const excerpt = fullTocText.slice(start, end).trim();
 
-  // ابحث عن أرقام الصفحات في هذا المقتطف
-  // أنماط: 40، 40-80، 40 - 80، ٤٠، إلخ
+  // ابحث عن أرقام الصفحات في المقتطف
   const pagePatterns = excerpt.match(
     /\d{1,4}(?:\s*[-–—]\s*\d{1,4})?/g
   );
@@ -242,10 +263,10 @@ export async function findSectionByTitle(file, title) {
     return { found: false, pages: "", title: "" };
   }
 
-  // أخذ أول رقم كصفحة البداية
+  // أول رقم كصفحة البداية
   const firstNumber = parseInt(pagePatterns[0].split(/[-–—]/)[0], 10);
 
-  // إذا وجد نطاق صريح (40-80)، نستخدمه
+  // إذا وجد نطاق صريح (40-80)
   const rangePattern = excerpt.match(
     /(\d{1,4})\s*[-–—]\s*(\d{1,4})/
   );
@@ -258,7 +279,6 @@ export async function findSectionByTitle(file, title) {
     endPage = parseInt(rangePattern[2], 10);
   }
 
-  // التحقق من صحة الأرقام
   if (startPage < 1 || startPage > numPages) {
     return { found: false, pages: "", title: "" };
   }
@@ -271,4 +291,172 @@ export async function findSectionByTitle(file, title) {
     endPage,
     excerpt,
   };
+}
+
+// ============================================
+// ✅ Supabase Storage Functions
+// ============================================
+
+/**
+ * رفع ملف إلى Supabase Storage
+ * @param {File} file - الملف
+ * @param {string} userId - معرف المستخدم
+ * @param {string} chatId - معرف المحادثة
+ * @returns {Promise<{path: string, publicUrl: string}>}
+ */
+export async function uploadFileToStorage(file, userId, chatId) {
+  if (!supabase) {
+    throw new Error("Supabase غير متاح.");
+  }
+
+  // مسار الملف: {user_id}/{chat_id}/{timestamp}_{file_name}
+  // هذا يتوافق مع سياسات Storage التي أنشأناها
+  const timestamp = Date.now();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const filePath = `${userId}/${chatId}/${timestamp}_${safeName}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from("user-files")
+    .upload(filePath, file, {
+      cacheControl: "3600",
+      upsert: false,
+    });
+
+  if (uploadError) {
+    throw new Error("فشل رفع الملف: " + uploadError.message);
+  }
+
+  return {
+    path: filePath,
+    publicUrl: null, // Private bucket - لا يوجد public URL
+  };
+}
+
+/**
+ * الحصول على URL موقّع لتحميل ملف من Storage
+ * (Private bucket يحتاج signed URL)
+ * @param {string} filePath - مسار الملف
+ * @param {number} expiresIn - مدة الصلاحية بالثواني (افتراضي: ساعة)
+ * @returns {Promise<string>} - URL مؤقت
+ */
+export async function getFileSignedUrl(filePath, expiresIn = 3600) {
+  if (!supabase) {
+    throw new Error("Supabase غير متاح.");
+  }
+
+  const { data, error } = await supabase.storage
+    .from("user-files")
+    .createSignedUrl(filePath, expiresIn);
+
+  if (error) {
+    throw new Error("فشل إنشاء رابط الملف: " + error.message);
+  }
+
+  return data.signedUrl;
+}
+
+/**
+ * حذف ملف من Supabase Storage
+ * @param {string} filePath - مسار الملف
+ * @returns {Promise<boolean>}
+ */
+export async function deleteFileFromStorage(filePath) {
+  if (!supabase) {
+    throw new Error("Supabase غير متاح.");
+  }
+
+  const { error } = await supabase.storage
+    .from("user-files")
+    .remove([filePath]);
+
+  if (error) {
+    console.warn("[Storage] فشل حذف الملف:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * حذف عدة ملفات دفعة واحدة
+ * @param {string[]} filePaths - مصفوفة مسارات
+ * @returns {Promise<boolean>}
+ */
+export async function deleteFilesFromStorage(filePaths) {
+  if (!supabase || !filePaths || filePaths.length === 0) {
+    return true;
+  }
+
+  const { error } = await supabase.storage
+    .from("user-files")
+    .remove(filePaths);
+
+  if (error) {
+    console.warn("[Storage] فشل حذف الملفات:", error.message);
+    return false;
+  }
+
+  return true;
+}
+
+// ============================================
+// ✅ Supabase Database Functions (user_files)
+// ============================================
+
+/**
+ * إضافة سجل ملف في جدول user_files
+ * @param {Object} fileData
+ * @returns {Promise<Object>}
+ */
+export async function insertUserFile(fileData) {
+  const { data, error } = await supabase
+    .from("user_files")
+    .insert(fileData)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error("فشل حفظ بيانات الملف: " + error.message);
+  }
+
+  return data;
+}
+
+/**
+ * جلب ملفات محادثة معينة
+ * @param {string} chatId
+ * @returns {Promise<Array>}
+ */
+export async function getUserFilesByChatId(chatId) {
+  const { data, error } = await supabase
+    .from("user_files")
+    .select("*")
+    .eq("chat_id", chatId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.warn("[user_files] فشل جلب الملفات:", error.message);
+    return [];
+  }
+
+  return data || [];
+}
+
+/**
+ * حذف سجل ملف (يُستخدم عادة قبل حذف الملف من Storage)
+ * @param {string} fileId
+ * @returns {Promise<boolean>}
+ */
+export async function deleteUserFileRecord(fileId) {
+  const { error } = await supabase
+    .from("user_files")
+    .delete()
+    .eq("id", fileId);
+
+  if (error) {
+    console.warn("[user_files] فشل حذف السجل:", error.message);
+    return false;
+  }
+
+  return true;
 }
