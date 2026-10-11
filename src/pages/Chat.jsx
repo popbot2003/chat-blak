@@ -1,15 +1,9 @@
 // ============================================
-// Chat.jsx — نسخة v5 (OCR للصور)
-// ✅ إصلاح 1: حذف المحادثة يوقف المهام
-// ✅ إصلاح 2: حفظ المحادثة يعمل مع مهام type='task'
-// ✅ إصلاح 3: استعادة المهمة عند التحديث
-// ✅ إصلاح 4: لا محادثة فارغة عند كل دخول
-// ✅ إصلاح 5: إنشاء ID فقط عند أول رسالة
-// ✅ إصلاح 6: حذف المهام المكتملة مع المحادثة
-// ✅ جديد 7: استخراج النص من الصور محلياً (Tesseract.js)
-// ✅ جديد 8: لا يستهلك توكنات Groq للصور
-// ✅ جديد 9: رفع حد الملفات المرفقة إلى 100,000 حرف
-// ✅ جديد 10: إخفاء محتوى الملفات من الشات (يظهر الاسم فقط)
+// Chat.jsx — نسخة v6 (دعم PDF — فهرس)
+// ✅ إصلاح 1-8 (كما في السابق)
+// ✅ جديد 9: رفع حد الملفات إلى 100,000 حرف
+// ✅ جديد 10: إخفاء محتوى الملفات (اسم فقط)
+// ✅ جديد 11: دعم رفع PDF + عرض الفهرس
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -39,6 +33,7 @@ import {
 import { formatDate, copyToClipboard, debounce } from "../utils/helpers";
 import { checkUserDailyLimit } from "../utils/validators";
 import { extractTextFromImage } from "../utils/ocr";
+import { getPdfPageCount, findToc } from "../utils/pdf";
 
 // ─────────────────────────────────────────
 // Helpers
@@ -76,9 +71,9 @@ async function readFileAsText(file) {
     const reader = new FileReader();
     reader.onerror = () => resolve("❌ خطأ في قراءة الملف");
 
+    // ✅ PDF لم يعد يُقرأ هنا — له معالجة خاصة
     if (file.type === "application/pdf") {
-      reader.onload = () => resolve("📄 PDF: " + file.name);
-      reader.readAsArrayBuffer(file);
+      resolve("");
       return;
     }
 
@@ -149,6 +144,24 @@ function mergeMessages(existing, newMsgs) {
   }
 
   return sortMessagesByTime(combined);
+}
+
+// ✅ كشف طلب الفهرس في نص المستخدم
+function isTocRequest(text) {
+  if (!text) return false;
+  const t = text.trim().toLowerCase();
+  const keys = [
+    "الفهرس",
+    "فهرس",
+    "المحتويات",
+    "محتويات",
+    "المحتوى",
+    "contents",
+    "table of contents",
+    "toc",
+    "index",
+  ];
+  return keys.some((k) => t.includes(k));
 }
 
 // ─────────────────────────────────────────
@@ -1238,6 +1251,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
+    // ✅ طلب الفهرس من PDF
+    const hasPdf = attachedFiles.some(
+      (f) => f.type === "application/pdf" && f.pdfFile
+    );
+    if (hasPdf && isTocRequest(text)) {
+      await handleTocRequest();
+      return;
+    }
+
     // ✅ الحد الأقصى لمحتوى الملفات المرفقة (100,000 حرف)
     const MAX_FILE_CHARS = 100000;
 
@@ -1255,8 +1277,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
       // بناء النص المعروض (نص المستخدم + أسماء الملفات)
       displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
 
-      // بناء النص المُرسل للنموذج (نص المستخدم + أسماء + محتوى كامل)
-      const filesFullText = attachedFiles
+      // بناء النص المُرسل للنموذج
+      // ملاحظة: ملفات PDF لا تُرسل محتواها هنا (تُرسل عند طلب صفحات محددة فقط)
+      const textFiles = attachedFiles.filter(
+        (f) => f.type !== "application/pdf"
+      );
+
+      const filesFullText = textFiles
         .map((f) => {
           const content = f.content || "";
           const truncated = content.length > MAX_FILE_CHARS;
@@ -1271,9 +1298,93 @@ export default function Chat({ user, onLogout, isAdmin }) {
         .join("");
 
       sendText = (text || "الملفات المرفقة:") + filesFullText;
+
+      // تنبيه للنموذج بوجود PDF
+      const pdfNames = attachedFiles
+        .filter((f) => f.type === "application/pdf")
+        .map((f) => f.name);
+      if (pdfNames.length > 0) {
+        sendText +=
+          `\n\n[ملاحظة: يوجد ${pdfNames.length} ملف PDF مرفق (${pdfNames.join(
+            ", "
+          )}). لم يُقرأ محتواه بعد. اطلب من المستخدم كتابة (اعرض الفهرس) أو تحديد أرقام صفحات.]`;
+      }
     }
 
     executeRequest(sendText, displayText);
+  }
+
+  // ✅ معالجة طلب الفهرس
+  async function handleTocRequest() {
+    const pdfFile = attachedFiles.find(
+      (f) => f.type === "application/pdf" && f.pdfFile
+    );
+    if (!pdfFile) {
+      showToast("⚠️ لم يُعثر على ملف PDF.", "error");
+      return;
+    }
+
+    // عرض رسالة المستخدم (طلب الفهرس)
+    const userMsgId = Date.now();
+    const userMsg = {
+      role: "user",
+      content: input.trim() || "اعرض الفهرس",
+      id: userMsgId,
+    };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+    setStreamingText("");
+
+    try {
+      showToast("🔍 جاري البحث عن الفهرس...", "info");
+
+      const result = await findToc(pdfFile.pdfFile);
+
+      if (result.found) {
+        const tocText = `📋 **فهرس الملف: ${pdfFile.name}**\n\n${result.text}`;
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: tocText,
+              id: Date.now(),
+            },
+          ])
+        );
+        showToast("✅ تم العثور على الفهرس.", "success");
+      } else {
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                "⚠️ لم يُعثر على فهرس في هذا الملف.\n\nيمكنك تحديد أرقام الصفحات التي تريدها (مثلًا: «الصفحات 50-60»).",
+              id: Date.now(),
+            },
+          ])
+        );
+        showToast("⚠️ لا يوجد فهرس.", "info");
+      }
+    } catch (err) {
+      console.error("[PDF] خطأ في قراءة الفهرس:", err);
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: "❌ خطأ في قراءة PDF: " + err.message,
+            id: Date.now(),
+          },
+        ])
+      );
+      showToast("❌ فشل قراءة PDF.", "error");
+    } finally {
+      setLoading(false);
+      setStreamingText("");
+    }
   }
 
   async function newChat() {
@@ -1390,7 +1501,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     });
   }
 
-  // ✅ رفع الملفات: الصور تُعالج بـ OCR تلقائياً
+  // ✅ رفع الملفات: الصور تُعالج بـ OCR + PDF يُحفظ للتحليل
   async function handleFileUpload(e) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -1399,6 +1510,35 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const newFiles = [];
 
     for (const file of files) {
+      // ✅ PDF: نحفظ الملف ونقرأ عدد الصفحات فقط
+      if (file.type === "application/pdf") {
+        try {
+          showToast(`📄 جاري قراءة ${file.name}...`, "info");
+
+          const pageCount = await getPdfPageCount(file);
+
+          newFiles.push({
+            id: Date.now() + Math.random(),
+            name: file.name,
+            type: "application/pdf",
+            size: file.size,
+            icon: "📄",
+            content: "",
+            pdfFile: file,
+            pageCount,
+          });
+
+          showToast(
+            `✅ تم استلام ${file.name} (${pageCount} صفحة). اكتب (اعرض الفهرس) أو اذكر الصفحات.`,
+            "success"
+          );
+        } catch (err) {
+          console.error("[PDF] خطأ:", err);
+          showToast(`❌ فشل قراءة ${file.name}`, "error");
+        }
+        continue;
+      }
+
       // ✅ الصور: استخراج النص عبر Tesseract.js
       if (file.type.startsWith("image/")) {
         try {
@@ -1582,4 +1722,4 @@ export default function Chat({ user, onLogout, isAdmin }) {
       )}
     </div>
   );
-}
+} 
