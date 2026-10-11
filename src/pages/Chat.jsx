@@ -1,9 +1,8 @@
 // ============================================
-// Chat.jsx — نسخة v6 (دعم PDF — فهرس)
-// ✅ إصلاح 1-8 (كما في السابق)
-// ✅ جديد 9: رفع حد الملفات إلى 100,000 حرف
-// ✅ جديد 10: إخفاء محتوى الملفات (اسم فقط)
-// ✅ جديد 11: دعم رفع PDF + عرض الفهرس
+// Chat.jsx — نسخة v7 (تمرير + تركيز + PDF فهرس)
+// ✅ إصلاح 1-11 (كما في السابق)
+// ✅ جديد 12: إصلاح التركيز بعد كل رد
+// ✅ جديد 13: إصلاح التمرير التلقائي + زر العودة للأسفل
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -71,7 +70,6 @@ async function readFileAsText(file) {
     const reader = new FileReader();
     reader.onerror = () => resolve("❌ خطأ في قراءة الملف");
 
-    // ✅ PDF لم يعد يُقرأ هنا — له معالجة خاصة
     if (file.type === "application/pdf") {
       resolve("");
       return;
@@ -146,7 +144,6 @@ function mergeMessages(existing, newMsgs) {
   return sortMessagesByTime(combined);
 }
 
-// ✅ كشف طلب الفهرس في نص المستخدم
 function isTocRequest(text) {
   if (!text) return false;
   const t = text.trim().toLowerCase();
@@ -195,6 +192,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
+
+  // ✅ جديد: حالة التمرير
+  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -442,9 +442,36 @@ export default function Chat({ user, onLogout, isAdmin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ✅ جديد: إصلاح التركيز — يُعيد التركيز بعد كل رد
   useEffect(() => {
+    if (!loading && !streamingText && isLoaded) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [loading, streamingText, isLoaded]);
+
+  // ✅ جديد: تمرير تلقائي ذكي — يتوقف عند التمرير لأعلى
+  useEffect(() => {
+    if (isUserScrolledUp) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingText]);
+  }, [messages, streamingText, isUserScrolledUp]);
+
+  // ✅ جديد: كشف تمرير المستخدم
+  function handleMessagesScroll(e) {
+    const el = e.target;
+    const distanceFromBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight;
+    // إذا كان بعيدًا عن الأسفل بأكثر من 150 بكسل، فهو يتصفح
+    setIsUserScrolledUp(distanceFromBottom > 150);
+  }
+
+  // ✅ جديد: زر العودة للأسفل
+  function handleScrollToBottom() {
+    setIsUserScrolledUp(false);
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }
 
   // ── حفظ تلقائي ──
   useEffect(() => {
@@ -928,6 +955,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       setInput("");
       setAttachedFiles([]);
 
+      // ✅ عند بدء طلب جديد، نُصفّر حالة التمرير
+      setIsUserScrolledUp(false);
+
       setLoading(true);
       setStreamingText("");
 
@@ -1055,7 +1085,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
             );
             setLoading(false);
             abortControllerRef.current = null;
-            setTimeout(() => inputRef.current?.focus(), 100);
           }
         }
         type();
@@ -1278,7 +1307,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
 
       // بناء النص المُرسل للنموذج
-      // ملاحظة: ملفات PDF لا تُرسل محتواها هنا (تُرسل عند طلب صفحات محددة فقط)
       const textFiles = attachedFiles.filter(
         (f) => f.type !== "application/pdf"
       );
@@ -1299,15 +1327,20 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       sendText = (text || "الملفات المرفقة:") + filesFullText;
 
-      // تنبيه للنموذج بوجود PDF
-      const pdfNames = attachedFiles
-        .filter((f) => f.type === "application/pdf")
-        .map((f) => f.name);
-      if (pdfNames.length > 0) {
+      // تنبيه للنموذج بوجود PDF + عدد الصفحات
+      const pdfFiles = attachedFiles.filter(
+        (f) => f.type === "application/pdf"
+      );
+      if (pdfFiles.length > 0) {
+        const pdfInfo = pdfFiles
+          .map(
+            (f) =>
+              `"${f.name}" (${f.pageCount || "?"} صفحة)`
+          )
+          .join(", ");
         sendText +=
-          `\n\n[ملاحظة: يوجد ${pdfNames.length} ملف PDF مرفق (${pdfNames.join(
-            ", "
-          )}). لم يُقرأ محتواه بعد. اطلب من المستخدم كتابة (اعرض الفهرس) أو تحديد أرقام صفحات.]`;
+          `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
+          `اطلب من المستخدم كتابة (اعرض الفهرس) أو تحديد أرقام صفحات لقراءتها.]`;
       }
     }
 
@@ -1335,6 +1368,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setInput("");
     setLoading(true);
     setStreamingText("");
+    setIsUserScrolledUp(false);
 
     try {
       showToast("🔍 جاري البحث عن الفهرس...", "info");
@@ -1403,6 +1437,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowHistory(false);
     setInput("");
     setAttachedFiles([]);
+    setIsUserScrolledUp(false);
     inputRef.current?.focus();
   }
 
@@ -1424,6 +1459,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowMenu(false);
     setInput("");
     setAttachedFiles([]);
+    setIsUserScrolledUp(false);
     inputRef.current?.focus();
   }
 
@@ -1694,6 +1730,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onCopy={copyMessage}
         onCancelTask={cancelTask}
         bottomRef={bottomRef}
+        showScrollButton={isUserScrolledUp}
+        onScrollToBottom={handleScrollToBottom}
+        onScroll={handleMessagesScroll}
       />
 
       <ChatInput
@@ -1722,4 +1761,4 @@ export default function Chat({ user, onLogout, isAdmin }) {
       )}
     </div>
   );
-} 
+}
