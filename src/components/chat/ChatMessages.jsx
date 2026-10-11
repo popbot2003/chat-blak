@@ -1,6 +1,7 @@
 // ============================================
 // ChatMessages.jsx
 // عرض الرسائل + المهام + النتائج المكتملة
+// ✅ جديد: زر "العودة للأسفل" عند التمرير لأعلى
 // ============================================
 
 import MessageContent from "../MessageContent";
@@ -17,9 +18,13 @@ export default function ChatMessages({
   onCopy,
   onCancelTask,
   bottomRef,
+  // ✅ جديد
+  showScrollButton = false,
+  onScrollToBottom,
+  onScroll,
 }) {
   return (
-    <div className="messages">
+    <div className="messages" onScroll={onScroll}>
       {/* الرسائل العادية + المهام + النتائج */}
       {messages.map((msg) => {
         // رسالة مهمة نشطة → كارت
@@ -106,6 +111,37 @@ export default function ChatMessages({
 
       {/* مرجع للتمرير التلقائي */}
       <div ref={bottomRef} />
+
+      {/* ✅ زر العودة للأسفل */}
+      {showScrollButton && (
+        <button
+          onClick={onScrollToBottom}
+          className="scroll-to-bottom-btn"
+          title="العودة للأسفل"
+          style={{
+            position: "absolute",
+            bottom: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "44px",
+            height: "44px",
+            borderRadius: "50%",
+            border: "none",
+            background: "linear-gradient(135deg, #6c5ce7, #8b7cf6)",
+            color: "#fff",
+            fontSize: "20px",
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            zIndex: 100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "opacity 0.2s, transform 0.2s",
+          }}
+        >
+          ⬇️
+        </button>
+      )}
     </div>
   );
 }
