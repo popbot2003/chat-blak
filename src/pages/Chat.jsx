@@ -759,7 +759,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return [];
     }
   }
-  
 async function saveChatToSupabase() {
   const msgs = messagesRef.current;
   if (!msgs || msgs.length === 0) return;
@@ -1004,7 +1003,6 @@ async function summarizeOldMessages(oldMessages, session) {
   }
 }
 
-// ✅ رفع الملفات المعلقة إلى Storage
 async function uploadPendingFiles(chatId) {
   const filesToUpload = attachedFiles.filter(
     (f) => !f.fromStorage && f.rawFile
@@ -1096,10 +1094,6 @@ const executeRequest = useCallback(
       return;
     }
 
-    // ✅ منطق العرض:
-    // - إذا displayText === null → لا نضيف رسالة (المتصل أضافها بنفسه)
-    // - إذا displayText معرّف → نضيف رسالة بـ displayText
-    // - إذا displayText === undefined → نستخدم text
     const addUserMessage = displayText !== null;
     const shownText = displayText ?? text;
 
@@ -1113,7 +1107,6 @@ const executeRequest = useCallback(
     }
     setInput("");
 
-    // ✅ رفع الملفات المعلقة إلى Storage
     let filesForRequest = attachedFiles;
     if (attachedFiles.length > 0) {
       try {
@@ -1124,7 +1117,6 @@ const executeRequest = useCallback(
       }
     }
 
-    // نبقي PDFs المرفوعة
     setAttachedFiles((prev) =>
       prev.filter((f) => f.type === "application/pdf" && f.fromStorage)
     );
@@ -1306,9 +1298,6 @@ function handleStop() {
   setStreamingText("");
 }
 
-// ─────────────────────────────────────────
-// إنشاء مهمة جديدة
-// ─────────────────────────────────────────
 async function createTask(text) {
   if (creatingTaskRef.current) {
     console.log("[Chat] createTask already in progress, skipping");
@@ -1441,11 +1430,6 @@ async function openTaskInChat(chatId) {
   setTimeout(() => inputRef.current?.focus(), 100);
 }
 
-// ─────────────────────────────────────────
-// PDF: معالجة قراءة صفحات/فصول محددة على دفعات
-// ✅ BATCH_SIZE = 5 (حد Groq)
-// ✅ إصلاح: تمرير userPrompt كـ displayText
-// ─────────────────────────────────────────
 async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
   const BATCH_SIZE = 5;
   const totalPages = pdfFile.pageCount || endPage;
@@ -1507,8 +1491,6 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
         `نفّذ طلب المستخدم على هذا النص فقط. ` +
         `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
 
-      // ✅ إصلاح: للدفعة الأولى نمرر userPrompt (يظهر في الواجهة)
-      //           للدفعات التالية نمرر null (لتفادي التكرار)
       const displayForThisBatch = batchIndex === 0 ? userPrompt : null;
       await executeRequest(requestText, displayForThisBatch);
     }
@@ -1531,7 +1513,6 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
   }
 }
 
-// PDF: معالجة طلب الفصل/الدرس بالاسم
 async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
   setLoading(true);
   setStreamingText("");
@@ -1586,12 +1567,11 @@ async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
 
     setLoading(false);
 
-    // ✅ نمرر null لأننا أضفنا رسالة المستخدم بالفعل
     await handlePdfPagesRequest(
       pdfFile,
       result.startPage,
       result.endPage,
-      null // ← لتفادي التكرار (الرسالة موجودة)
+      null
     );
   } catch (err) {
     console.error("[PDF] خطأ في البحث عن الفصل:", err);
@@ -1610,9 +1590,6 @@ async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
   }
 }
 
-// ─────────────────────────────────────────
-// Send
-// ─────────────────────────────────────────
 async function sendMessage() {
   if (loading) return;
 
@@ -1716,7 +1693,6 @@ async function sendMessage() {
   executeRequest(sendText, displayText);
 }
   
-  // ✅ معالجة طلب الفهرس
   async function handleTocRequest() {
     const pdfFile = attachedFiles.find(
       (f) => f.type === "application/pdf"
@@ -1844,7 +1820,6 @@ async function sendMessage() {
     inputRef.current?.focus();
   }
 
-  // ✅ حذف المحادثة: يشمل حذف الملفات من Storage
   async function deleteChat(chatId) {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
@@ -1923,7 +1898,6 @@ async function sendMessage() {
     });
   }
 
-  // ✅ رفع الملفات
   async function handleFileUpload(e) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -2044,14 +2018,8 @@ async function sendMessage() {
     setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
   }
 
-  // ─────────────────────────────────────────
-  // Derived
-  // ─────────────────────────────────────────
   const isDark = theme === "dark";
 
-  // ─────────────────────────────────────────
-  // Early return
-  // ─────────────────────────────────────────
   if (!isLoaded) {
     return (
       <div
@@ -2069,9 +2037,6 @@ async function sendMessage() {
     );
   }
 
-  // ─────────────────────────────────────────
-  // Render
-  // ─────────────────────────────────────────
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
       <div style={{ position: "relative" }}>
@@ -2165,3 +2130,5 @@ async function sendMessage() {
     </div>
   );
 }
+
+  
