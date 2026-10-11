@@ -742,1788 +742,897 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return [];
     }
   }
+async function saveChatToSupabase() {
+  const msgs = messagesRef.current;
+  if (!msgs || msgs.length === 0) return;
+  if (!currentChatIdRef.current) return;
+
+  const hasRealMessages = msgs.some(
+    (m) => m.role === "user" || m.type === "task"
+  );
+  if (!hasRealMessages) return;
+
+  const normalMsgs = msgs.map((m) => {
+    if (m.type === "task" && m.task) {
+      return {
+        id: m.id,
+        role: "assistant",
+        type: "task",
+        task_id: m.task.id,
+        task_status: m.task.status,
+        content: `📋 مهمة: ${m.task.input?.slice(0, 100) || ""}`,
+      };
+    }
+    return m;
+  });
+
+  const title =
+    normalMsgs.find((m) => m.role === "user")?.content?.slice(0, 50) ||
+    "محادثة";
+  const chatId = currentChatIdRef.current;
+  const now = new Date().toISOString();
+
+  try {
+    const { error } = await supabase.from("chats").upsert({
+      id: chatId,
+      user_id: user.id,
+      title,
+      messages: normalMsgs.slice(-CHAT_HISTORY_LIMIT),
+      updated_at: now,
+    });
+    if (error) throw error;
+
+    setAllChats((prev) => {
+      const exists = prev.find((c) => c.id === chatId);
+      const updated = {
+        id: chatId,
+        title,
+        date: now,
+        messageCount: normalMsgs.length,
+      };
+      return exists
+        ? [updated, ...prev.filter((c) => c.id !== chatId)]
+        : [updated, ...prev];
+    });
+  } catch (err) {
+    console.error("[Chat] خطأ في حفظ المحادثة:", err.message);
+  }
+}
+
+// ─────────────────────────────────────────
+// Welcome
+// ─────────────────────────────────────────
+function getTimeBasedGreeting() {
+  const h = new Date().getHours();
+  if (h >= 6 && h < 12) return "صباح الخير";
+  if (h >= 12 && h < 17) return "نهارك سعيد";
+  if (h >= 17 && h < 22) return "مساء الخير";
+  return "يا سلاام";
+}
+
+function getWelcomeMessage(
+  lastLoginDate,
+  userName,
+  usedToday,
+  dailyLimit,
+  chatCount
+) {
+  const today = new Date().toISOString().slice(0, 10);
+  const percentLeft =
+    dailyLimit > 0 ? ((dailyLimit - usedToday) / dailyLimit) * 100 : 0;
+  const greeting = getTimeBasedGreeting();
+  const name = userName || "صاحبي";
+
+  if (lastLoginDate !== today) {
+    let msg = `${greeting} يا ${name} 🖤\n\nياهلا بيك في يوم جديد.\n\n📊 النهاردة:\n`;
+    msg += `- متبقي: ${(
+      dailyLimit - usedToday
+    ).toLocaleString()} / ${dailyLimit.toLocaleString()} توكن (${Math.floor(
+      percentLeft
+    )}%)\n`;
+    if (chatCount > 0) msg += `- عدد محادثاتك: ${chatCount} محادثة\n`;
+    msg += `\nجهز نفسك، النهاردة هنتكلم كتير 🚀`;
+    return msg;
+  }
+
+  const opts = [
+    `أهلاً بعودتك يا ${name} 🖤\n\nفاتك حاجة ولا إيه؟ تعالا نكمل.`,
+    `مرحباً مرة تانية يا ${name} 🖤\n\nوحشتني بجد. احكلي إيه الأخبار.`,
+    `يا ${name}.. رجعت! 🖤\n\nكنت مستنيك. يلا احكيلي.`,
+    `هلا والله يا ${name} 🖤\n\nعودتك تسعدني. إيه اللي جابك؟`,
+  ];
+  return opts[Math.floor(Math.random() * opts.length)];
+}
+
+async function checkAndShowWelcome(chats) {
+  const cu = currentUserRef.current;
+  if (!cu) return;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const isNewUser = !cu.last_login_date;
+  const isFirstDay = cu.last_login_date !== today;
+  const chatCount = (chats || []).length;
+
+  const welcomeMessage = isNewUser
+    ? `أهلاً وسهلاً يا ${
+        cu.name || "صاحبي"
+      } 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(
+        cu.daily_limit || 5000
+      ).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`
+    : getWelcomeMessage(
+        cu.last_login_date,
+        cu.name,
+        cu.used_today || 0,
+        cu.daily_limit || 5000,
+        chatCount
+      );
+
+  if ((isNewUser || isFirstDay) && messagesRef.current.length === 1) {
+    setMessages([
+      { role: "assistant", content: welcomeMessage, id: Date.now() },
+    ]);
+  }
+
+  if (isFirstDay || isNewUser) {
+    await supabase
+      .from("profiles")
+      .update({ last_login_date: today })
+      .eq("id", user.id);
+    setCurrentUser((prev) => ({ ...prev, last_login_date: today }));
+  }
+}
+
+// ─────────────────────────────────────────
+// Settings handlers
+// ─────────────────────────────────────────
+async function handleSaveSettings({ profileUpdates, newPassword }) {
+  if (Object.keys(profileUpdates).length) {
+    const { error } = await supabase
+      .from("profiles")
+      .update(profileUpdates)
+      .eq("id", user.id);
+    if (error) throw error;
+  }
+
+  if (newPassword) {
+    const { error: authError } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (authError) throw authError;
+  }
+
+  const updatedUser = { ...currentUser, ...profileUpdates };
+  setCurrentUser(updatedUser);
+  localStorage.setItem("black-user", JSON.stringify(updatedUser));
+  showToast("✅ تم تحديث الإعدادات بنجاح");
+}
+
+async function handleDeleteAccount() {
+  if (
+    !window.confirm(
+      "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
+    )
+  )
+    return;
+
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const res = await fetch(
+      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/delete-account",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      }
+    );
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "خطأ في حذف الحساب");
+
+    localStorage.removeItem("black-user");
+    localStorage.removeItem("black-last-chat-id");
+    window.location.reload();
+  } catch (err) {
+    alert("❌ خطأ في حذف الحساب: " + err.message);
+  }
+}
+
+// ─────────────────────────────────────────
+// Core chat logic
+// ─────────────────────────────────────────
+async function summarizeOldMessages(oldMessages, session) {
+  if (!oldMessages || oldMessages.length === 0) return null;
+
+  const text = oldMessages
+    .map(
+      (m) =>
+        `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(
+          0,
+          300
+        )}`
+    )
+    .join("\n");
+
+  try {
+    const res = await fetch(
+      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          max_tokens: 200,
+          temperature: 0.3,
+          systemPrompt:
+            "أنت ملخّص محادثات. لخّص المحادثة التالية في 3 جمل قصيرة بالعربية فقط. لا تضف تعليقًا.",
+          messages: [{ role: "user", content: text }],
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+const executeRequest = useCallback(
+  async (text, displayText) => {
+    try {
+      const { data: freshUser, error } = await supabase
+        .from("profiles")
+        .select("id, is_blocked")
+        .eq("id", user.id)
+        .single();
+
+      if (error || !freshUser) {
+        localStorage.removeItem("black-user");
+        window.location.reload();
+        return;
+      }
+      if (freshUser.is_blocked) {
+        showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
+        localStorage.removeItem("black-user");
+        setTimeout(() => window.location.reload(), 2000);
+        return;
+      }
+    } catch (err) {
+      console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
+    }
+
+    if (!currentChatIdRef.current) {
+      const newId = Date.now().toString();
+      currentChatIdRef.current = newId;
+      setCurrentChatId(newId);
+    }
+
+    const limitCheck = checkUserDailyLimit(currentUserRef.current);
+    if (!limitCheck.canChat) {
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: limitCheck.reason,
+            id: Date.now(),
+          },
+        ])
+      );
+      setLoading(false);
+      return;
+    }
+
+    const shownText = displayText ?? text;
+
+    const userMsg = { role: "user", content: shownText, id: Date.now() };
+    const updatedMessages = [...messagesRef.current, userMsg];
+
+    setMessages(updatedMessages);
+    setInput("");
+    setAttachedFiles([]);
+
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
+
+    setLoading(true);
+    setStreamingText("");
+
+    try {
+      let enhancedText = text;
+      const searchResult = await searchDuckDuckGo(text);
+      if (searchResult) {
+        enhancedText =
+          text +
+          "\n\n[نتائج البحث]:\n" +
+          searchResult +
+          "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const KEEP_FULL = 5;
+      const MAX_CHARS_PER_MSG = 500;
+
+      const allMsgs = updatedMessages
+        .filter((m) => m.type !== "task")
+        .slice(0, -1);
+      const recentMsgs = allMsgs.slice(-KEEP_FULL);
+      const oldMsgs = allMsgs.slice(0, -KEEP_FULL);
+
+      let summaryText = null;
+      if (oldMsgs.length > 0) {
+        summaryText = await summarizeOldMessages(oldMsgs, session);
+      }
+
+      const chatMessages = [];
+
+      if (summaryText) {
+        chatMessages.push({
+          role: "system",
+          content: `ملخص المحادثة السابقة: ${summaryText}`,
+        });
+      }
+
+      recentMsgs.forEach((m) => {
+        chatMessages.push({
+          role: m.role,
+          content:
+            m.content.length > MAX_CHARS_PER_MSG
+              ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
+              : m.content,
+        });
+      });
+
+      abortControllerRef.current = new AbortController();
+
+      const res = await fetch(
+        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          signal: abortControllerRef.current.signal,
+          body: JSON.stringify({
+            model: GROQ_MODEL,
+            max_tokens: GROQ_MAX_TOKENS,
+            temperature: GROQ_TEMPERATURE,
+            systemPrompt: getPersonalityPrompt(
+              currentUserRef.current?.personality || DEFAULT_PERSONALITY,
+              currentUserRef.current?.gender || "ولد"
+            ),
+            messages: [
+              ...chatMessages,
+              { role: "user", content: enhancedText },
+            ],
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        if (res.status === 401) {
+          showToast("⚠️ خطأ في المصادقة، حاول تسجيل الدخول مرة أخرى", "error");
+        } else if (
+          res.status === 429 ||
+          data.error?.code === "rate_limit_exceeded" ||
+          data.error?.code === "all_keys_rate_limited"
+        ) {
+          const retryAfter = Number(
+            data.error?.retry_after_seconds ||
+              data.retry_after_seconds ||
+              0
+          );
+
+          showToast(
+            retryAfter > 0
+              ? `⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول بعد ${retryAfter} ثانية.`
+              : "⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول مرة أخرى لاحقًا.",
+            "error"
+          );
+        }
+
+        throw new Error(
+          data.error?.message || data.error || `خطأ: ${res.status}`
+        );
+      }
+
+      const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
+
+      let i = 0;
+      function type() {
+        if (abortControllerRef.current === null) return;
+
+        if (i <= reply.length) {
+          setStreamingText(reply.slice(0, i));
+          i++;
+          setTimeout(type, 15);
+        } else {
+          setStreamingText("");
+          setMessages((prev) =>
+            sortMessagesByTime([
+              ...prev,
+              { role: "assistant", content: reply, id: Date.now() },
+            ])
+          );
+          setLoading(false);
+          abortControllerRef.current = null;
+        }
+      }
+      type();
+    } catch (err) {
+      if (err.name === "AbortError") {
+        console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: "⏹️ تم إيقاف التوليد.",
+              id: Date.now(),
+            },
+          ])
+        );
+      } else {
+        console.error("[Chat] خطأ في executeRequest:", err.message);
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: "❌ حدث خطأ: " + err.message,
+              id: Date.now(),
+            },
+          ])
+        );
+      }
+      setLoading(false);
+      setStreamingText("");
+      abortControllerRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },
+  [user.id]
+);
+
+function handleStop() {
+  if (abortControllerRef.current) {
+    abortControllerRef.current.abort();
+    abortControllerRef.current = null;
+  }
+  setLoading(false);
+  setStreamingText("");
+}
+
+// ─────────────────────────────────────────
+// إنشاء مهمة جديدة
+// ─────────────────────────────────────────
+async function createTask(text) {
+  if (creatingTaskRef.current) {
+    console.log("[Chat] createTask already in progress, skipping");
+    return;
+  }
+
+  creatingTaskRef.current = true;
+
+  try {
+    if (!currentChatIdRef.current) {
+      const newId = Date.now().toString();
+      currentChatIdRef.current = newId;
+      setCurrentChatId(newId);
+    }
+
+    const { data: taskId, error } = await supabase.rpc("create_task", {
+      task_input: text,
+      chat_id_input: currentChatIdRef.current,
+    });
+
+    if (error) {
+      showToast("❌ " + error.message, "error");
+      return;
+    }
+
+    showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
+
+    const { data: task, error: fetchErr } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("id", taskId)
+      .single();
+
+    if (fetchErr || !task) {
+      console.error("[Chat] فشل جلب المهمة:", fetchErr);
+      return;
+    }
+
+    const taskMsgId = `task-${task.id}`;
+
+    setMessages((prev) => {
+      const exists = prev.some((m) => m.id === taskMsgId);
+      if (exists) return prev;
+
+      return sortMessagesByTime([
+        ...prev,
+        {
+          id: taskMsgId,
+          role: "assistant",
+          type: "task",
+          task,
+        },
+      ]);
+    });
+
+    setAllActiveTasks((prev) => {
+      const exists = prev.some((t) => t.id === task.id);
+      if (exists) return prev;
+      return [task, ...prev];
+    });
+
+    setInput("");
+    setAttachedFiles([]);
+    setSendMode("chat");
+  } catch (err) {
+    console.error("[Chat] خطأ في createTask:", err);
+    showToast("❌ فشل إنشاء المهمة", "error");
+  } finally {
+    creatingTaskRef.current = false;
+  }
+}
+
+async function cancelTask(taskId) {
+  try {
+    const { error } = await supabase.rpc("cancel_task", {
+      target_task_id: taskId,
+    });
+
+    if (error) throw error;
+
+    showToast("🛑 تم إيقاف المهمة.", "info");
+  } catch (err) {
+    console.error("[Chat] خطأ في cancelTask:", err);
+    showToast("❌ فشل إيقاف المهمة", "error");
+  }
+}
+
+async function openTaskInChat(chatId) {
+  if (chatId === currentChatIdRef.current) {
+    showToast("✅ أنت بالفعل في هذه المحادثة.", "info");
+    return;
+  }
+
+  if (currentChatIdRef.current) {
+    await saveChatToSupabase();
+  }
+
+  const { data: chat } = await supabase
+    .from("chats")
+    .select("*")
+    .eq("id", chatId)
+    .single();
+
+  if (!chat) {
+    showToast("⚠️ المحادثة غير موجودة.", "error");
+    return;
+  }
+
+  setCurrentChatId(chatId);
+  setMessages(
+    chat.messages && chat.messages.length > 0
+      ? sortMessagesByTime(chat.messages)
+      : [
+          {
+            role: "assistant",
+            content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
+            id: Date.now(),
+          },
+        ]
+  );
+
+  setShowHistory(false);
+  setShowMenu(false);
+  setInput("");
+  setAttachedFiles([]);
+
+  await loadChatTasksForChat(chatId);
+
+  setTimeout(() => inputRef.current?.focus(), 100);
+}
+
+// ─────────────────────────────────────────
+// ✅ PDF: معالجة قراءة صفحات/فصول محددة على دفعات
+// ─────────────────────────────────────────
+async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
+  const BATCH_SIZE = 20;
+  const totalPages = pdfFile.pageCount || endPage;
+  const safeEnd = Math.min(endPage, totalPages);
+  const safeStart = Math.max(1, startPage);
+
+  if (safeStart > safeEnd) {
+    showToast("⚠️ نطاق صفحات غير صالح.", "error");
+    return;
+  }
+
+  // عرض رسالة المستخدم (طلب الصفحات)
+  const userMsg = {
+    role: "user",
+    content: userPrompt,
+    id: Date.now(),
+  };
+  setMessages((prev) => [...prev, userMsg]);
+  setInput("");
+  setLoading(true);
+  setStreamingText("");
+  autoScrollRef.current = true;
+  setShowScrollButton(false);
+
+  const totalBatches = Math.ceil((safeEnd - safeStart + 1) / BATCH_SIZE);
+
+  try {
+    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+      const batchStart = safeStart + batchIndex * BATCH_SIZE;
+      const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, safeEnd);
+
+      showToast(
+        `🔍 جاري استخراج الصفحات ${batchStart}-${batchEnd} (${batchIndex + 1}/${totalBatches})...`,
+        "info"
+      );
+
+      // استخراج نص الدفعة
+      const batchText = await extractPdfText(
+        pdfFile.pdfFile,
+        batchStart,
+        batchEnd
+      );
+
+      if (!batchText || batchText.trim().length < 10) {
+        // دفعة فارغة — ننتقل للتالية
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: `⚠️ الصفحات ${batchStart}-${batchEnd} لا تحتوي على نص قابل للقراءة (قد تكون صورًا).`,
+              id: Date.now() + batchIndex,
+            },
+          ])
+        );
+        continue;
+      }
+
+      // ✅ بناء الطلب للنموذج
+      const requestText =
+        `طلب المستخدم: ${userPrompt}\n\n` +
+        `[ملف PDF: ${pdfFile.name} — الصفحات ${batchStart}-${batchEnd} من ${totalPages}]\n` +
+        `[دفعة ${batchIndex + 1} من ${totalBatches}]\n\n` +
+        `النص المستخرج:\n${batchText}\n\n` +
+        `نفّذ طلب المستخدم على هذا النص فقط. ` +
+        `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
+
+      // إرسال للنموذج
+      await executeRequest(requestText, null);
+    }
+  } catch (err) {
+    console.error("[PDF] خطأ في معالجة الصفحات:", err);
+    setMessages((prev) =>
+      sortMessagesByTime([
+        ...prev,
+        {
+          role: "assistant",
+          content: "❌ خطأ في قراءة PDF: " + err.message,
+          id: Date.now(),
+        },
+      ])
+    );
+    showToast("❌ فشل قراءة PDF.", "error");
+  } finally {
+    setLoading(false);
+    setStreamingText("");
+  }
+}
+
+// ✅ PDF: معالجة طلب الفصل/الدرس بالاسم
+async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
+  setLoading(true);
+  setStreamingText("");
+  autoScrollRef.current = true;
+  setShowScrollButton(false);
+
+  // عرض رسالة المستخدم
+  setMessages((prev) => [
+    ...prev,
+    { role: "user", content: userPrompt, id: Date.now() },
+  ]);
+  setInput("");
+
+  try {
+    showToast("🔍 جاري البحث عن الفصل في الفهرس...", "info");
+
+    const result = await findSectionByTitle(pdfFile.pdfFile, sectionTitle);
+
+    if (!result.found) {
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content:
+              `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
+              `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة (مثلًا: "من 40 إلى 80").`,
+            id: Date.now(),
+          },
+        ])
+      );
+      setLoading(false);
+      return;
+    }
+
+    showToast(
+      `✅ وُجد "${result.title}" في الصفحات ${result.startPage}-${result.endPage}`,
+      "success"
+    );
+
+    // عرض رسالة توضيحية
+    setMessages((prev) =>
+      sortMessagesByTime([
+        ...prev,
+        {
+          role: "assistant",
+          content: `📖 وُجد **${result.title}** في الصفحات **${result.startPage}-${result.endPage}**. جاري المعالجة على دفعات...`,
+          id: Date.now(),
+        },
+      ])
+    );
+
+    setLoading(false);
+
+    // الآن نستدعي معالجة الصفحات
+    await handlePdfPagesRequest(
+      pdfFile,
+      result.startPage,
+      result.endPage,
+      userPrompt
+    );
+  } catch (err) {
+    console.error("[PDF] خطأ في البحث عن الفصل:", err);
+    setMessages((prev) =>
+      sortMessagesByTime([
+        ...prev,
+        {
+          role: "assistant",
+          content: "❌ خطأ: " + err.message,
+          id: Date.now(),
+        },
+      ])
+    );
+    showToast("❌ فشل البحث عن الفصل.", "error");
+    setLoading(false);
+  }
+}
+
+// ─────────────────────────────────────────
+// Send
+// ─────────────────────────────────────────
+async function sendMessage() {
+  if (loading) return;
+
+  const text = input.trim();
+  if (!text && !attachedFiles.length) return;
+
+  // ✅ حماية: لا تُرسل ملفًا بدون نص (إلا إذا كان طلب فهرس)
+  const hasOnlyFiles = !text && attachedFiles.length > 0;
+  const hasTocRequest = isTocRequest(text);
+
+  if (hasOnlyFiles && !hasTocRequest) {
+    showToast(
+      "⚠️ اكتب سؤالًا مع الملف، أو اطلب (اعرض الفهرس).",
+      "info"
+    );
+    return;
+  }
+
+  if (sendMode === "task" && !attachedFiles.length) {
+    await createTask(text);
+    return;
+  }
+
+  const hasPdf = attachedFiles.some(
+    (f) => f.type === "application/pdf" && f.pdfFile
+  );
+
+  // ✅ أولوية 1: طلب الفهرس
+  if (hasPdf && isTocRequest(text)) {
+    await handleTocRequest();
+    return;
+  }
+
+  // ✅ أولوية 2: طلب صفحات محددة
+  if (hasPdf) {
+    const pdfFile = attachedFiles.find(
+      (f) => f.type === "application/pdf" && f.pdfFile
+    );
+
+    const pageRange = detectPageRange(text);
+    if (pageRange) {
+      await handlePdfPagesRequest(
+        pdfFile,
+        pageRange.startPage,
+        pageRange.endPage,
+        text
+      );
+      return;
+    }
+
+    // ✅ أولوية 3: طلب فصل/درس بالاسم
+    const sectionTitle = detectSectionRequest(text);
+    if (sectionTitle) {
+      await handlePdfSectionRequest(pdfFile, sectionTitle, text);
+      return;
+    }
+  }
+
+  const MAX_FILE_CHARS = 100000;
+
+  let sendText = text;
+  let displayText = text;
+
+  if (attachedFiles.length > 0) {
+    const fileNamesLine = attachedFiles
+      .map((f) => `📎 ${f.name}`)
+      .join(" ");
+
+    displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
+
+    const textFiles = attachedFiles.filter(
+      (f) => f.type !== "application/pdf"
+    );
+
+    const filesFullText = textFiles
+      .map((f) => {
+        const content = f.content || "";
+        const truncated = content.length > MAX_FILE_CHARS;
+        const body = truncated
+          ? content.slice(0, MAX_FILE_CHARS) +
+            "\n\n... [تم اقتصار الملف: تجاوز 100,000 حرف]"
+          : content;
+        return `\n\n📎 ${f.name}${
+          truncated ? " ⚠️ (تم اقتصاره)" : ""
+        }\n\`\`\`\n${body}\n\`\`\``;
+      })
+      .join("");
+
+    sendText = (text || "الملفات المرفقة:") + filesFullText;
+
+    const pdfFiles = attachedFiles.filter(
+      (f) => f.type === "application/pdf"
+    );
+    if (pdfFiles.length > 0) {
+      const pdfInfo = pdfFiles
+        .map((f) => `"${f.name}" (${f.pageCount || "?"} صفحة)`)
+        .join(", ");
+      sendText +=
+        `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
+        `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات (مثلًا: "من 40 إلى 80")، ` +
+        `أو اسم فصل/درس (مثلًا: "الفصل الأول").]`;
+    }
+  }
+
+  executeRequest(sendText, displayText);
+}
   
-async function saveChatToSupabase() {
-  const msgs = messagesRef.current;
-  if (!msgs || msgs.length === 0) return;
-  if (!currentChatIdRef.current) return;
-
-  const hasRealMessages = msgs.some(
-    (m) => m.role === "user" || m.type === "task"
-  );
-  if (!hasRealMessages) return;
-
-  const normalMsgs = msgs.map((m) => {
-    if (m.type === "task" && m.task) {
-      return {
-        id: m.id,
-        role: "assistant",
-        type: "task",
-        task_id: m.task.id,
-        task_status: m.task.status,
-        content: `📋 مهمة: ${m.task.input?.slice(0, 100) || ""}`,
-      };
-    }
-    return m;
-  });
-
-  const title =
-    normalMsgs.find((m) => m.role === "user")?.content?.slice(0, 50) ||
-    "محادثة";
-  const chatId = currentChatIdRef.current;
-  const now = new Date().toISOString();
-
-  try {
-    const { error } = await supabase.from("chats").upsert({
-      id: chatId,
-      user_id: user.id,
-      title,
-      messages: normalMsgs.slice(-CHAT_HISTORY_LIMIT),
-      updated_at: now,
-    });
-    if (error) throw error;
-
-    setAllChats((prev) => {
-      const exists = prev.find((c) => c.id === chatId);
-      const updated = {
-        id: chatId,
-        title,
-        date: now,
-        messageCount: normalMsgs.length,
-      };
-      return exists
-        ? [updated, ...prev.filter((c) => c.id !== chatId)]
-        : [updated, ...prev];
-    });
-  } catch (err) {
-    console.error("[Chat] خطأ في حفظ المحادثة:", err.message);
-  }
-}
-
-// ─────────────────────────────────────────
-// Welcome
-// ─────────────────────────────────────────
-function getTimeBasedGreeting() {
-  const h = new Date().getHours();
-  if (h >= 6 && h < 12) return "صباح الخير";
-  if (h >= 12 && h < 17) return "نهارك سعيد";
-  if (h >= 17 && h < 22) return "مساء الخير";
-  return "يا سلاام";
-}
-
-function getWelcomeMessage(
-  lastLoginDate,
-  userName,
-  usedToday,
-  dailyLimit,
-  chatCount
-) {
-  const today = new Date().toISOString().slice(0, 10);
-  const percentLeft =
-    dailyLimit > 0 ? ((dailyLimit - usedToday) / dailyLimit) * 100 : 0;
-  const greeting = getTimeBasedGreeting();
-  const name = userName || "صاحبي";
-
-  if (lastLoginDate !== today) {
-    let msg = `${greeting} يا ${name} 🖤\n\nياهلا بيك في يوم جديد.\n\n📊 النهاردة:\n`;
-    msg += `- متبقي: ${(
-      dailyLimit - usedToday
-    ).toLocaleString()} / ${dailyLimit.toLocaleString()} توكن (${Math.floor(
-      percentLeft
-    )}%)\n`;
-    if (chatCount > 0) msg += `- عدد محادثاتك: ${chatCount} محادثة\n`;
-    msg += `\nجهز نفسك، النهاردة هنتكلم كتير 🚀`;
-    return msg;
-  }
-
-  const opts = [
-    `أهلاً بعودتك يا ${name} 🖤\n\nفاتك حاجة ولا إيه؟ تعالا نكمل.`,
-    `مرحباً مرة تانية يا ${name} 🖤\n\nوحشتني بجد. احكلي إيه الأخبار.`,
-    `يا ${name}.. رجعت! 🖤\n\nكنت مستنيك. يلا احكيلي.`,
-    `هلا والله يا ${name} 🖤\n\nعودتك تسعدني. إيه اللي جابك؟`,
-  ];
-  return opts[Math.floor(Math.random() * opts.length)];
-}
-
-async function checkAndShowWelcome(chats) {
-  const cu = currentUserRef.current;
-  if (!cu) return;
-
-  const today = new Date().toISOString().slice(0, 10);
-  const isNewUser = !cu.last_login_date;
-  const isFirstDay = cu.last_login_date !== today;
-  const chatCount = (chats || []).length;
-
-  const welcomeMessage = isNewUser
-    ? `أهلاً وسهلاً يا ${
-        cu.name || "صاحبي"
-      } 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(
-        cu.daily_limit || 5000
-      ).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`
-    : getWelcomeMessage(
-        cu.last_login_date,
-        cu.name,
-        cu.used_today || 0,
-        cu.daily_limit || 5000,
-        chatCount
-      );
-
-  if ((isNewUser || isFirstDay) && messagesRef.current.length === 1) {
-    setMessages([
-      { role: "assistant", content: welcomeMessage, id: Date.now() },
-    ]);
-  }
-
-  if (isFirstDay || isNewUser) {
-    await supabase
-      .from("profiles")
-      .update({ last_login_date: today })
-      .eq("id", user.id);
-    setCurrentUser((prev) => ({ ...prev, last_login_date: today }));
-  }
-}
-
-// ─────────────────────────────────────────
-// Settings handlers
-// ─────────────────────────────────────────
-async function handleSaveSettings({ profileUpdates, newPassword }) {
-  if (Object.keys(profileUpdates).length) {
-    const { error } = await supabase
-      .from("profiles")
-      .update(profileUpdates)
-      .eq("id", user.id);
-    if (error) throw error;
-  }
-
-  if (newPassword) {
-    const { error: authError } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    if (authError) throw authError;
-  }
-
-  const updatedUser = { ...currentUser, ...profileUpdates };
-  setCurrentUser(updatedUser);
-  localStorage.setItem("black-user", JSON.stringify(updatedUser));
-  showToast("✅ تم تحديث الإعدادات بنجاح");
-}
-
-async function handleDeleteAccount() {
-  if (
-    !window.confirm(
-      "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
-    )
-  )
-    return;
-
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const res = await fetch(
-      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/delete-account",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "خطأ في حذف الحساب");
-
-    localStorage.removeItem("black-user");
-    localStorage.removeItem("black-last-chat-id");
-    window.location.reload();
-  } catch (err) {
-    alert("❌ خطأ في حذف الحساب: " + err.message);
-  }
-}
-
-// ─────────────────────────────────────────
-// Core chat logic
-// ─────────────────────────────────────────
-async function summarizeOldMessages(oldMessages, session) {
-  if (!oldMessages || oldMessages.length === 0) return null;
-
-  const text = oldMessages
-    .map(
-      (m) =>
-        `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(
-          0,
-          300
-        )}`
-    )
-    .join("\n");
-
-  try {
-    const res = await fetch(
-      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          max_tokens: 200,
-          temperature: 0.3,
-          systemPrompt:
-            "أنت ملخّص محادثات. لخّص المحادثة التالية في 3 جمل قصيرة بالعربية فقط. لا تضف تعليقًا.",
-          messages: [{ role: "user", content: text }],
-        }),
-      }
-    );
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-const executeRequest = useCallback(
-  async (text, displayText) => {
-    try {
-      const { data: freshUser, error } = await supabase
-        .from("profiles")
-        .select("id, is_blocked")
-        .eq("id", user.id)
-        .single();
-
-      if (error || !freshUser) {
-        localStorage.removeItem("black-user");
-        window.location.reload();
-        return;
-      }
-      if (freshUser.is_blocked) {
-        showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
-        localStorage.removeItem("black-user");
-        setTimeout(() => window.location.reload(), 2000);
-        return;
-      }
-    } catch (err) {
-      console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
-    }
-
-    if (!currentChatIdRef.current) {
-      const newId = Date.now().toString();
-      currentChatIdRef.current = newId;
-      setCurrentChatId(newId);
-    }
-
-    const limitCheck = checkUserDailyLimit(currentUserRef.current);
-    if (!limitCheck.canChat) {
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content: limitCheck.reason,
-            id: Date.now(),
-          },
-        ])
-      );
-      setLoading(false);
-      return;
-    }
-
-    const shownText = displayText ?? text;
-
-    const userMsg = { role: "user", content: shownText, id: Date.now() };
-    const updatedMessages = [...messagesRef.current, userMsg];
-
-    setMessages(updatedMessages);
-    setInput("");
-    setAttachedFiles([]);
-
-    autoScrollRef.current = true;
-    setShowScrollButton(false);
-
-    setLoading(true);
-    setStreamingText("");
-
-    try {
-      let enhancedText = text;
-      const searchResult = await searchDuckDuckGo(text);
-      if (searchResult) {
-        enhancedText =
-          text +
-          "\n\n[نتائج البحث]:\n" +
-          searchResult +
-          "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const KEEP_FULL = 5;
-      const MAX_CHARS_PER_MSG = 500;
-
-      const allMsgs = updatedMessages
-        .filter((m) => m.type !== "task")
-        .slice(0, -1);
-      const recentMsgs = allMsgs.slice(-KEEP_FULL);
-      const oldMsgs = allMsgs.slice(0, -KEEP_FULL);
-
-      let summaryText = null;
-      if (oldMsgs.length > 0) {
-        summaryText = await summarizeOldMessages(oldMsgs, session);
-      }
-
-      const chatMessages = [];
-
-      if (summaryText) {
-        chatMessages.push({
-          role: "system",
-          content: `ملخص المحادثة السابقة: ${summaryText}`,
-        });
-      }
-
-      recentMsgs.forEach((m) => {
-        chatMessages.push({
-          role: m.role,
-          content:
-            m.content.length > MAX_CHARS_PER_MSG
-              ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
-              : m.content,
-        });
-      });
-
-      abortControllerRef.current = new AbortController();
-
-      const res = await fetch(
-        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          signal: abortControllerRef.current.signal,
-          body: JSON.stringify({
-            model: GROQ_MODEL,
-            max_tokens: GROQ_MAX_TOKENS,
-            temperature: GROQ_TEMPERATURE,
-            systemPrompt: getPersonalityPrompt(
-              currentUserRef.current?.personality || DEFAULT_PERSONALITY,
-              currentUserRef.current?.gender || "ولد"
-            ),
-            messages: [
-              ...chatMessages,
-              { role: "user", content: enhancedText },
-            ],
-          }),
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          showToast("⚠️ خطأ في المصادقة، حاول تسجيل الدخول مرة أخرى", "error");
-        } else if (
-          res.status === 429 ||
-          data.error?.code === "rate_limit_exceeded" ||
-          data.error?.code === "all_keys_rate_limited"
-        ) {
-          const retryAfter = Number(
-            data.error?.retry_after_seconds ||
-              data.retry_after_seconds ||
-              0
-          );
-
-          showToast(
-            retryAfter > 0
-              ? `⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول بعد ${retryAfter} ثانية.`
-              : "⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول مرة أخرى لاحقًا.",
-            "error"
-          );
-        }
-
-        throw new Error(
-          data.error?.message || data.error || `خطأ: ${res.status}`
-        );
-      }
-
-      const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-
-      let i = 0;
-      function type() {
-        if (abortControllerRef.current === null) return;
-
-        if (i <= reply.length) {
-          setStreamingText(reply.slice(0, i));
-          i++;
-          setTimeout(type, 15);
-        } else {
-          setStreamingText("");
-          setMessages((prev) =>
-            sortMessagesByTime([
-              ...prev,
-              { role: "assistant", content: reply, id: Date.now() },
-            ])
-          );
-          setLoading(false);
-          abortControllerRef.current = null;
-        }
-      }
-      type();
-    } catch (err) {
-      if (err.name === "AbortError") {
-        console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: "⏹️ تم إيقاف التوليد.",
-              id: Date.now(),
-            },
-          ])
-        );
-      } else {
-        console.error("[Chat] خطأ في executeRequest:", err.message);
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: "❌ حدث خطأ: " + err.message,
-              id: Date.now(),
-            },
-          ])
-        );
-      }
-      setLoading(false);
-      setStreamingText("");
-      abortControllerRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },
-  [user.id]
-);
-
-function handleStop() {
-  if (abortControllerRef.current) {
-    abortControllerRef.current.abort();
-    abortControllerRef.current = null;
-  }
-  setLoading(false);
-  setStreamingText("");
-}
-
-// ─────────────────────────────────────────
-// إنشاء مهمة جديدة
-// ─────────────────────────────────────────
-async function createTask(text) {
-  if (creatingTaskRef.current) {
-    console.log("[Chat] createTask already in progress, skipping");
-    return;
-  }
-
-  creatingTaskRef.current = true;
-
-  try {
-    if (!currentChatIdRef.current) {
-      const newId = Date.now().toString();
-      currentChatIdRef.current = newId;
-      setCurrentChatId(newId);
-    }
-
-    const { data: taskId, error } = await supabase.rpc("create_task", {
-      task_input: text,
-      chat_id_input: currentChatIdRef.current,
-    });
-
-    if (error) {
-      showToast("❌ " + error.message, "error");
-      return;
-    }
-
-    showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
-
-    const { data: task, error: fetchErr } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("id", taskId)
-      .single();
-
-    if (fetchErr || !task) {
-      console.error("[Chat] فشل جلب المهمة:", fetchErr);
-      return;
-    }
-
-    const taskMsgId = `task-${task.id}`;
-
-    setMessages((prev) => {
-      const exists = prev.some((m) => m.id === taskMsgId);
-      if (exists) return prev;
-
-      return sortMessagesByTime([
-        ...prev,
-        {
-          id: taskMsgId,
-          role: "assistant",
-          type: "task",
-          task,
-        },
-      ]);
-    });
-
-    setAllActiveTasks((prev) => {
-      const exists = prev.some((t) => t.id === task.id);
-      if (exists) return prev;
-      return [task, ...prev];
-    });
-
-    setInput("");
-    setAttachedFiles([]);
-    setSendMode("chat");
-  } catch (err) {
-    console.error("[Chat] خطأ في createTask:", err);
-    showToast("❌ فشل إنشاء المهمة", "error");
-  } finally {
-    creatingTaskRef.current = false;
-  }
-}
-
-async function cancelTask(taskId) {
-  try {
-    const { error } = await supabase.rpc("cancel_task", {
-      target_task_id: taskId,
-    });
-
-    if (error) throw error;
-
-    showToast("🛑 تم إيقاف المهمة.", "info");
-  } catch (err) {
-    console.error("[Chat] خطأ في cancelTask:", err);
-    showToast("❌ فشل إيقاف المهمة", "error");
-  }
-}
-
-async function openTaskInChat(chatId) {
-  if (chatId === currentChatIdRef.current) {
-    showToast("✅ أنت بالفعل في هذه المحادثة.", "info");
-    return;
-  }
-
-  if (currentChatIdRef.current) {
-    await saveChatToSupabase();
-  }
-
-  const { data: chat } = await supabase
-    .from("chats")
-    .select("*")
-    .eq("id", chatId)
-    .single();
-
-  if (!chat) {
-    showToast("⚠️ المحادثة غير موجودة.", "error");
-    return;
-  }
-
-  setCurrentChatId(chatId);
-  setMessages(
-    chat.messages && chat.messages.length > 0
-      ? sortMessagesByTime(chat.messages)
-      : [
-          {
-            role: "assistant",
-            content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
-            id: Date.now(),
-          },
-        ]
-  );
-
-  setShowHistory(false);
-  setShowMenu(false);
-  setInput("");
-  setAttachedFiles([]);
-
-  await loadChatTasksForChat(chatId);
-
-  setTimeout(() => inputRef.current?.focus(), 100);
-}
-
-// ─────────────────────────────────────────
-// ✅ PDF: معالجة قراءة صفحات/فصول محددة على دفعات
-// ─────────────────────────────────────────
-async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-  const BATCH_SIZE = 20;
-  const totalPages = pdfFile.pageCount || endPage;
-  const safeEnd = Math.min(endPage, totalPages);
-  const safeStart = Math.max(1, startPage);
-
-  if (safeStart > safeEnd) {
-    showToast("⚠️ نطاق صفحات غير صالح.", "error");
-    return;
-  }
-
-  // عرض رسالة المستخدم (طلب الصفحات)
-  const userMsg = {
-    role: "user",
-    content: userPrompt,
-    id: Date.now(),
-  };
-  setMessages((prev) => [...prev, userMsg]);
-  setInput("");
-  setLoading(true);
-  setStreamingText("");
-  autoScrollRef.current = true;
-  setShowScrollButton(false);
-
-  const totalBatches = Math.ceil((safeEnd - safeStart + 1) / BATCH_SIZE);
-
-  try {
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      const batchStart = safeStart + batchIndex * BATCH_SIZE;
-      const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, safeEnd);
-
-      showToast(
-        `🔍 جاري استخراج الصفحات ${batchStart}-${batchEnd} (${batchIndex + 1}/${totalBatches})...`,
-        "info"
-      );
-
-      // استخراج نص الدفعة
-      const batchText = await extractPdfText(
-        pdfFile.pdfFile,
-        batchStart,
-        batchEnd
-      );
-
-      if (!batchText || batchText.trim().length < 10) {
-        // دفعة فارغة — ننتقل للتالية
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: `⚠️ الصفحات ${batchStart}-${batchEnd} لا تحتوي على نص قابل للقراءة (قد تكون صورًا).`,
-              id: Date.now() + batchIndex,
-            },
-          ])
-        );
-        continue;
-      }
-
-      // ✅ بناء الطلب للنموذج
-      const requestText =
-        `طلب المستخدم: ${userPrompt}\n\n` +
-        `[ملف PDF: ${pdfFile.name} — الصفحات ${batchStart}-${batchEnd} من ${totalPages}]\n` +
-        `[دفعة ${batchIndex + 1} من ${totalBatches}]\n\n` +
-        `النص المستخرج:\n${batchText}\n\n` +
-        `نفّذ طلب المستخدم على هذا النص فقط. ` +
-        `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
-
-      // إرسال للنموذج
-      await executeRequest(requestText, null);
-    }
-  } catch (err) {
-    console.error("[PDF] خطأ في معالجة الصفحات:", err);
-    setMessages((prev) =>
-      sortMessagesByTime([
-        ...prev,
-        {
-          role: "assistant",
-          content: "❌ خطأ في قراءة PDF: " + err.message,
-          id: Date.now(),
-        },
-      ])
-    );
-    showToast("❌ فشل قراءة PDF.", "error");
-  } finally {
-    setLoading(false);
-    setStreamingText("");
-  }
-}
-
-// ✅ PDF: معالجة طلب الفصل/الدرس بالاسم
-async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
-  setLoading(true);
-  setStreamingText("");
-  autoScrollRef.current = true;
-  setShowScrollButton(false);
-
-  // عرض رسالة المستخدم
-  setMessages((prev) => [
-    ...prev,
-    { role: "user", content: userPrompt, id: Date.now() },
-  ]);
-  setInput("");
-
-  try {
-    showToast("🔍 جاري البحث عن الفصل في الفهرس...", "info");
-
-    const result = await findSectionByTitle(pdfFile.pdfFile, sectionTitle);
-
-    if (!result.found) {
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content:
-              `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
-              `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة (مثلًا: "من 40 إلى 80").`,
-            id: Date.now(),
-          },
-        ])
-      );
-      setLoading(false);
-      return;
-    }
-
-    showToast(
-      `✅ وُجد "${result.title}" في الصفحات ${result.startPage}-${result.endPage}`,
-      "success"
-    );
-
-    // عرض رسالة توضيحية
-    setMessages((prev) =>
-      sortMessagesByTime([
-        ...prev,
-        {
-          role: "assistant",
-          content: `📖 وُجد **${result.title}** في الصفحات **${result.startPage}-${result.endPage}**. جاري المعالجة على دفعات...`,
-          id: Date.now(),
-        },
-      ])
-    );
-
-    setLoading(false);
-
-    // الآن نستدعي معالجة الصفحات
-    await handlePdfPagesRequest(
-      pdfFile,
-      result.startPage,
-      result.endPage,
-      userPrompt
-    );
-  } catch (err) {
-    console.error("[PDF] خطأ في البحث عن الفصل:", err);
-    setMessages((prev) =>
-      sortMessagesByTime([
-        ...prev,
-        {
-          role: "assistant",
-          content: "❌ خطأ: " + err.message,
-          id: Date.now(),
-        },
-      ])
-    );
-    showToast("❌ فشل البحث عن الفصل.", "error");
-    setLoading(false);
-  }
-}
-
-// ─────────────────────────────────────────
-// Send
-// ─────────────────────────────────────────
-async function sendMessage() {
-  if (loading) return;
-
-  const text = input.trim();
-  if (!text && !attachedFiles.length) return;
-
-  // ✅ حماية: لا تُرسل ملفًا بدون نص (إلا إذا كان طلب فهرس)
-  const hasOnlyFiles = !text && attachedFiles.length > 0;
-  const hasTocRequest = isTocRequest(text);
-
-  if (hasOnlyFiles && !hasTocRequest) {
-    showToast(
-      "⚠️ اكتب سؤالًا مع الملف، أو اطلب (اعرض الفهرس).",
-      "info"
-    );
-    return;
-  }
-
-  if (sendMode === "task" && !attachedFiles.length) {
-    await createTask(text);
-    return;
-  }
-
-  const hasPdf = attachedFiles.some(
-    (f) => f.type === "application/pdf" && f.pdfFile
-  );
-
-  // ✅ أولوية 1: طلب الفهرس
-  if (hasPdf && isTocRequest(text)) {
-    await handleTocRequest();
-    return;
-  }
-
-  // ✅ أولوية 2: طلب صفحات محددة
-  if (hasPdf) {
-    const pdfFile = attachedFiles.find(
-      (f) => f.type === "application/pdf" && f.pdfFile
-    );
-
-    const pageRange = detectPageRange(text);
-    if (pageRange) {
-      await handlePdfPagesRequest(
-        pdfFile,
-        pageRange.startPage,
-        pageRange.endPage,
-        text
-      );
-      return;
-    }
-
-    // ✅ أولوية 3: طلب فصل/درس بالاسم
-    const sectionTitle = detectSectionRequest(text);
-    if (sectionTitle) {
-      await handlePdfSectionRequest(pdfFile, sectionTitle, text);
-      return;
-    }
-  }
-
-  const MAX_FILE_CHARS = 100000;
-
-  let sendText = text;
-  let displayText = text;
-
-  if (attachedFiles.length > 0) {
-    const fileNamesLine = attachedFiles
-      .map((f) => `📎 ${f.name}`)
-      .join(" ");
-
-    displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
-
-    const textFiles = attachedFiles.filter(
-      (f) => f.type !== "application/pdf"
-    );
-
-    const filesFullText = textFiles
-      .map((f) => {
-        const content = f.content || "";
-        const truncated = content.length > MAX_FILE_CHARS;
-        const body = truncated
-          ? content.slice(0, MAX_FILE_CHARS) +
-            "\n\n... [تم اقتصار الملف: تجاوز 100,000 حرف]"
-          : content;
-        return `\n\n📎 ${f.name}${
-          truncated ? " ⚠️ (تم اقتصاره)" : ""
-        }\n\`\`\`\n${body}\n\`\`\``;
-      })
-      .join("");
-
-    sendText = (text || "الملفات المرفقة:") + filesFullText;
-
-    const pdfFiles = attachedFiles.filter(
-      (f) => f.type === "application/pdf"
-    );
-    if (pdfFiles.length > 0) {
-      const pdfInfo = pdfFiles
-        .map((f) => `"${f.name}" (${f.pageCount || "?"} صفحة)`)
-        .join(", ");
-      sendText +=
-        `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
-        `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات (مثلًا: "من 40 إلى 80")، ` +
-        `أو اسم فصل/درس (مثلًا: "الفصل الأول").]`;
-    }
-  }
-
-  executeRequest(sendText, displayText);
-        }
-async function saveChatToSupabase() {
-  const msgs = messagesRef.current;
-  if (!msgs || msgs.length === 0) return;
-  if (!currentChatIdRef.current) return;
-
-  const hasRealMessages = msgs.some(
-    (m) => m.role === "user" || m.type === "task"
-  );
-  if (!hasRealMessages) return;
-
-  const normalMsgs = msgs.map((m) => {
-    if (m.type === "task" && m.task) {
-      return {
-        id: m.id,
-        role: "assistant",
-        type: "task",
-        task_id: m.task.id,
-        task_status: m.task.status,
-        content: `📋 مهمة: ${m.task.input?.slice(0, 100) || ""}`,
-      };
-    }
-    return m;
-  });
-
-  const title =
-    normalMsgs.find((m) => m.role === "user")?.content?.slice(0, 50) ||
-    "محادثة";
-  const chatId = currentChatIdRef.current;
-  const now = new Date().toISOString();
-
-  try {
-    const { error } = await supabase.from("chats").upsert({
-      id: chatId,
-      user_id: user.id,
-      title,
-      messages: normalMsgs.slice(-CHAT_HISTORY_LIMIT),
-      updated_at: now,
-    });
-    if (error) throw error;
-
-    setAllChats((prev) => {
-      const exists = prev.find((c) => c.id === chatId);
-      const updated = {
-        id: chatId,
-        title,
-        date: now,
-        messageCount: normalMsgs.length,
-      };
-      return exists
-        ? [updated, ...prev.filter((c) => c.id !== chatId)]
-        : [updated, ...prev];
-    });
-  } catch (err) {
-    console.error("[Chat] خطأ في حفظ المحادثة:", err.message);
-  }
-}
-
-// ─────────────────────────────────────────
-// Welcome
-// ─────────────────────────────────────────
-function getTimeBasedGreeting() {
-  const h = new Date().getHours();
-  if (h >= 6 && h < 12) return "صباح الخير";
-  if (h >= 12 && h < 17) return "نهارك سعيد";
-  if (h >= 17 && h < 22) return "مساء الخير";
-  return "يا سلاام";
-}
-
-function getWelcomeMessage(
-  lastLoginDate,
-  userName,
-  usedToday,
-  dailyLimit,
-  chatCount
-) {
-  const today = new Date().toISOString().slice(0, 10);
-  const percentLeft =
-    dailyLimit > 0 ? ((dailyLimit - usedToday) / dailyLimit) * 100 : 0;
-  const greeting = getTimeBasedGreeting();
-  const name = userName || "صاحبي";
-
-  if (lastLoginDate !== today) {
-    let msg = `${greeting} يا ${name} 🖤\n\nياهلا بيك في يوم جديد.\n\n📊 النهاردة:\n`;
-    msg += `- متبقي: ${(
-      dailyLimit - usedToday
-    ).toLocaleString()} / ${dailyLimit.toLocaleString()} توكن (${Math.floor(
-      percentLeft
-    )}%)\n`;
-    if (chatCount > 0) msg += `- عدد محادثاتك: ${chatCount} محادثة\n`;
-    msg += `\nجهز نفسك، النهاردة هنتكلم كتير 🚀`;
-    return msg;
-  }
-
-  const opts = [
-    `أهلاً بعودتك يا ${name} 🖤\n\nفاتك حاجة ولا إيه؟ تعالا نكمل.`,
-    `مرحباً مرة تانية يا ${name} 🖤\n\nوحشتني بجد. احكلي إيه الأخبار.`,
-    `يا ${name}.. رجعت! 🖤\n\nكنت مستنيك. يلا احكيلي.`,
-    `هلا والله يا ${name} 🖤\n\nعودتك تسعدني. إيه اللي جابك؟`,
-  ];
-  return opts[Math.floor(Math.random() * opts.length)];
-}
-
-async function checkAndShowWelcome(chats) {
-  const cu = currentUserRef.current;
-  if (!cu) return;
-
-  const today = new Date().toISOString().slice(0, 10);
-  const isNewUser = !cu.last_login_date;
-  const isFirstDay = cu.last_login_date !== today;
-  const chatCount = (chats || []).length;
-
-  const welcomeMessage = isNewUser
-    ? `أهلاً وسهلاً يا ${
-        cu.name || "صاحبي"
-      } 🖤\n\nيا هلا بيك في بلاك! أنا هنا عشانك.\n\n📊 حسابك:\n- الحد اليومي: ${(
-        cu.daily_limit || 5000
-      ).toLocaleString()} توكن\n\nاتكلم، أنا جاهز! 🚀`
-    : getWelcomeMessage(
-        cu.last_login_date,
-        cu.name,
-        cu.used_today || 0,
-        cu.daily_limit || 5000,
-        chatCount
-      );
-
-  if ((isNewUser || isFirstDay) && messagesRef.current.length === 1) {
-    setMessages([
-      { role: "assistant", content: welcomeMessage, id: Date.now() },
-    ]);
-  }
-
-  if (isFirstDay || isNewUser) {
-    await supabase
-      .from("profiles")
-      .update({ last_login_date: today })
-      .eq("id", user.id);
-    setCurrentUser((prev) => ({ ...prev, last_login_date: today }));
-  }
-}
-
-// ─────────────────────────────────────────
-// Settings handlers
-// ─────────────────────────────────────────
-async function handleSaveSettings({ profileUpdates, newPassword }) {
-  if (Object.keys(profileUpdates).length) {
-    const { error } = await supabase
-      .from("profiles")
-      .update(profileUpdates)
-      .eq("id", user.id);
-    if (error) throw error;
-  }
-
-  if (newPassword) {
-    const { error: authError } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-    if (authError) throw authError;
-  }
-
-  const updatedUser = { ...currentUser, ...profileUpdates };
-  setCurrentUser(updatedUser);
-  localStorage.setItem("black-user", JSON.stringify(updatedUser));
-  showToast("✅ تم تحديث الإعدادات بنجاح");
-}
-
-async function handleDeleteAccount() {
-  if (
-    !window.confirm(
-      "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
-    )
-  )
-    return;
-
-  try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    const res = await fetch(
-      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/delete-account",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      }
-    );
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "خطأ في حذف الحساب");
-
-    localStorage.removeItem("black-user");
-    localStorage.removeItem("black-last-chat-id");
-    window.location.reload();
-  } catch (err) {
-    alert("❌ خطأ في حذف الحساب: " + err.message);
-  }
-}
-
-// ─────────────────────────────────────────
-// Core chat logic
-// ─────────────────────────────────────────
-async function summarizeOldMessages(oldMessages, session) {
-  if (!oldMessages || oldMessages.length === 0) return null;
-
-  const text = oldMessages
-    .map(
-      (m) =>
-        `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(
-          0,
-          300
-        )}`
-    )
-    .join("\n");
-
-  try {
-    const res = await fetch(
-      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-        body: JSON.stringify({
-          model: GROQ_MODEL,
-          max_tokens: 200,
-          temperature: 0.3,
-          systemPrompt:
-            "أنت ملخّص محادثات. لخّص المحادثة التالية في 3 جمل قصيرة بالعربية فقط. لا تضف تعليقًا.",
-          messages: [{ role: "user", content: text }],
-        }),
-      }
-    );
-
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-const executeRequest = useCallback(
-  async (text, displayText) => {
-    try {
-      const { data: freshUser, error } = await supabase
-        .from("profiles")
-        .select("id, is_blocked")
-        .eq("id", user.id)
-        .single();
-
-      if (error || !freshUser) {
-        localStorage.removeItem("black-user");
-        window.location.reload();
-        return;
-      }
-      if (freshUser.is_blocked) {
-        showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
-        localStorage.removeItem("black-user");
-        setTimeout(() => window.location.reload(), 2000);
-        return;
-      }
-    } catch (err) {
-      console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
-    }
-
-    if (!currentChatIdRef.current) {
-      const newId = Date.now().toString();
-      currentChatIdRef.current = newId;
-      setCurrentChatId(newId);
-    }
-
-    const limitCheck = checkUserDailyLimit(currentUserRef.current);
-    if (!limitCheck.canChat) {
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content: limitCheck.reason,
-            id: Date.now(),
-          },
-        ])
-      );
-      setLoading(false);
-      return;
-    }
-
-    const shownText = displayText ?? text;
-
-    const userMsg = { role: "user", content: shownText, id: Date.now() };
-    const updatedMessages = [...messagesRef.current, userMsg];
-
-    setMessages(updatedMessages);
-    setInput("");
-    setAttachedFiles([]);
-
-    autoScrollRef.current = true;
-    setShowScrollButton(false);
-
-    setLoading(true);
-    setStreamingText("");
-
-    try {
-      let enhancedText = text;
-      const searchResult = await searchDuckDuckGo(text);
-      if (searchResult) {
-        enhancedText =
-          text +
-          "\n\n[نتائج البحث]:\n" +
-          searchResult +
-          "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
-      }
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const KEEP_FULL = 5;
-      const MAX_CHARS_PER_MSG = 500;
-
-      const allMsgs = updatedMessages
-        .filter((m) => m.type !== "task")
-        .slice(0, -1);
-      const recentMsgs = allMsgs.slice(-KEEP_FULL);
-      const oldMsgs = allMsgs.slice(0, -KEEP_FULL);
-
-      let summaryText = null;
-      if (oldMsgs.length > 0) {
-        summaryText = await summarizeOldMessages(oldMsgs, session);
-      }
-
-      const chatMessages = [];
-
-      if (summaryText) {
-        chatMessages.push({
-          role: "system",
-          content: `ملخص المحادثة السابقة: ${summaryText}`,
-        });
-      }
-
-      recentMsgs.forEach((m) => {
-        chatMessages.push({
-          role: m.role,
-          content:
-            m.content.length > MAX_CHARS_PER_MSG
-              ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
-              : m.content,
-        });
-      });
-
-      abortControllerRef.current = new AbortController();
-
-      const res = await fetch(
-        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          signal: abortControllerRef.current.signal,
-          body: JSON.stringify({
-            model: GROQ_MODEL,
-            max_tokens: GROQ_MAX_TOKENS,
-            temperature: GROQ_TEMPERATURE,
-            systemPrompt: getPersonalityPrompt(
-              currentUserRef.current?.personality || DEFAULT_PERSONALITY,
-              currentUserRef.current?.gender || "ولد"
-            ),
-            messages: [
-              ...chatMessages,
-              { role: "user", content: enhancedText },
-            ],
-          }),
-        }
-      );
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          showToast("⚠️ خطأ في المصادقة، حاول تسجيل الدخول مرة أخرى", "error");
-        } else if (
-          res.status === 429 ||
-          data.error?.code === "rate_limit_exceeded" ||
-          data.error?.code === "all_keys_rate_limited"
-        ) {
-          const retryAfter = Number(
-            data.error?.retry_after_seconds ||
-              data.retry_after_seconds ||
-              0
-          );
-
-          showToast(
-            retryAfter > 0
-              ? `⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول بعد ${retryAfter} ثانية.`
-              : "⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول مرة أخرى لاحقًا.",
-            "error"
-          );
-        }
-
-        throw new Error(
-          data.error?.message || data.error || `خطأ: ${res.status}`
-        );
-      }
-
-      const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
-
-      let i = 0;
-      function type() {
-        if (abortControllerRef.current === null) return;
-
-        if (i <= reply.length) {
-          setStreamingText(reply.slice(0, i));
-          i++;
-          setTimeout(type, 15);
-        } else {
-          setStreamingText("");
-          setMessages((prev) =>
-            sortMessagesByTime([
-              ...prev,
-              { role: "assistant", content: reply, id: Date.now() },
-            ])
-          );
-          setLoading(false);
-          abortControllerRef.current = null;
-        }
-      }
-      type();
-    } catch (err) {
-      if (err.name === "AbortError") {
-        console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: "⏹️ تم إيقاف التوليد.",
-              id: Date.now(),
-            },
-          ])
-        );
-      } else {
-        console.error("[Chat] خطأ في executeRequest:", err.message);
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: "❌ حدث خطأ: " + err.message,
-              id: Date.now(),
-            },
-          ])
-        );
-      }
-      setLoading(false);
-      setStreamingText("");
-      abortControllerRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  },
-  [user.id]
-);
-
-function handleStop() {
-  if (abortControllerRef.current) {
-    abortControllerRef.current.abort();
-    abortControllerRef.current = null;
-  }
-  setLoading(false);
-  setStreamingText("");
-}
-
-// ─────────────────────────────────────────
-// إنشاء مهمة جديدة
-// ─────────────────────────────────────────
-async function createTask(text) {
-  if (creatingTaskRef.current) {
-    console.log("[Chat] createTask already in progress, skipping");
-    return;
-  }
-
-  creatingTaskRef.current = true;
-
-  try {
-    if (!currentChatIdRef.current) {
-      const newId = Date.now().toString();
-      currentChatIdRef.current = newId;
-      setCurrentChatId(newId);
-    }
-
-    const { data: taskId, error } = await supabase.rpc("create_task", {
-      task_input: text,
-      chat_id_input: currentChatIdRef.current,
-    });
-
-    if (error) {
-      showToast("❌ " + error.message, "error");
-      return;
-    }
-
-    showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
-
-    const { data: task, error: fetchErr } = await supabase
-      .from("tasks")
-      .select("*")
-      .eq("id", taskId)
-      .single();
-
-    if (fetchErr || !task) {
-      console.error("[Chat] فشل جلب المهمة:", fetchErr);
-      return;
-    }
-
-    const taskMsgId = `task-${task.id}`;
-
-    setMessages((prev) => {
-      const exists = prev.some((m) => m.id === taskMsgId);
-      if (exists) return prev;
-
-      return sortMessagesByTime([
-        ...prev,
-        {
-          id: taskMsgId,
-          role: "assistant",
-          type: "task",
-          task,
-        },
-      ]);
-    });
-
-    setAllActiveTasks((prev) => {
-      const exists = prev.some((t) => t.id === task.id);
-      if (exists) return prev;
-      return [task, ...prev];
-    });
-
-    setInput("");
-    setAttachedFiles([]);
-    setSendMode("chat");
-  } catch (err) {
-    console.error("[Chat] خطأ في createTask:", err);
-    showToast("❌ فشل إنشاء المهمة", "error");
-  } finally {
-    creatingTaskRef.current = false;
-  }
-}
-
-async function cancelTask(taskId) {
-  try {
-    const { error } = await supabase.rpc("cancel_task", {
-      target_task_id: taskId,
-    });
-
-    if (error) throw error;
-
-    showToast("🛑 تم إيقاف المهمة.", "info");
-  } catch (err) {
-    console.error("[Chat] خطأ في cancelTask:", err);
-    showToast("❌ فشل إيقاف المهمة", "error");
-  }
-}
-
-async function openTaskInChat(chatId) {
-  if (chatId === currentChatIdRef.current) {
-    showToast("✅ أنت بالفعل في هذه المحادثة.", "info");
-    return;
-  }
-
-  if (currentChatIdRef.current) {
-    await saveChatToSupabase();
-  }
-
-  const { data: chat } = await supabase
-    .from("chats")
-    .select("*")
-    .eq("id", chatId)
-    .single();
-
-  if (!chat) {
-    showToast("⚠️ المحادثة غير موجودة.", "error");
-    return;
-  }
-
-  setCurrentChatId(chatId);
-  setMessages(
-    chat.messages && chat.messages.length > 0
-      ? sortMessagesByTime(chat.messages)
-      : [
-          {
-            role: "assistant",
-            content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
-            id: Date.now(),
-          },
-        ]
-  );
-
-  setShowHistory(false);
-  setShowMenu(false);
-  setInput("");
-  setAttachedFiles([]);
-
-  await loadChatTasksForChat(chatId);
-
-  setTimeout(() => inputRef.current?.focus(), 100);
-}
-
-// ─────────────────────────────────────────
-// ✅ PDF: معالجة قراءة صفحات/فصول محددة على دفعات
-// ─────────────────────────────────────────
-async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-  const BATCH_SIZE = 20;
-  const totalPages = pdfFile.pageCount || endPage;
-  const safeEnd = Math.min(endPage, totalPages);
-  const safeStart = Math.max(1, startPage);
-
-  if (safeStart > safeEnd) {
-    showToast("⚠️ نطاق صفحات غير صالح.", "error");
-    return;
-  }
-
-  // عرض رسالة المستخدم (طلب الصفحات)
-  const userMsg = {
-    role: "user",
-    content: userPrompt,
-    id: Date.now(),
-  };
-  setMessages((prev) => [...prev, userMsg]);
-  setInput("");
-  setLoading(true);
-  setStreamingText("");
-  autoScrollRef.current = true;
-  setShowScrollButton(false);
-
-  const totalBatches = Math.ceil((safeEnd - safeStart + 1) / BATCH_SIZE);
-
-  try {
-    for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-      const batchStart = safeStart + batchIndex * BATCH_SIZE;
-      const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, safeEnd);
-
-      showToast(
-        `🔍 جاري استخراج الصفحات ${batchStart}-${batchEnd} (${batchIndex + 1}/${totalBatches})...`,
-        "info"
-      );
-
-      // استخراج نص الدفعة
-      const batchText = await extractPdfText(
-        pdfFile.pdfFile,
-        batchStart,
-        batchEnd
-      );
-
-      if (!batchText || batchText.trim().length < 10) {
-        // دفعة فارغة — ننتقل للتالية
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: `⚠️ الصفحات ${batchStart}-${batchEnd} لا تحتوي على نص قابل للقراءة (قد تكون صورًا).`,
-              id: Date.now() + batchIndex,
-            },
-          ])
-        );
-        continue;
-      }
-
-      // ✅ بناء الطلب للنموذج
-      const requestText =
-        `طلب المستخدم: ${userPrompt}\n\n` +
-        `[ملف PDF: ${pdfFile.name} — الصفحات ${batchStart}-${batchEnd} من ${totalPages}]\n` +
-        `[دفعة ${batchIndex + 1} من ${totalBatches}]\n\n` +
-        `النص المستخرج:\n${batchText}\n\n` +
-        `نفّذ طلب المستخدم على هذا النص فقط. ` +
-        `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
-
-      // إرسال للنموذج
-      await executeRequest(requestText, null);
-    }
-  } catch (err) {
-    console.error("[PDF] خطأ في معالجة الصفحات:", err);
-    setMessages((prev) =>
-      sortMessagesByTime([
-        ...prev,
-        {
-          role: "assistant",
-          content: "❌ خطأ في قراءة PDF: " + err.message,
-          id: Date.now(),
-        },
-      ])
-    );
-    showToast("❌ فشل قراءة PDF.", "error");
-  } finally {
-    setLoading(false);
-    setStreamingText("");
-  }
-}
-
-// ✅ PDF: معالجة طلب الفصل/الدرس بالاسم
-async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
-  setLoading(true);
-  setStreamingText("");
-  autoScrollRef.current = true;
-  setShowScrollButton(false);
-
-  // عرض رسالة المستخدم
-  setMessages((prev) => [
-    ...prev,
-    { role: "user", content: userPrompt, id: Date.now() },
-  ]);
-  setInput("");
-
-  try {
-    showToast("🔍 جاري البحث عن الفصل في الفهرس...", "info");
-
-    const result = await findSectionByTitle(pdfFile.pdfFile, sectionTitle);
-
-    if (!result.found) {
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content:
-              `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
-              `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة (مثلًا: "من 40 إلى 80").`,
-            id: Date.now(),
-          },
-        ])
-      );
-      setLoading(false);
-      return;
-    }
-
-    showToast(
-      `✅ وُجد "${result.title}" في الصفحات ${result.startPage}-${result.endPage}`,
-      "success"
-    );
-
-    // عرض رسالة توضيحية
-    setMessages((prev) =>
-      sortMessagesByTime([
-        ...prev,
-        {
-          role: "assistant",
-          content: `📖 وُجد **${result.title}** في الصفحات **${result.startPage}-${result.endPage}**. جاري المعالجة على دفعات...`,
-          id: Date.now(),
-        },
-      ])
-    );
-
-    setLoading(false);
-
-    // الآن نستدعي معالجة الصفحات
-    await handlePdfPagesRequest(
-      pdfFile,
-      result.startPage,
-      result.endPage,
-      userPrompt
-    );
-  } catch (err) {
-    console.error("[PDF] خطأ في البحث عن الفصل:", err);
-    setMessages((prev) =>
-      sortMessagesByTime([
-        ...prev,
-        {
-          role: "assistant",
-          content: "❌ خطأ: " + err.message,
-          id: Date.now(),
-        },
-      ])
-    );
-    showToast("❌ فشل البحث عن الفصل.", "error");
-    setLoading(false);
-  }
-}
-
-// ─────────────────────────────────────────
-// Send
-// ─────────────────────────────────────────
-async function sendMessage() {
-  if (loading) return;
-
-  const text = input.trim();
-  if (!text && !attachedFiles.length) return;
-
-  // ✅ حماية: لا تُرسل ملفًا بدون نص (إلا إذا كان طلب فهرس)
-  const hasOnlyFiles = !text && attachedFiles.length > 0;
-  const hasTocRequest = isTocRequest(text);
-
-  if (hasOnlyFiles && !hasTocRequest) {
-    showToast(
-      "⚠️ اكتب سؤالًا مع الملف، أو اطلب (اعرض الفهرس).",
-      "info"
-    );
-    return;
-  }
-
-  if (sendMode === "task" && !attachedFiles.length) {
-    await createTask(text);
-    return;
-  }
-
-  const hasPdf = attachedFiles.some(
-    (f) => f.type === "application/pdf" && f.pdfFile
-  );
-
-  // ✅ أولوية 1: طلب الفهرس
-  if (hasPdf && isTocRequest(text)) {
-    await handleTocRequest();
-    return;
-  }
-
-  // ✅ أولوية 2: طلب صفحات محددة
-  if (hasPdf) {
-    const pdfFile = attachedFiles.find(
-      (f) => f.type === "application/pdf" && f.pdfFile
-    );
-
-    const pageRange = detectPageRange(text);
-    if (pageRange) {
-      await handlePdfPagesRequest(
-        pdfFile,
-        pageRange.startPage,
-        pageRange.endPage,
-        text
-      );
-      return;
-    }
-
-    // ✅ أولوية 3: طلب فصل/درس بالاسم
-    const sectionTitle = detectSectionRequest(text);
-    if (sectionTitle) {
-      await handlePdfSectionRequest(pdfFile, sectionTitle, text);
-      return;
-    }
-  }
-
-  const MAX_FILE_CHARS = 100000;
-
-  let sendText = text;
-  let displayText = text;
-
-  if (attachedFiles.length > 0) {
-    const fileNamesLine = attachedFiles
-      .map((f) => `📎 ${f.name}`)
-      .join(" ");
-
-    displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
-
-    const textFiles = attachedFiles.filter(
-      (f) => f.type !== "application/pdf"
-    );
-
-    const filesFullText = textFiles
-      .map((f) => {
-        const content = f.content || "";
-        const truncated = content.length > MAX_FILE_CHARS;
-        const body = truncated
-          ? content.slice(0, MAX_FILE_CHARS) +
-            "\n\n... [تم اقتصار الملف: تجاوز 100,000 حرف]"
-          : content;
-        return `\n\n📎 ${f.name}${
-          truncated ? " ⚠️ (تم اقتصاره)" : ""
-        }\n\`\`\`\n${body}\n\`\`\``;
-      })
-      .join("");
-
-    sendText = (text || "الملفات المرفقة:") + filesFullText;
-
-    const pdfFiles = attachedFiles.filter(
-      (f) => f.type === "application/pdf"
-    );
-    if (pdfFiles.length > 0) {
-      const pdfInfo = pdfFiles
-        .map((f) => `"${f.name}" (${f.pageCount || "?"} صفحة)`)
-        .join(", ");
-      sendText +=
-        `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
-        `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات (مثلًا: "من 40 إلى 80")، ` +
-        `أو اسم فصل/درس (مثلًا: "الفصل الأول").]`;
-    }
-  }
-
-  executeRequest(sendText, displayText);
-}
-
   // ✅ معالجة طلب الفهرس
   async function handleTocRequest() {
     const pdfFile = attachedFiles.find(
@@ -2945,4 +2054,5 @@ async function sendMessage() {
       )}
     </div>
   );
-    }
+}
+  
