@@ -1,7 +1,7 @@
 // ============================================
 // ChatMessages.jsx
 // عرض الرسائل + المهام + النتائج المكتملة
-// ✅ جديد: زر "العودة للأسفل" عند التمرير لأعلى
+// ✅ جديد: زر "العودة للأسفل" + كشف الوصول للأسفل
 // ============================================
 
 import MessageContent from "../MessageContent";
@@ -119,10 +119,9 @@ export default function ChatMessages({
           className="scroll-to-bottom-btn"
           title="العودة للأسفل"
           style={{
-            position: "absolute",
+            position: "sticky",
             bottom: "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
+            alignSelf: "center",
             width: "44px",
             height: "44px",
             borderRadius: "50%",
@@ -131,7 +130,7 @@ export default function ChatMessages({
             color: "#fff",
             fontSize: "20px",
             cursor: "pointer",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
             zIndex: 100,
             display: "flex",
             alignItems: "center",
