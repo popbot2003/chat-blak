@@ -1,9 +1,11 @@
 // ============================================
-// Chat.jsx — نسخة v9.0 (مع Supabase Storage)
+// Chat.jsx — نسخة v9.1 (مع Supabase Storage)
 // ✅ إصلاح 1-17 (كما في السابق)
 // ✅ جديد 18: رفع الملفات إلى Supabase Storage
 // ✅ جديد 19: استرجاع الملفات عند فتح المحادثة
 // ✅ جديد 20: حذف الملفات من Storage عند حذف المحادثة
+// ✅ جديد 21: تقليل حجم الدفعة إلى 5 صفحات (حد Groq)
+// ✅ جديد 22: إخفاء النص الكامل للطلب من الشات
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -155,7 +157,6 @@ function mergeMessages(existing, newMsgs) {
   return sortMessagesByTime(combined);
 }
 
-// ✅ كشف طلب الفهرس
 function isTocRequest(text) {
   if (!text) return false;
   const t = text.trim().toLowerCase();
@@ -173,7 +174,6 @@ function isTocRequest(text) {
   return keys.some((k) => t.includes(k));
 }
 
-// ✅ كشف طلب نطاق صفحات
 function detectPageRange(text) {
   if (!text) return null;
 
@@ -198,7 +198,6 @@ function detectPageRange(text) {
   return null;
 }
 
-// ✅ كشف طلب فصل/درس بالاسم
 function detectSectionRequest(text) {
   if (!text) return null;
 
@@ -631,8 +630,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setCurrentChatId(lastChatId);
         setMessages(sortMessagesByTime(data.messages));
         await loadChatTasksForChat(lastChatId);
-
-        // ✅ جديد: استرجاع الملفات المرتبطة بالمحادثة
         await restoreChatFiles(lastChatId);
       }
     } catch (err) {
@@ -640,7 +637,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ✅ جديد: استرجاع ملفات المحادثة من user_files
+  // ✅ استرجاع ملفات المحادثة
   async function restoreChatFiles(chatId) {
     if (!chatId) return;
 
@@ -648,7 +645,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       const files = await getUserFilesByChatId(chatId);
       if (!files || files.length === 0) return;
 
-      // تحويل السجلات إلى شكل attachedFiles
       const restoredFiles = files.map((f) => ({
         id: f.id,
         name: f.file_name,
@@ -662,12 +658,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
             : "📎",
         content: f.content_text || "",
         pageCount: f.page_count,
-        filePath: f.file_path, // ✅ مسار في Storage
-        fromStorage: true, // ✅ علامة
+        filePath: f.file_path,
+        fromStorage: true,
       }));
 
       setAttachedFiles((prev) => {
-        // تجنب التكرار
         const existingIds = new Set(prev.map((p) => p.id));
         const toAdd = restoredFiles.filter((f) => !existingIds.has(f.id));
         return [...prev, ...toAdd];
@@ -1014,7 +1009,7 @@ async function summarizeOldMessages(oldMessages, session) {
   }
 }
 
-// ✅ جديد: رفع الملفات المعلقة إلى Storage
+// ✅ رفع الملفات المعلقة إلى Storage
 async function uploadPendingFiles(chatId) {
   const filesToUpload = attachedFiles.filter(
     (f) => !f.fromStorage && f.rawFile
@@ -1028,10 +1023,8 @@ async function uploadPendingFiles(chatId) {
     try {
       showToast(`⬆️ جاري رفع ${f.name} إلى التخزين...`, "info");
 
-      // رفع الملف إلى Storage
       const { path } = await uploadFileToStorage(f.rawFile, user.id, chatId);
 
-      // إضافة سجل في user_files
       const record = await insertUserFile({
         user_id: user.id,
         chat_id: chatId,
@@ -1043,15 +1036,14 @@ async function uploadPendingFiles(chatId) {
         page_count: f.pageCount || null,
       });
 
-      // تحديث الكائن في attachedFiles
       const idx = uploadedFiles.findIndex((u) => u.id === f.id);
       if (idx !== -1) {
         uploadedFiles[idx] = {
           ...uploadedFiles[idx],
-          id: record.id, // استخدام id من DB
+          id: record.id,
           filePath: path,
           fromStorage: true,
-          rawFile: null, // لم نعد نحتاج الملف الأصلي
+          rawFile: null,
         };
       }
     } catch (err) {
@@ -1117,7 +1109,7 @@ const executeRequest = useCallback(
     setMessages(updatedMessages);
     setInput("");
 
-    // ✅ جديد: رفع الملفات المعلقة إلى Storage قبل المسح
+    // ✅ رفع الملفات المعلقة إلى Storage
     let filesForRequest = attachedFiles;
     if (attachedFiles.length > 0) {
       try {
@@ -1128,7 +1120,7 @@ const executeRequest = useCallback(
       }
     }
 
-    // ✅ نبقي ملفات PDF المرفوعة (للاستخدام اللاحق)
+    // نبقي PDFs المرفوعة
     setAttachedFiles((prev) =>
       prev.filter((f) => f.type === "application/pdf" && f.fromStorage)
     );
@@ -1447,9 +1439,11 @@ async function openTaskInChat(chatId) {
 
 // ─────────────────────────────────────────
 // PDF: معالجة قراءة صفحات/فصول محددة على دفعات
+// ✅ BATCH_SIZE = 5 (حد Groq)
+// ✅ إخفاء النص الكامل للطلب
 // ─────────────────────────────────────────
 async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-  const BATCH_SIZE = 20;
+  const BATCH_SIZE = 5; // ✅ 5 صفحات فقط (حد Groq 8000 TPM)
   const totalPages = pdfFile.pageCount || endPage;
   const safeEnd = Math.min(endPage, totalPages);
   const safeStart = Math.max(1, startPage);
@@ -1459,6 +1453,7 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
     return;
   }
 
+  // ✅ عرض رسالة المستخدم الأصلية فقط (وليس الطلب الكامل)
   const userMsg = {
     role: "user",
     content: userPrompt,
@@ -1483,7 +1478,7 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
         "info"
       );
 
-      // ✅ استخدام URL إذا كان الملف من Storage، وإلا File
+      // ✅ استخدام URL إذا كان الملف من Storage
       const pdfSource = pdfFile.filePath
         ? await getFileSignedUrl(pdfFile.filePath, 3600)
         : pdfFile.rawFile || pdfFile.pdfFile;
@@ -1516,6 +1511,9 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
         `نفّذ طلب المستخدم على هذا النص فقط. ` +
         `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
 
+      // ✅ إخفاء الطلب الكامل، عرض رسالة المستخدم فقط
+      // نرسل text=requestText و displayText=userPrompt
+      // لكن لأننا أضفنا userMsg بالفعل، نرسل displayText=null لتجنب التكرار
       await executeRequest(requestText, null);
     }
   } catch (err) {
@@ -1646,13 +1644,11 @@ async function sendMessage() {
     (f) => f.type === "application/pdf"
   );
 
-  // أولوية 1: طلب الفهرس
   if (hasPdf && isTocRequest(text)) {
     await handleTocRequest();
     return;
   }
 
-  // أولوية 2: طلب صفحات محددة
   if (hasPdf) {
     const pdfFile = attachedFiles.find(
       (f) => f.type === "application/pdf"
@@ -1669,7 +1665,6 @@ async function sendMessage() {
       return;
     }
 
-    // أولوية 3: طلب فصل/درس بالاسم
     const sectionTitle = detectSectionRequest(text);
     if (sectionTitle) {
       await handlePdfSectionRequest(pdfFile, sectionTitle, text);
@@ -1753,7 +1748,6 @@ async function sendMessage() {
     try {
       showToast("🔍 جاري البحث عن الفهرس...", "info");
 
-      // ✅ استخدام URL إذا كان الملف من Storage
       const pdfSource = pdfFile.filePath
         ? await getFileSignedUrl(pdfFile.filePath, 3600)
         : pdfFile.rawFile || pdfFile.pdfFile;
@@ -1842,7 +1836,6 @@ async function sendMessage() {
       setCurrentChatId(chatId);
       setMessages(sortMessagesByTime(data.messages));
       await loadChatTasksForChat(chatId);
-      // ✅ جديد: استرجاع الملفات
       await restoreChatFiles(chatId);
     }
     setShowHistory(false);
@@ -1861,7 +1854,7 @@ async function sendMessage() {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
     try {
-      // ✅ 1. حذف الملفات من Storage أولًا
+      // 1. حذف الملفات من Storage أولًا
       try {
         const files = await getUserFilesByChatId(chatId);
         if (files && files.length > 0) {
@@ -1875,7 +1868,7 @@ async function sendMessage() {
         console.warn("[Chat] خطأ في حذف الملفات من Storage:", err.message);
       }
 
-      // ✅ 2. إلغاء المهام النشطة
+      // 2. إلغاء المهام النشطة
       const { error: cancelErr } = await supabase
         .from("tasks")
         .update({
@@ -1896,7 +1889,7 @@ async function sendMessage() {
         console.warn("[Chat] خطأ في إلغاء المهام:", cancelErr.message);
       }
 
-      // ✅ 3. حذف المحادثة (tasks و user_files يُحذفان تلقائيًا عبر CASCADE)
+      // 3. حذف المحادثة (tasks و user_files يُحذفان تلقائيًا عبر CASCADE)
       const { error: chatErr } = await supabase
         .from("chats")
         .delete()
@@ -1938,7 +1931,7 @@ async function sendMessage() {
     });
   }
 
-  // ✅ رفع الملفات: نحتفظ بالـ File في الذاكرة مؤقتًا
+  // ✅ رفع الملفات
   async function handleFileUpload(e) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -1947,7 +1940,6 @@ async function sendMessage() {
     const newFiles = [];
 
     for (const file of files) {
-      // ✅ PDF: نحفظ الملف ونقرأ عدد الصفحات فقط
       if (file.type === "application/pdf") {
         try {
           showToast(`📄 جاري قراءة ${file.name}...`, "info");
@@ -1961,14 +1953,14 @@ async function sendMessage() {
             size: file.size,
             icon: "📄",
             content: "",
-            rawFile: file, // ✅ نحتفظ بالملف الأصلي
-            pdfFile: file, // للتوافق مع الكود القديم
+            rawFile: file,
+            pdfFile: file,
             pageCount,
-            fromStorage: false, // ✅ لم يُرفع بعد
+            fromStorage: false,
           });
 
           showToast(
-            `✅ تم استلام ${file.name} (${pageCount} صفحة). اكتب (اعرض الفهرس)، أو اطلب صفحات محددة، أو اسم فصل.`,
+            `✅ تم استلام ${file.name} (${pageCount} صفحة). اكتب (اعرض الفهرس)، أو اطلب صفحات محددة (5 صفحات كحد أقصى في الطلب)، أو اسم فصل.`,
             "success"
           );
         } catch (err) {
@@ -1978,7 +1970,6 @@ async function sendMessage() {
         continue;
       }
 
-      // ✅ الصور: استخراج النص عبر Tesseract.js
       if (file.type.startsWith("image/")) {
         try {
           showToast(`🔍 جاري استخراج النص من ${file.name}...`, "info");
@@ -2015,7 +2006,6 @@ async function sendMessage() {
         continue;
       }
 
-      // ✅ باقي الملفات: تُقرأ كنص عادي
       try {
         newFiles.push({
           id: Date.now() + Math.random(),
@@ -2045,13 +2035,11 @@ async function sendMessage() {
   }
 
   function removeFile(fileId) {
-    // ✅ إذا كان الملف مرفوعًا إلى Storage، نحذفه أيضًا
     const fileToRemove = attachedFiles.find((f) => f.id === fileId);
     if (fileToRemove?.filePath) {
       deleteFilesFromStorage([fileToRemove.filePath]).catch((err) =>
         console.warn("[Chat] فشل حذف الملف من Storage:", err.message)
       );
-      // سجل user_files سيُحذف تلقائيًا عند حفظ المحادثة
       supabase
         .from("user_files")
         .delete()
