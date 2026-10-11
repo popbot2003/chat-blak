@@ -1,8 +1,9 @@
 // ============================================
-// Chat.jsx — نسخة v7 (تمرير + تركيز + PDF فهرس)
+// Chat.jsx — نسخة v7.2
 // ✅ إصلاح 1-11 (كما في السابق)
 // ✅ جديد 12: إصلاح التركيز بعد كل رد
-// ✅ جديد 13: إصلاح التمرير التلقائي + زر العودة للأسفل
+// ✅ جديد 13: إصلاح التمرير التلقائي (ref فوري)
+// ✅ جديد 14: الوضع الافتراضي = نهاري (light)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -188,13 +189,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [loading, setLoading] = useState(false);
   const [streamingText, setStreamingText] = useState("");
   const [copiedId, setCopiedId] = useState(null);
-  const [theme, setTheme] = useState("dark");
+  // ✅ الوضع الافتراضي: نهاري (light)
+  const [theme, setTheme] = useState("light");
   const [attachedFiles, setAttachedFiles] = useState([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
 
-  // ✅ جديد: حالة التمرير
-  const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
+  // ✅ حالة عرض الزر العائم
+  const [showScrollButton, setShowScrollButton] = useState(false);
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -204,6 +206,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const debouncedSaveRef = useRef(null);
   const abortControllerRef = useRef(null);
   const creatingTaskRef = useRef(false);
+
+  // ✅ المرجع الفوري لحالة التمرير (لا يسبب re-render)
+  const autoScrollRef = useRef(true);
 
   useEffect(() => {
     messagesRef.current = messages;
@@ -442,7 +447,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ جديد: إصلاح التركيز — يُعيد التركيز بعد كل رد
+  // ✅ إصلاح التركيز — يُعيد التركيز بعد كل رد
   useEffect(() => {
     if (!loading && !streamingText && isLoaded) {
       const timer = setTimeout(() => {
@@ -452,24 +457,40 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }, [loading, streamingText, isLoaded]);
 
-  // ✅ جديد: تمرير تلقائي ذكي — يتوقف عند التمرير لأعلى
+  // ✅ التمرير التلقائي — يعتمد على المرجع الفوري
   useEffect(() => {
-    if (isUserScrolledUp) return;
+    if (!autoScrollRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, streamingText, isUserScrolledUp]);
+  }, [messages, streamingText]);
 
-  // ✅ جديد: كشف تمرير المستخدم
+  // ✅ كشف تمرير المستخدم
   function handleMessagesScroll(e) {
     const el = e.target;
     const distanceFromBottom =
       el.scrollHeight - el.scrollTop - el.clientHeight;
-    // إذا كان بعيدًا عن الأسفل بأكثر من 150 بكسل، فهو يتصفح
-    setIsUserScrolledUp(distanceFromBottom > 150);
+
+    // إذا اقترب من الأسفل (أقل من 50 بكسل): إعادة التمرير التلقائي
+    if (distanceFromBottom < 50) {
+      if (!autoScrollRef.current) {
+        autoScrollRef.current = true;
+        setShowScrollButton(false);
+      }
+      return;
+    }
+
+    // إذا ابتعد عن الأسفل (أكثر من 100 بكسل): إيقاف التمرير التلقائي
+    if (distanceFromBottom > 100) {
+      if (autoScrollRef.current) {
+        autoScrollRef.current = false;
+        setShowScrollButton(true);
+      }
+    }
   }
 
-  // ✅ جديد: زر العودة للأسفل
+  // ✅ زر العودة للأسفل
   function handleScrollToBottom() {
-    setIsUserScrolledUp(false);
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
@@ -654,7 +675,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return [];
     }
   }
-  
   async function saveChatToSupabase() {
     const msgs = messagesRef.current;
     if (!msgs || msgs.length === 0) return;
@@ -945,7 +965,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         return;
       }
 
-      // ✅ النص المعروض في الشات (بدون محتوى الملفات)
       const shownText = displayText ?? text;
 
       const userMsg = { role: "user", content: shownText, id: Date.now() };
@@ -955,8 +974,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       setInput("");
       setAttachedFiles([]);
 
-      // ✅ عند بدء طلب جديد، نُصفّر حالة التمرير
-      setIsUserScrolledUp(false);
+      // ✅ عند إرسال رسالة جديدة، نُفعّل التمرير التلقائي
+      autoScrollRef.current = true;
+      setShowScrollButton(false);
 
       setLoading(true);
       setStreamingText("");
@@ -1289,24 +1309,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    // ✅ الحد الأقصى لمحتوى الملفات المرفقة (100,000 حرف)
     const MAX_FILE_CHARS = 100000;
 
-    // النص الكامل الذي سيُرسل للنموذج
     let sendText = text;
-    // النص المعروض في الشات (يحتوي أسماء الملفات فقط)
     let displayText = text;
 
     if (attachedFiles.length > 0) {
-      // أسماء الملفات في سطر واحد للعرض
       const fileNamesLine = attachedFiles
         .map((f) => `📎 ${f.name}`)
         .join(" ");
 
-      // بناء النص المعروض (نص المستخدم + أسماء الملفات)
       displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
 
-      // بناء النص المُرسل للنموذج
       const textFiles = attachedFiles.filter(
         (f) => f.type !== "application/pdf"
       );
@@ -1327,16 +1341,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       sendText = (text || "الملفات المرفقة:") + filesFullText;
 
-      // تنبيه للنموذج بوجود PDF + عدد الصفحات
       const pdfFiles = attachedFiles.filter(
         (f) => f.type === "application/pdf"
       );
       if (pdfFiles.length > 0) {
         const pdfInfo = pdfFiles
-          .map(
-            (f) =>
-              `"${f.name}" (${f.pageCount || "?"} صفحة)`
-          )
+          .map((f) => `"${f.name}" (${f.pageCount || "?"} صفحة)`)
           .join(", ");
         sendText +=
           `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
@@ -1357,7 +1367,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    // عرض رسالة المستخدم (طلب الفهرس)
     const userMsgId = Date.now();
     const userMsg = {
       role: "user",
@@ -1368,7 +1377,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setInput("");
     setLoading(true);
     setStreamingText("");
-    setIsUserScrolledUp(false);
+
+    // ✅ تفعيل التمرير التلقائي عند طلب جديد
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
 
     try {
       showToast("🔍 جاري البحث عن الفهرس...", "info");
@@ -1437,7 +1449,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowHistory(false);
     setInput("");
     setAttachedFiles([]);
-    setIsUserScrolledUp(false);
+
+    // ✅ تفعيل التمرير التلقائي
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
+
     inputRef.current?.focus();
   }
 
@@ -1459,7 +1475,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowMenu(false);
     setInput("");
     setAttachedFiles([]);
-    setIsUserScrolledUp(false);
+
+    // ✅ تفعيل التمرير التلقائي
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
+
     inputRef.current?.focus();
   }
 
@@ -1657,8 +1677,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "#0f0f1a",
-          color: "#e0e0e0",
+          background: "#f4f6fb",
+          color: "#1e1b4b",
         }}
       >
         🖤 جاري التحميل...
@@ -1730,7 +1750,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onCopy={copyMessage}
         onCancelTask={cancelTask}
         bottomRef={bottomRef}
-        showScrollButton={isUserScrolledUp}
+        showScrollButton={showScrollButton}
         onScrollToBottom={handleScrollToBottom}
         onScroll={handleMessagesScroll}
       />
@@ -1762,3 +1782,4 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
+  
