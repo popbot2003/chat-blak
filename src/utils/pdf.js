@@ -2,6 +2,9 @@
 // src/utils/pdf.js
 // استخراج النص من ملفات PDF باستخدام pdf.js
 // pdf.js محمّل من CDN في index.html
+// ✅ جديد 1: الفهرس الكامل (20,000 حرف)
+// ✅ جديد 2: البحث باسم الفصل/الدرس في الفهرس
+// ✅ جديد 3: استخراج نص الدفعات (للصفحات الكبيرة)
 // ============================================
 
 /**
@@ -26,6 +29,32 @@ async function loadPdf(file) {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
   return await loadingTask.promise;
+}
+
+/**
+ * استخراج نص صفحة واحدة
+ * @param {PDFPageProxy} page
+ * @returns {Promise<string>}
+ */
+async function extractPageText(page) {
+  const textContent = await page.getTextContent();
+
+  let pageText = "";
+  let lastY = null;
+
+  for (const item of textContent.items) {
+    if (typeof item.str !== "string") continue;
+
+    // كشف تغيير السطر
+    if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
+      pageText += "\n";
+    }
+
+    pageText += item.str;
+    lastY = item.transform[5];
+  }
+
+  return pageText.trim();
 }
 
 /**
@@ -57,25 +86,9 @@ export async function extractPdfText(file, startPage, endPage, onProgress) {
 
   for (let i = from; i <= to; i++) {
     const page = await pdf.getPage(i);
-    const textContent = await page.getTextContent();
+    const pageText = await extractPageText(page);
 
-    // دمج النص مع الحفاظ على الفواصل
-    let pageText = "";
-    let lastY = null;
-
-    for (const item of textContent.items) {
-      if (typeof item.str !== "string") continue;
-
-      // كشف تغيير السطر (y يختلف)
-      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
-        pageText += "\n";
-      }
-
-      pageText += item.str;
-      lastY = item.transform[5];
-    }
-
-    pagesText.push(`─── صفحة ${i} ───\n${pageText.trim()}`);
+    pagesText.push(`─── صفحة ${i} ───\n${pageText}`);
     if (onProgress) onProgress(i - from + 1, total);
   }
 
@@ -83,7 +96,8 @@ export async function extractPdfText(file, startPage, endPage, onProgress) {
 }
 
 /**
- * البحث عن الفهرس في أول 20 وآخر 5 صفحات
+ * البحث عن الفهرس في أول 20 وآخر 10 صفحات
+ * ✅ جديد: يحاول جمع الفهرس كاملًا عبر عدة صفحات
  * @param {File} file
  * @param {(current: number, total: number) => void} [onProgress]
  * @returns {Promise<{found: boolean, text: string, page: number}>}
@@ -93,9 +107,8 @@ export async function findToc(file, onProgress) {
   const numPages = pdf.numPages;
 
   const firstPages = Math.min(20, numPages);
-  const lastPages = Math.min(5, numPages);
+  const lastPages = Math.min(10, numPages);
 
-  // قائمة الصفحات التي سنفحصها (بدون تكرار)
   const pagesToCheck = new Set();
   for (let i = 1; i <= firstPages; i++) pagesToCheck.add(i);
   for (let i = Math.max(1, numPages - lastPages + 1); i <= numPages; i++) {
@@ -106,7 +119,6 @@ export async function findToc(file, onProgress) {
   const total = sortedPages.length;
   let current = 0;
 
-  // كلمات دالة على الفهرس (عربي + إنجليزي)
   const tocKeywords = [
     "الفهرس",
     "فهرس",
@@ -124,33 +136,33 @@ export async function findToc(file, onProgress) {
     if (onProgress) onProgress(current, total);
 
     const page = await pdf.getPage(pageNum);
-    const textContent = await page.getTextContent();
-
-    let pageText = "";
-    let lastY = null;
-
-    for (const item of textContent.items) {
-      if (typeof item.str !== "string") continue;
-      if (lastY !== null && Math.abs(item.transform[5] - lastY) > 5) {
-        pageText += "\n";
-      }
-      pageText += item.str;
-      lastY = item.transform[5];
-    }
-
+    const pageText = await extractPageText(page);
     const lowerText = pageText.toLowerCase();
 
-    // هل يحتوي على كلمة دالة؟
     for (const kw of tocKeywords) {
       if (lowerText.includes(kw.toLowerCase())) {
-        // استخرج مساحة معقولة حول الكلمة
         const idx = lowerText.indexOf(kw.toLowerCase());
-        const start = Math.max(0, idx - 100);
-        const end = Math.min(pageText.length, idx + 3000);
+
+        // ✅ الفهرس الكامل: نأخذ من بداية الكلمة إلى 20,000 حرف بعدها
+        const start = Math.max(0, idx - 200);
+        let combined = pageText.slice(start);
+
+        // ✅ نجمع مع الصفحة التالية إذا كان الفهرس طويلًا
+        let nextPageNum = pageNum + 1;
+        while (
+          combined.length < 20000 &&
+          nextPageNum <= numPages &&
+          nextPageNum <= pageNum + 5
+        ) {
+          const nextPage = await pdf.getPage(nextPageNum);
+          const nextText = await extractPageText(nextPage);
+          combined += "\n\n" + nextText;
+          nextPageNum++;
+        }
 
         return {
           found: true,
-          text: pageText.slice(start, end).trim(),
+          text: combined.slice(0, 20000).trim(),
           page: pageNum,
         };
       }
@@ -158,4 +170,105 @@ export async function findToc(file, onProgress) {
   }
 
   return { found: false, text: "", page: -1 };
+}
+
+/**
+ * ✅ جديد: البحث عن فصل/درس بالاسم في الفهرس
+ * @param {File} file
+ * @param {string} title - اسم الفصل/الدرس (مثل "الفصل الأول")
+ * @returns {Promise<{found: boolean, pages: string, title: string}>}
+ */
+export async function findSectionByTitle(file, title) {
+  const pdf = await loadPdf(file);
+  const numPages = pdf.numPages;
+
+  // نبحث في أول 30 وآخر 15 صفحة
+  const pagesToCheck = new Set();
+  for (let i = 1; i <= Math.min(30, numPages); i++) pagesToCheck.add(i);
+  for (
+    let i = Math.max(1, numPages - 15);
+    i <= numPages;
+    i++
+  )
+    pagesToCheck.add(i);
+
+  const sortedPages = Array.from(pagesToCheck).sort((a, b) => a - b);
+
+  // تنظيف العنوان من الكلمات الزائدة
+  const cleanTitle = title
+    .replace(/^(ما هو|ما هي|اشرح|لخص|اقرأ|استخرج)\s+/i, "")
+    .replace(/\s+(في الكتاب|في الملف|من الكتاب|من الملف)$/i, "")
+    .trim();
+
+  const lowerTitle = cleanTitle.toLowerCase();
+
+  let fullTocText = "";
+
+  for (const pageNum of sortedPages) {
+    const page = await pdf.getPage(pageNum);
+    const pageText = await extractPageText(page);
+    fullTocText += "\n" + pageText;
+  }
+
+  const lowerToc = fullTocText.toLowerCase();
+
+  // 1) البحث الدقيق
+  let idx = lowerToc.indexOf(lowerTitle);
+
+  // 2) إذا لم يوجد، البحث عن أول كلمة
+  if (idx === -1) {
+    const firstWord = cleanTitle.split(/\s+/)[0].toLowerCase();
+    if (firstWord.length > 2) {
+      idx = lowerToc.indexOf(firstWord);
+    }
+  }
+
+  if (idx === -1) {
+    return { found: false, pages: "", title: "" };
+  }
+
+  // استخرج النص حول العنوان (200 حرف قبل، 500 حرف بعد)
+  const start = Math.max(0, idx - 200);
+  const end = Math.min(fullTocText.length, idx + 500);
+  const excerpt = fullTocText.slice(start, end).trim();
+
+  // ابحث عن أرقام الصفحات في هذا المقتطف
+  // أنماط: 40، 40-80، 40 - 80، ٤٠، إلخ
+  const pagePatterns = excerpt.match(
+    /\d{1,4}(?:\s*[-–—]\s*\d{1,4})?/g
+  );
+
+  if (!pagePatterns || pagePatterns.length === 0) {
+    return { found: false, pages: "", title: "" };
+  }
+
+  // أخذ أول رقم كصفحة البداية
+  const firstNumber = parseInt(pagePatterns[0].split(/[-–—]/)[0], 10);
+
+  // إذا وجد نطاق صريح (40-80)، نستخدمه
+  const rangePattern = excerpt.match(
+    /(\d{1,4})\s*[-–—]\s*(\d{1,4})/
+  );
+
+  let startPage = firstNumber;
+  let endPage = firstNumber;
+
+  if (rangePattern) {
+    startPage = parseInt(rangePattern[1], 10);
+    endPage = parseInt(rangePattern[2], 10);
+  }
+
+  // التحقق من صحة الأرقام
+  if (startPage < 1 || startPage > numPages) {
+    return { found: false, pages: "", title: "" };
+  }
+
+  return {
+    found: true,
+    pages: `${startPage}-${endPage}`,
+    title: cleanTitle,
+    startPage,
+    endPage,
+    excerpt,
+  };
 }
