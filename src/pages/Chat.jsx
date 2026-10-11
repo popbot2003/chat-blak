@@ -9,6 +9,7 @@
 // ✅ جديد 7: استخراج النص من الصور محلياً (Tesseract.js)
 // ✅ جديد 8: لا يستهلك توكنات Groq للصور
 // ✅ جديد 9: رفع حد الملفات المرفقة إلى 100,000 حرف
+// ✅ جديد 10: إخفاء محتوى الملفات من الشات (يظهر الاسم فقط)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -859,7 +860,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }
 
   const executeRequest = useCallback(
-    async (text) => {
+    async (text, displayText) => {
       try {
         const { data: freshUser, error } = await supabase
           .from("profiles")
@@ -904,7 +905,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
         return;
       }
 
-      const userMsg = { role: "user", content: text, id: Date.now() };
+      // ✅ النص المعروض في الشات (بدون محتوى الملفات)
+      const shownText = displayText ?? text;
+
+      const userMsg = { role: "user", content: shownText, id: Date.now() };
       const updatedMessages = [...messagesRef.current, userMsg];
 
       setMessages(updatedMessages);
@@ -1236,10 +1240,23 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
     // ✅ الحد الأقصى لمحتوى الملفات المرفقة (100,000 حرف)
     const MAX_FILE_CHARS = 100000;
-    let finalText = text;
+
+    // النص الكامل الذي سيُرسل للنموذج
+    let sendText = text;
+    // النص المعروض في الشات (يحتوي أسماء الملفات فقط)
+    let displayText = text;
 
     if (attachedFiles.length > 0) {
-      const filesText = attachedFiles
+      // أسماء الملفات في سطر واحد للعرض
+      const fileNamesLine = attachedFiles
+        .map((f) => `📎 ${f.name}`)
+        .join(" ");
+
+      // بناء النص المعروض (نص المستخدم + أسماء الملفات)
+      displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
+
+      // بناء النص المُرسل للنموذج (نص المستخدم + أسماء + محتوى كامل)
+      const filesFullText = attachedFiles
         .map((f) => {
           const content = f.content || "";
           const truncated = content.length > MAX_FILE_CHARS;
@@ -1252,10 +1269,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
           }\n\`\`\`\n${body}\n\`\`\``;
         })
         .join("");
-      finalText = (text || "الملفات المرفقة:") + filesText;
+
+      sendText = (text || "الملفات المرفقة:") + filesFullText;
     }
 
-    executeRequest(finalText);
+    executeRequest(sendText, displayText);
   }
 
   async function newChat() {
@@ -1565,4 +1583,3 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
-  
