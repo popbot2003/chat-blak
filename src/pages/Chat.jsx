@@ -1,11 +1,7 @@
 // ============================================
-// Chat.jsx — نسخة v9.1 (مع Supabase Storage)
-// ✅ إصلاح 1-17 (كما في السابق)
-// ✅ جديد 18: رفع الملفات إلى Supabase Storage
-// ✅ جديد 19: استرجاع الملفات عند فتح المحادثة
-// ✅ جديد 20: حذف الملفات من Storage عند حذف المحادثة
-// ✅ جديد 21: تقليل حجم الدفعة إلى 5 صفحات (حد Groq)
-// ✅ جديد 22: إخفاء النص الكامل للطلب من الشات
+// Chat.jsx — نسخة v9.2 (مع Supabase Storage)
+// ✅ إصلاح 1-22 (كما في السابق)
+// ✅ جديد 23: إصلاح ظهور النص الكامل للطلب
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -637,7 +633,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ✅ استرجاع ملفات المحادثة
   async function restoreChatFiles(chatId) {
     if (!chatId) return;
 
@@ -1101,12 +1096,21 @@ const executeRequest = useCallback(
       return;
     }
 
+    // ✅ منطق العرض:
+    // - إذا displayText === null → لا نضيف رسالة (المتصل أضافها بنفسه)
+    // - إذا displayText معرّف → نضيف رسالة بـ displayText
+    // - إذا displayText === undefined → نستخدم text
+    const addUserMessage = displayText !== null;
     const shownText = displayText ?? text;
 
     const userMsg = { role: "user", content: shownText, id: Date.now() };
-    const updatedMessages = [...messagesRef.current, userMsg];
+    const updatedMessages = addUserMessage
+      ? [...messagesRef.current, userMsg]
+      : messagesRef.current;
 
-    setMessages(updatedMessages);
+    if (addUserMessage) {
+      setMessages(updatedMessages);
+    }
     setInput("");
 
     // ✅ رفع الملفات المعلقة إلى Storage
@@ -1440,10 +1444,10 @@ async function openTaskInChat(chatId) {
 // ─────────────────────────────────────────
 // PDF: معالجة قراءة صفحات/فصول محددة على دفعات
 // ✅ BATCH_SIZE = 5 (حد Groq)
-// ✅ إخفاء النص الكامل للطلب
+// ✅ إصلاح: تمرير userPrompt كـ displayText
 // ─────────────────────────────────────────
 async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-  const BATCH_SIZE = 5; // ✅ 5 صفحات فقط (حد Groq 8000 TPM)
+  const BATCH_SIZE = 5;
   const totalPages = pdfFile.pageCount || endPage;
   const safeEnd = Math.min(endPage, totalPages);
   const safeStart = Math.max(1, startPage);
@@ -1453,13 +1457,6 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
     return;
   }
 
-  // ✅ عرض رسالة المستخدم الأصلية فقط (وليس الطلب الكامل)
-  const userMsg = {
-    role: "user",
-    content: userPrompt,
-    id: Date.now(),
-  };
-  setMessages((prev) => [...prev, userMsg]);
   setInput("");
   setLoading(true);
   setStreamingText("");
@@ -1478,7 +1475,6 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
         "info"
       );
 
-      // ✅ استخدام URL إذا كان الملف من Storage
       const pdfSource = pdfFile.filePath
         ? await getFileSignedUrl(pdfFile.filePath, 3600)
         : pdfFile.rawFile || pdfFile.pdfFile;
@@ -1511,10 +1507,10 @@ async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
         `نفّذ طلب المستخدم على هذا النص فقط. ` +
         `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
 
-      // ✅ إخفاء الطلب الكامل، عرض رسالة المستخدم فقط
-      // نرسل text=requestText و displayText=userPrompt
-      // لكن لأننا أضفنا userMsg بالفعل، نرسل displayText=null لتجنب التكرار
-      await executeRequest(requestText, null);
+      // ✅ إصلاح: للدفعة الأولى نمرر userPrompt (يظهر في الواجهة)
+      //           للدفعات التالية نمرر null (لتفادي التكرار)
+      const displayForThisBatch = batchIndex === 0 ? userPrompt : null;
+      await executeRequest(requestText, displayForThisBatch);
     }
   } catch (err) {
     console.error("[PDF] خطأ في معالجة الصفحات:", err);
@@ -1542,10 +1538,6 @@ async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
   autoScrollRef.current = true;
   setShowScrollButton(false);
 
-  setMessages((prev) => [
-    ...prev,
-    { role: "user", content: userPrompt, id: Date.now() },
-  ]);
   setInput("");
 
   try {
@@ -1561,12 +1553,13 @@ async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
       setMessages((prev) =>
         sortMessagesByTime([
           ...prev,
+          { role: "user", content: userPrompt, id: Date.now() },
           {
             role: "assistant",
             content:
               `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
               `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة (مثلًا: "من 40 إلى 80").`,
-            id: Date.now(),
+            id: Date.now() + 1,
           },
         ])
       );
@@ -1582,21 +1575,23 @@ async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
     setMessages((prev) =>
       sortMessagesByTime([
         ...prev,
+        { role: "user", content: userPrompt, id: Date.now() },
         {
           role: "assistant",
           content: `📖 وُجد **${result.title}** في الصفحات **${result.startPage}-${result.endPage}**. جاري المعالجة على دفعات...`,
-          id: Date.now(),
+          id: Date.now() + 1,
         },
       ])
     );
 
     setLoading(false);
 
+    // ✅ نمرر null لأننا أضفنا رسالة المستخدم بالفعل
     await handlePdfPagesRequest(
       pdfFile,
       result.startPage,
       result.endPage,
-      userPrompt
+      null // ← لتفادي التكرار (الرسالة موجودة)
     );
   } catch (err) {
     console.error("[PDF] خطأ في البحث عن الفصل:", err);
@@ -1854,7 +1849,6 @@ async function sendMessage() {
     if (!window.confirm("حذف هذه المحادثة؟")) return;
 
     try {
-      // 1. حذف الملفات من Storage أولًا
       try {
         const files = await getUserFilesByChatId(chatId);
         if (files && files.length > 0) {
@@ -1868,7 +1862,6 @@ async function sendMessage() {
         console.warn("[Chat] خطأ في حذف الملفات من Storage:", err.message);
       }
 
-      // 2. إلغاء المهام النشطة
       const { error: cancelErr } = await supabase
         .from("tasks")
         .update({
@@ -1889,7 +1882,6 @@ async function sendMessage() {
         console.warn("[Chat] خطأ في إلغاء المهام:", cancelErr.message);
       }
 
-      // 3. حذف المحادثة (tasks و user_files يُحذفان تلقائيًا عبر CASCADE)
       const { error: chatErr } = await supabase
         .from("chats")
         .delete()
