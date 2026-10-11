@@ -1,7 +1,8 @@
 // ============================================
-// Chat.jsx — نسخة v9.2 (مع Supabase Storage)
-// ✅ إصلاح 1-22 (كما في السابق)
-// ✅ جديد 23: إصلاح ظهور النص الكامل للطلب
+// Chat.jsx — نسخة v9.4
+// ✅ إصلاح 1-23 (كما في السابق)
+// ✅ جديد 24: smartDetectIntent (ذكاء مختلط)
+// ✅ جديد 25: تسريع streaming (5ms + 3 أحرف)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -212,6 +213,94 @@ function detectSectionRequest(text) {
   }
 
   return null;
+}
+
+// ✅ كاشف النية الذكي (عبر النموذج)
+async function smartDetectIntent(text, session) {
+  if (!text || !session?.access_token) return null;
+
+  const systemPrompt = `أنت كاشف نية دقيق. المستخدم كتب رسالة عن ملف PDF.
+مهمتك: تحديد ما يريده بالضبط.
+
+أعد الإجابة بصيغة JSON فقط، بدون أي نص آخر:
+
+- إذا طلب صفحات محددة:
+  {"action": "pages", "start": رقم, "end": رقم}
+
+- إذا طلب فصل/باب/مبحث/درس بالاسم:
+  {"action": "section", "title": "الاسم"}
+
+- إذا طلب الفهرس أو المحتويات:
+  {"action": "toc"}
+
+- إذا كان سؤالًا عامًا أو طلبًا آخر:
+  {"action": "chat"}
+
+قواعد:
+- "من صفحة 4 إلى 10" → {"action":"pages","start":4,"end":10}
+- "من بداية الصفحة رقم 4-10" → {"action":"pages","start":4,"end":10}
+- "لخص 4 لـ 10" → {"action":"pages","start":4,"end":10}
+- "اقرأ الصفحات 4,5,6" → {"action":"pages","start":4,"end":6}
+- "الفصل الأول" → {"action":"section","title":"الفصل الأول"}
+- "اعرض الفهرس" → {"action":"toc"}
+- "ما هو القانون التجاري" → {"action":"chat"}
+
+لا تُعد إلا JSON. لا تضف شرحًا.`;
+
+  try {
+    const res = await fetch(
+      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          max_tokens: 150,
+          temperature: 0.1,
+          systemPrompt,
+          messages: [{ role: "user", content: text }],
+        }),
+      }
+    );
+
+    if (!res.ok) return null;
+    const data = await res.json();
+    const content = data.choices?.[0]?.message?.content?.trim() || "";
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+
+    const intent = JSON.parse(jsonMatch[0]);
+
+    if (intent.action === "pages") {
+      const start = parseInt(intent.start, 10);
+      const end = parseInt(intent.end, 10);
+      if (start > 0 && end >= start && end - start < 200) {
+        return { action: "pages", start, end };
+      }
+      return null;
+    }
+
+    if (intent.action === "section" && intent.title) {
+      return { action: "section", title: String(intent.title).trim() };
+    }
+
+    if (intent.action === "toc") {
+      return { action: "toc" };
+    }
+
+    if (intent.action === "chat") {
+      return { action: "chat" };
+    }
+
+    return null;
+  } catch (err) {
+    console.warn("[SmartIntent] فشل:", err.message);
+    return null;
+  }
 }
 
 // ─────────────────────────────────────────
@@ -662,8 +751,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         const toAdd = restoredFiles.filter((f) => !existingIds.has(f.id));
         return [...prev, ...toAdd];
       });
-
-      console.log(`[Chat] تم استرجاع ${restoredFiles.length} ملف من Storage.`);
     } catch (err) {
       console.warn("[Chat] خطأ في استرجاع الملفات:", err.message);
     }
@@ -759,6 +846,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return [];
     }
   }
+  
 async function saveChatToSupabase() {
   const msgs = messagesRef.current;
   if (!msgs || msgs.length === 0) return;
@@ -816,9 +904,6 @@ async function saveChatToSupabase() {
   }
 }
 
-// ─────────────────────────────────────────
-// Welcome
-// ─────────────────────────────────────────
 function getTimeBasedGreeting() {
   const h = new Date().getHours();
   if (h >= 6 && h < 12) return "صباح الخير";
@@ -899,9 +984,6 @@ async function checkAndShowWelcome(chats) {
   }
 }
 
-// ─────────────────────────────────────────
-// Settings handlers
-// ─────────────────────────────────────────
 async function handleSaveSettings({ profileUpdates, newPassword }) {
   if (Object.keys(profileUpdates).length) {
     const { error } = await supabase
@@ -959,9 +1041,6 @@ async function handleDeleteAccount() {
   }
 }
 
-// ─────────────────────────────────────────
-// Core chat logic
-// ─────────────────────────────────────────
 async function summarizeOldMessages(oldMessages, session) {
   if (!oldMessages || oldMessages.length === 0) return null;
 
@@ -1233,14 +1312,15 @@ const executeRequest = useCallback(
 
       const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
 
+      // ✅ streaming سريع: 3 أحرف كل 5ms
       let i = 0;
       function type() {
         if (abortControllerRef.current === null) return;
 
         if (i <= reply.length) {
-          setStreamingText(reply.slice(0, i));
-          i++;
-          setTimeout(type, 15);
+          setStreamingText(reply.slice(0, i + 2));
+          i += 3;
+          setTimeout(type, 5);
         } else {
           setStreamingText("");
           setMessages((prev) =>
@@ -1539,7 +1619,7 @@ async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
             role: "assistant",
             content:
               `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
-              `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة (مثلًا: "من 40 إلى 80").`,
+              `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة.`,
             id: Date.now() + 1,
           },
         ])
@@ -1616,15 +1696,16 @@ async function sendMessage() {
     (f) => f.type === "application/pdf"
   );
 
-  if (hasPdf && isTocRequest(text)) {
-    await handleTocRequest();
-    return;
-  }
-
-  if (hasPdf) {
+  if (hasPdf && text) {
     const pdfFile = attachedFiles.find(
       (f) => f.type === "application/pdf"
     );
+
+    // ✅ 1. RegEx أولًا (سريع)
+    if (isTocRequest(text)) {
+      await handleTocRequest();
+      return;
+    }
 
     const pageRange = detectPageRange(text);
     if (pageRange) {
@@ -1642,8 +1723,46 @@ async function sendMessage() {
       await handlePdfSectionRequest(pdfFile, sectionTitle, text);
       return;
     }
+
+    // ✅ 2. إذا فشل RegEx → نستدعي كاشف النية الذكي
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        showToast("🔍 جاري تحليل طلبك...", "info");
+
+        const intent = await smartDetectIntent(text, session);
+
+        if (intent) {
+          if (intent.action === "pages") {
+            await handlePdfPagesRequest(
+              pdfFile,
+              intent.start,
+              intent.end,
+              text
+            );
+            return;
+          }
+
+          if (intent.action === "section") {
+            await handlePdfSectionRequest(pdfFile, intent.title, text);
+            return;
+          }
+
+          if (intent.action === "toc") {
+            await handleTocRequest();
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("[SmartIntent] فشل:", err.message);
+    }
   }
 
+  // 3. الوضع العادي
   const MAX_FILE_CHARS = 100000;
 
   let sendText = text;
@@ -1685,8 +1804,8 @@ async function sendMessage() {
         .join(", ");
       sendText +=
         `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
-        `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات (مثلًا: "من 40 إلى 80")، ` +
-        `أو اسم فصل/درس (مثلًا: "الفصل الأول").]`;
+        `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات، ` +
+        `أو اسم فصل/درس.]`;
     }
   }
 
@@ -1745,7 +1864,7 @@ async function sendMessage() {
             {
               role: "assistant",
               content:
-                "⚠️ لم يُعثر على فهرس في هذا الملف.\n\nيمكنك تحديد أرقام الصفحات التي تريدها (مثلًا: «الصفحات 50-60»).",
+                "⚠️ لم يُعثر على فهرس في هذا الملف.\n\nيمكنك تحديد أرقام الصفحات التي تريدها.",
               id: Date.now(),
             },
           ])
@@ -1830,7 +1949,6 @@ async function sendMessage() {
           const paths = files.map((f) => f.file_path).filter(Boolean);
           if (paths.length > 0) {
             await deleteFilesFromStorage(paths);
-            console.log(`[Chat] تم حذف ${paths.length} ملف من Storage`);
           }
         }
       } catch (err) {
@@ -1926,7 +2044,7 @@ async function sendMessage() {
           });
 
           showToast(
-            `✅ تم استلام ${file.name} (${pageCount} صفحة). اكتب (اعرض الفهرس)، أو اطلب صفحات محددة (5 صفحات كحد أقصى في الطلب)، أو اسم فصل.`,
+            `✅ تم استلام ${file.name} (${pageCount} صفحة).`,
             "success"
           );
         } catch (err) {
@@ -2131,4 +2249,3 @@ async function sendMessage() {
   );
 }
 
-  
