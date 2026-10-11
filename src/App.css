@@ -591,6 +591,7 @@ h3 { font-size: 18px; }
   gap: 16px;
   -webkit-overflow-scrolling: touch;
   min-height: 0;
+  position: relative;
 }
 
 .messages::-webkit-scrollbar { width: 4px; }
