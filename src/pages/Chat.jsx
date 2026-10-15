@@ -20,7 +20,6 @@ import ActiveTasksNotification from "../components/chat/ActiveTasksNotification"
 import { supabase } from "../lib/supabase";
 import {
   GROQ_MODEL,
-  GROQ_FAST_MODEL,
   GROQ_MAX_TOKENS,
   GROQ_TEMPERATURE,
   CHAT_HISTORY_LIMIT,
@@ -31,7 +30,10 @@ import {
   DEFAULT_PERSONALITY,
 } from "../config/personalities";
 import { formatDate, copyToClipboard, debounce } from "../utils/helpers";
-import { checkUserDailyLimit } from "../utils/validators";
+import {
+  checkUserDailyLimit,
+  getEffectiveUsedToday,
+} from "../utils/validators";
 import { extractTextFromImage } from "../utils/ocr";
 import {
   getPdfPageCount,
@@ -258,7 +260,7 @@ async function smartDetectIntent(text, session) {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          model: GROQ_FAST_MODEL,
+          model: GROQ_MODEL,
           max_tokens: 150,
           temperature: 0.1,
           systemPrompt,
@@ -965,7 +967,7 @@ async function checkAndShowWelcome(chats) {
     : getWelcomeMessage(
         cu.last_login_date,
         cu.name,
-        cu.used_today || 0,
+        getEffectiveUsedToday(cu),
         cu.daily_limit || 5000,
         chatCount
       );
@@ -1065,7 +1067,7 @@ async function summarizeOldMessages(oldMessages, session) {
           Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          model: GROQ_FAST_MODEL,
+          model: GROQ_MODEL,
           max_tokens: 200,
           temperature: 0.3,
           systemPrompt:
@@ -1238,17 +1240,22 @@ const executeRequest = useCallback(
 
       const chatMessages = [];
 
-      recentMsgs
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .forEach((m) => {
-          chatMessages.push({
-            role: m.role,
-            content:
-              m.content.length > MAX_CHARS_PER_MSG
-                ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
-                : m.content,
-          });
+      if (summaryText) {
+        chatMessages.push({
+          role: "system",
+          content: `ملخص المحادثة السابقة: ${summaryText}`,
         });
+      }
+
+      recentMsgs.forEach((m) => {
+        chatMessages.push({
+          role: m.role,
+          content:
+            m.content.length > MAX_CHARS_PER_MSG
+              ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
+              : m.content,
+        });
+      });
 
       abortControllerRef.current = new AbortController();
 
@@ -1265,14 +1272,10 @@ const executeRequest = useCallback(
             model: GROQ_MODEL,
             max_tokens: GROQ_MAX_TOKENS,
             temperature: GROQ_TEMPERATURE,
-            systemPrompt:
-              getPersonalityPrompt(
-                currentUserRef.current?.personality || DEFAULT_PERSONALITY,
-                currentUserRef.current?.gender || "ولد"
-              ) +
-              (summaryText
-                ? `\n\nملخص المحادثة السابقة: ${summaryText}`
-                : ""),
+            systemPrompt: getPersonalityPrompt(
+              currentUserRef.current?.personality || DEFAULT_PERSONALITY,
+              currentUserRef.current?.gender || "ولد"
+            ),
             messages: [
               ...chatMessages,
               { role: "user", content: enhancedText },
