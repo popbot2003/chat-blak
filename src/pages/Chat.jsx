@@ -20,6 +20,7 @@ import ActiveTasksNotification from "../components/chat/ActiveTasksNotification"
 import { supabase } from "../lib/supabase";
 import {
   GROQ_MODEL,
+  GROQ_FAST_MODEL,
   GROQ_MAX_TOKENS,
   GROQ_TEMPERATURE,
   CHAT_HISTORY_LIMIT,
@@ -260,7 +261,7 @@ async function smartDetectIntent(text, session) {
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model: GROQ_FAST_MODEL,
           max_tokens: 150,
           temperature: 0.1,
           systemPrompt,
@@ -1067,7 +1068,7 @@ async function summarizeOldMessages(oldMessages, session) {
           Authorization: `Bearer ${session?.access_token}`,
         },
         body: JSON.stringify({
-          model: GROQ_MODEL,
+          model: GROQ_FAST_MODEL,
           max_tokens: 200,
           temperature: 0.3,
           systemPrompt:
@@ -1240,22 +1241,17 @@ const executeRequest = useCallback(
 
       const chatMessages = [];
 
-      if (summaryText) {
-        chatMessages.push({
-          role: "system",
-          content: `ملخص المحادثة السابقة: ${summaryText}`,
+      recentMsgs
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .forEach((m) => {
+          chatMessages.push({
+            role: m.role,
+            content:
+              m.content.length > MAX_CHARS_PER_MSG
+                ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
+                : m.content,
+          });
         });
-      }
-
-      recentMsgs.forEach((m) => {
-        chatMessages.push({
-          role: m.role,
-          content:
-            m.content.length > MAX_CHARS_PER_MSG
-              ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
-              : m.content,
-        });
-      });
 
       abortControllerRef.current = new AbortController();
 
@@ -1272,10 +1268,14 @@ const executeRequest = useCallback(
             model: GROQ_MODEL,
             max_tokens: GROQ_MAX_TOKENS,
             temperature: GROQ_TEMPERATURE,
-            systemPrompt: getPersonalityPrompt(
-              currentUserRef.current?.personality || DEFAULT_PERSONALITY,
-              currentUserRef.current?.gender || "ولد"
-            ),
+            systemPrompt:
+              getPersonalityPrompt(
+                currentUserRef.current?.personality || DEFAULT_PERSONALITY,
+                currentUserRef.current?.gender || "ولد"
+              ) +
+              (summaryText
+                ? `\n\nملخص المحادثة السابقة: ${summaryText}`
+                : ""),
             messages: [
               ...chatMessages,
               { role: "user", content: enhancedText },
