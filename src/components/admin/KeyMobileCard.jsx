@@ -14,6 +14,7 @@ import {
   isKeyActiveNow,
   getTpdResetCountdown,
 } from "../../utils/helpers";
+import { getEffectiveUsedToday } from "../../utils/validators";
 
 export default function KeyMobileCard({
   keyItem,
@@ -29,9 +30,9 @@ export default function KeyMobileCard({
 
   // ===== ✅ الحسابات =====
   const metrics = useMemo(() => {
-    const realLimit =
-      keyItem.effective_tpd_limit || keyItem.tpd_limit || 200000;
-    const realUsed = keyItem.used_tpd_today || keyItem.used_today || 0;
+    // نفس الحد الذي يطبقه الخادم على المفتاح
+    const realLimit = keyItem.daily_limit || 200000;
+    const realUsed = getEffectiveUsedToday(keyItem);
     const percent = getUsagePercent(realUsed, realLimit);
     const color = getUsageColor(percent);
     const status = getKeyStatus(keyItem);
@@ -59,10 +60,9 @@ export default function KeyMobileCard({
       countdown,
     };
   }, [
-    keyItem.effective_tpd_limit,
-    keyItem.tpd_limit,
-    keyItem.used_tpd_today,
+    keyItem.daily_limit,
     keyItem.used_today,
+    keyItem.last_reset_date,
     keyItem.rate_limited_until,
     keyItem.last_request_at,
     keyItem.is_valid,
