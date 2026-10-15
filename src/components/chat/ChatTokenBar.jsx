@@ -4,9 +4,10 @@
 // ============================================
 
 import { getUsagePercent, getUsageColor } from "../../utils/helpers";
+import { getEffectiveUsedToday } from "../../utils/validators";
 
 export default function ChatTokenBar({ user }) {
-  const usedToday = user?.used_today || 0;
+  const usedToday = getEffectiveUsedToday(user);
   const dailyLimit = user?.daily_limit || 5000;
   const percent = getUsagePercent(usedToday, dailyLimit);
   const color = getUsageColor(percent);
