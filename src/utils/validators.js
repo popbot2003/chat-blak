@@ -43,6 +43,24 @@ export function validateKeyValue(key) {
 }
 
 /**
+ * الاستهلاك اليومي الفعلي لأي عنصر (مستخدم أو مفتاح).
+ * إذا كان آخر تصفير قبل اليوم، فالاستهلاك الحالي صفر، ويطابق ذلك منطق قاعدة البيانات.
+ * التاريخ بتوقيت UTC لأن CURRENT_DATE في قاعدة البيانات بتوقيت UTC.
+ */
+export function getEffectiveUsedToday(item) {
+  if (!item) return 0;
+
+  const used = Number(item.used_today) || 0;
+
+  // إذا لم يُعرف تاريخ التصفير نعرض القيمة كما هي
+  if (!item.last_reset_date) return used;
+
+  const todayUtc = new Date().toISOString().slice(0, 10);
+
+  return item.last_reset_date < todayUtc ? 0 : used;
+}
+
+/**
  * التحقق من أن المستخدم لم يصل للحد اليومي
  */
 export function checkUserDailyLimit(user) {
@@ -51,11 +69,11 @@ export function checkUserDailyLimit(user) {
 
   // المدير ليس له حد — يشات بلا قيود
   if (user.role === "admin") {
-    const used = user.used_today || 0;
+    const used = getEffectiveUsedToday(user);
     return { canChat: true, used, limit: Infinity, percent: 0, isAdmin: true };
   }
   
-  const used = user.used_today || 0;
+  const used = getEffectiveUsedToday(user);
   const limit = user.daily_limit || 5000;
   
   if (used >= limit) {
