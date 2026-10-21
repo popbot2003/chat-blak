@@ -1,7 +1,6 @@
 // ============================================
-// Chat.jsx — نسخة v14.1 (مصححة)
-// ✅ ترتيب الـ hooks صحيح
-// ✅ executeRequest قبل usePdfProcessing
+// Chat.jsx — نسخة v14.2 (مصححة)
+// ✅ إصلاح: copyToClipboard مستورد من helpers.js
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -36,8 +35,9 @@ import {
   detectPageRange,
   detectSectionRequest,
   buildFileContextCard,
-  copyToClipboard,
 } from "../utils/chatHelpers";
+// ✅ إصلاح: copyToClipboard من helpers.js
+import { copyToClipboard } from "../utils/helpers";
 import { smartDetectIntent } from "../utils/intentDetection";
 import { checkUserDailyLimit } from "../utils/validators";
 
@@ -148,7 +148,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // 3. Hooks (بالترتيب الصحيح)
   // ═══════════════════════════════════════════
 
-  // 3.1 useTasks (لا يعتمد على شيء)
+  // 3.1 useTasks
   const tasksHook = useTasks({
     user,
     currentChatId,
@@ -199,7 +199,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   });
 
   // ═══════════════════════════════════════════
-  // 4. executeRequest (useCallback)
+  // 4. executeRequest
   // ═══════════════════════════════════════════
   const executeRequest = useCallback(
     async (text, displayText) => {
@@ -428,7 +428,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   );
 
   // ═══════════════════════════════════════════
-  // 5. usePdfProcessing (يستخدم executeRequest)
+  // 5. usePdfProcessing
   // ═══════════════════════════════════════════
   const pdfHook = usePdfProcessing({
     user,
@@ -1000,3 +1000,4 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
+  
