@@ -1,11 +1,11 @@
 // ============================================
-// Chat.jsx — نسخة v10.0
+// Chat.jsx — نسخة v10.2
+// ✅ استراتيجية Map-Reduce: تقسيم الملف إلى أجزاء صغيرة + دمج نهائي
 // ✅ OCR تلقائي للصفحات المصورة
-// ✅ detectPageRange يلتقط "لخص من 4 إلى 13"
-// ✅ handlePdfPagesRequest مع تقرير مفصل لكل دفعة
 // ✅ حفظ المحادثة فور رفع الملف
 // ✅ رفع الملفات فور اختيارها مع شريط تقدم
 // ✅ دعم TUS للملفات الكبيرة
+// ✅ عرض فوري بدون تأثير كتابة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -344,6 +344,47 @@ async function smartDetectIntent(text, session) {
     return null;
   } catch (err) {
     console.warn("[SmartIntent] فشل:", err.message);
+    return null;
+  }
+}
+
+// ✅ دالة مساعدة: ترسل طلب تلخيص جزئي وتعيد النص فقط (بدون عرضه في المحادثة)
+async function executeRequestForSummary(text) {
+  try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (!session) return null;
+
+    const res = await fetch(
+      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          model: GROQ_MODEL,
+          max_tokens: 800,
+          temperature: 0.3,
+          systemPrompt:
+            "أنت ملخّص دقيق. لخّص النص المعطى في نقاط مركزة. لا تضف معلومات من خارج النص.",
+          messages: [{ role: "user", content: text }],
+        }),
+      }
+    );
+
+    if (!res.ok) {
+      const err = await res.json();
+      console.warn("[Summary] فشل:", err);
+      return null;
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content?.trim() || null;
+  } catch (err) {
+    console.warn("[Summary] خطأ:", err);
     return null;
   }
 }
@@ -700,7 +741,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
     await checkAndShowWelcome(chats);
     await restoreLastChat(chats);
     setIsLoaded(true);
-  }  async function loadAllActiveTasks() {
+  }
+    async function loadAllActiveTasks() {
     try {
       const { data, error } = await supabase
         .from("tasks")
@@ -1355,7 +1397,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
         const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
 
-        // ✅ عرض فوري بدون تأثير كتابة
         setStreamingText("");
         setMessages((prev) =>
           sortMessagesByTime([
@@ -1542,8 +1583,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
-  // ✅ v10.1: handlePdfPagesRequest بدون حد 5 صفحات + حد تقني 30 صفحة
+  // ✅ v10.2: Map-Reduce — أجزاء 4 صفحات + دمج نهائي
   async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
+    const CHUNK_SIZE = 4;
     const totalPages = pdfFile.pageCount || endPage;
     const safeEnd = Math.min(endPage, totalPages);
     const safeStart = Math.max(1, startPage);
@@ -1553,33 +1595,21 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    const MAX_PAGES_PER_REQUEST = 30;
-    const rangeSize = safeEnd - safeStart + 1;
-
-    if (rangeSize > MAX_PAGES_PER_REQUEST) {
-      showToast(
-        `⚠️ النطاق كبير (${rangeSize} صفحة). سأقسّمه إلى ${Math.ceil(rangeSize / MAX_PAGES_PER_REQUEST)} أجزاء.`,
-        "info"
-      );
-    }
-
     setInput("");
     setLoading(true);
     setStreamingText("");
     autoScrollRef.current = true;
     setShowScrollButton(false);
 
-    const totalChunks = Math.ceil(rangeSize / MAX_PAGES_PER_REQUEST);
-    const processedChunks = [];
+    const totalChunks = Math.ceil((safeEnd - safeStart + 1) / CHUNK_SIZE);
+    const partialSummaries = [];
     const failedChunks = [];
 
     try {
+      // === المرحلة 1: الخريطة (Map) ===
       for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const chunkStart = safeStart + chunkIndex * MAX_PAGES_PER_REQUEST;
-        const chunkEnd = Math.min(
-          chunkStart + MAX_PAGES_PER_REQUEST - 1,
-          safeEnd
-        );
+        const chunkStart = safeStart + chunkIndex * CHUNK_SIZE;
+        const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, safeEnd);
 
         showToast(
           `🔍 استخراج الصفحات ${chunkStart}-${chunkEnd} (${chunkIndex + 1}/${totalChunks})...`,
@@ -1610,69 +1640,68 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
           if (!chunkText || chunkText.trim().length < 10) {
             failedChunks.push(`${chunkStart}-${chunkEnd} (نص فارغ)`);
-            setMessages((prev) =>
-              sortMessagesByTime([
-                ...prev,
-                {
-                  role: "assistant",
-                  content: `⚠️ لم أستطع قراءة الصفحات ${chunkStart}-${chunkEnd} (صور بدون نص واضح).`,
-                  id: Date.now() + chunkIndex,
-                },
-              ])
-            );
             continue;
           }
 
-          const requestText =
+          const mapRequestText =
             `طلب المستخدم: ${userPrompt}\n\n` +
-            `[ملف: ${pdfFile.name} — الصفحات ${chunkStart}-${chunkEnd} من ${totalPages}]\n` +
-            `[جزء ${chunkIndex + 1} من ${totalChunks}]\n\n` +
+            `[ملف: ${pdfFile.name} — الصفحات ${chunkStart}-${chunkEnd} من ${totalPages}]\n\n` +
             `النص:\n${chunkText}\n\n` +
-            `نفّذ الطلب على هذا النص فقط.`;
+            `المطلوب: لخّص هذا الجزء فقط في 3-5 نقاط مركزة، مع الحفاظ على المصطلحات والأفكار الرئيسية. ` +
+            `هذا الملخص سيُدمج لاحقاً مع ملخصات أجزاء أخرى، لذا ركّز على الجوهر.`;
 
-          const displayForThisChunk = chunkIndex === 0 ? userPrompt : null;
-          await executeRequest(requestText, displayForThisChunk);
-          processedChunks.push(`${chunkStart}-${chunkEnd}`);
+          const summary = await executeRequestForSummary(mapRequestText);
+          if (summary) {
+            partialSummaries.push(summary);
+          } else {
+            failedChunks.push(`${chunkStart}-${chunkEnd} (فشل التلخيص)`);
+          }
         } catch (chunkErr) {
           console.error(
             `[PDF] فشل الجزء ${chunkStart}-${chunkEnd}:`,
             chunkErr
           );
           failedChunks.push(`${chunkStart}-${chunkEnd} (${chunkErr.message})`);
-          setMessages((prev) =>
-            sortMessagesByTime([
-              ...prev,
-              {
-                role: "assistant",
-                content: `⚠️ تعذر معالجة الصفحات ${chunkStart}-${chunkEnd}: ${chunkErr.message}`,
-                id: Date.now() + chunkIndex + 1000,
-              },
-            ])
-          );
         }
 
         if (chunkIndex < totalChunks - 1) {
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, 500));
         }
       }
 
-      if (totalChunks > 1) {
-        let summary = `\n\n---\n**📊 ملخص المعالجة:**\n`;
-        summary += `- ✅ نجح: ${processedChunks.length} جزء\n`;
-        if (failedChunks.length > 0) {
-          summary += `- ❌ فشل: ${failedChunks.length} جزء\n`;
-        }
+      // === المرحلة 2: الاختزال (Reduce) ===
+      if (partialSummaries.length === 0) {
         setMessages((prev) =>
           sortMessagesByTime([
             ...prev,
             {
               role: "assistant",
-              content: summary,
-              id: Date.now() + 9999,
+              content:
+                "❌ لم أتمكن من تلخيص أي جزء من الملف. قد تكون الصفحات صوراً بدون نص واضح.",
+              id: Date.now(),
             },
           ])
         );
+        setLoading(false);
+        return;
       }
+
+      showToast("🔄 جاري دمج الملخصات في ملخص نهائي...", "info");
+
+      const combinedSummaries = partialSummaries
+        .map((s, i) => `--- ملخص الجزء ${i + 1} ---\n${s}`)
+        .join("\n\n");
+
+      const reduceRequestText =
+        `طلب المستخدم الأصلي: ${userPrompt}\n\n` +
+        `لقد قمت بتلخيص أجزاء متعددة من الملف "${pdfFile.name}" (الصفحات ${safeStart}-${safeEnd}). ` +
+        `فيما يلي الملخصات الجزئية لكل جزء:\n\n` +
+        `${combinedSummaries}\n\n` +
+        `المطلوب: قم بدمج هذه الملخصات الجزئية في ملخص نهائي واحد مترابط ومنظم. ` +
+        `حافظ على التسلسل المنطقي، واذكر الأفكار الرئيسية بوضوح. ` +
+        `لا تكرر المعلومات، ولا تختلق معلومات غير موجودة في الملخصات.`;
+
+      await executeRequest(reduceRequestText, userPrompt);
     } catch (err) {
       console.error("[PDF] خطأ عام:", err);
       setMessages((prev) =>
@@ -2513,4 +2542,3 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
-  
