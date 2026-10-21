@@ -700,8 +700,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     await checkAndShowWelcome(chats);
     await restoreLastChat(chats);
     setIsLoaded(true);
-  }
-    async function loadAllActiveTasks() {
+  }  async function loadAllActiveTasks() {
     try {
       const { data, error } = await supabase
         .from("tasks")
@@ -1356,27 +1355,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
         const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
 
-        let i = 0;
-        function type() {
-          if (abortControllerRef.current === null) return;
-
-          if (i <= reply.length) {
-            setStreamingText(reply.slice(0, i + 2));
-            i += 3;
-            setTimeout(type, 5);
-          } else {
-            setStreamingText("");
-            setMessages((prev) =>
-              sortMessagesByTime([
-                ...prev,
-                { role: "assistant", content: reply, id: Date.now() },
-              ])
-            );
-            setLoading(false);
-            abortControllerRef.current = null;
-          }
-        }
-        type();
+        // ✅ عرض فوري بدون تأثير كتابة
+        setStreamingText("");
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            { role: "assistant", content: reply, id: Date.now() },
+          ])
+        );
+        setLoading(false);
+        abortControllerRef.current = null;
       } catch (err) {
         if (err.name === "AbortError") {
           console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
@@ -1406,7 +1394,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setLoading(false);
         setStreamingText("");
         abortControllerRef.current = null;
-        throw err;
+        // ✅ لا نرمي الخطأ — نترك handlePdfPagesRequest يكمل
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
@@ -1554,9 +1542,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
-  // ✅ v10.0: دالة محسّنة مع تقرير مفصل لكل دفعة
+  // ✅ v10.1: handlePdfPagesRequest بدون حد 5 صفحات + حد تقني 30 صفحة
   async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-    const BATCH_SIZE = 5;
     const totalPages = pdfFile.pageCount || endPage;
     const safeEnd = Math.min(endPage, totalPages);
     const safeStart = Math.max(1, startPage);
@@ -1566,23 +1553,36 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
+    const MAX_PAGES_PER_REQUEST = 30;
+    const rangeSize = safeEnd - safeStart + 1;
+
+    if (rangeSize > MAX_PAGES_PER_REQUEST) {
+      showToast(
+        `⚠️ النطاق كبير (${rangeSize} صفحة). سأقسّمه إلى ${Math.ceil(rangeSize / MAX_PAGES_PER_REQUEST)} أجزاء.`,
+        "info"
+      );
+    }
+
     setInput("");
     setLoading(true);
     setStreamingText("");
     autoScrollRef.current = true;
     setShowScrollButton(false);
 
-    const totalBatches = Math.ceil((safeEnd - safeStart + 1) / BATCH_SIZE);
-    const processedBatches = [];
-    const failedBatches = [];
+    const totalChunks = Math.ceil(rangeSize / MAX_PAGES_PER_REQUEST);
+    const processedChunks = [];
+    const failedChunks = [];
 
     try {
-      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-        const batchStart = safeStart + batchIndex * BATCH_SIZE;
-        const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, safeEnd);
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const chunkStart = safeStart + chunkIndex * MAX_PAGES_PER_REQUEST;
+        const chunkEnd = Math.min(
+          chunkStart + MAX_PAGES_PER_REQUEST - 1,
+          safeEnd
+        );
 
         showToast(
-          `🔍 استخراج الصفحات ${batchStart}-${batchEnd} (${batchIndex + 1}/${totalBatches})...`,
+          `🔍 استخراج الصفحات ${chunkStart}-${chunkEnd} (${chunkIndex + 1}/${totalChunks})...`,
           "info"
         );
 
@@ -1591,32 +1591,32 @@ export default function Chat({ user, onLogout, isAdmin }) {
             ? await getFileSignedUrl(pdfFile.filePath, 3600)
             : pdfFile.rawFile || pdfFile.pdfFile;
 
-          const batchText = await extractPdfText(
+          const chunkText = await extractPdfText(
             pdfSource,
-            batchStart,
-            batchEnd,
+            chunkStart,
+            chunkEnd,
             {
               enableOcr: true,
               onOcrProgress: (pageNum, from, to) => {
-                const totalInBatch = to - from + 1;
+                const totalInChunk = to - from + 1;
                 const currentIdx = pageNum - from + 1;
                 showToast(
-                  `🔍 الصفحة ${pageNum} صورة — OCR (${currentIdx}/${totalInBatch})...`,
+                  `🔍 الصفحة ${pageNum} صورة — OCR (${currentIdx}/${totalInChunk})...`,
                   "info"
                 );
               },
             }
           );
 
-          if (!batchText || batchText.trim().length < 10) {
-            failedBatches.push(`${batchStart}-${batchEnd} (نص فارغ)`);
+          if (!chunkText || chunkText.trim().length < 10) {
+            failedChunks.push(`${chunkStart}-${chunkEnd} (نص فارغ)`);
             setMessages((prev) =>
               sortMessagesByTime([
                 ...prev,
                 {
                   role: "assistant",
-                  content: `⚠️ لم أستطع قراءة الصفحات ${batchStart}-${batchEnd} (صور بدون نص واضح).`,
-                  id: Date.now() + batchIndex,
+                  content: `⚠️ لم أستطع قراءة الصفحات ${chunkStart}-${chunkEnd} (صور بدون نص واضح).`,
+                  id: Date.now() + chunkIndex,
                 },
               ])
             );
@@ -1625,54 +1625,54 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
           const requestText =
             `طلب المستخدم: ${userPrompt}\n\n` +
-            `[ملف: ${pdfFile.name} — الصفحات ${batchStart}-${batchEnd} من ${totalPages}]\n` +
-            `[دفعة ${batchIndex + 1} من ${totalBatches}]\n\n` +
-            `النص:\n${batchText}\n\n` +
+            `[ملف: ${pdfFile.name} — الصفحات ${chunkStart}-${chunkEnd} من ${totalPages}]\n` +
+            `[جزء ${chunkIndex + 1} من ${totalChunks}]\n\n` +
+            `النص:\n${chunkText}\n\n` +
             `نفّذ الطلب على هذا النص فقط.`;
 
-          const displayForThisBatch = batchIndex === 0 ? userPrompt : null;
-          await executeRequest(requestText, displayForThisBatch);
-          processedBatches.push(`${batchStart}-${batchEnd}`);
-        } catch (batchErr) {
-          console.error(`[PDF] فشل الدفعة ${batchStart}-${batchEnd}:`, batchErr);
-          failedBatches.push(`${batchStart}-${batchEnd} (${batchErr.message})`);
+          const displayForThisChunk = chunkIndex === 0 ? userPrompt : null;
+          await executeRequest(requestText, displayForThisChunk);
+          processedChunks.push(`${chunkStart}-${chunkEnd}`);
+        } catch (chunkErr) {
+          console.error(
+            `[PDF] فشل الجزء ${chunkStart}-${chunkEnd}:`,
+            chunkErr
+          );
+          failedChunks.push(`${chunkStart}-${chunkEnd} (${chunkErr.message})`);
           setMessages((prev) =>
             sortMessagesByTime([
               ...prev,
               {
                 role: "assistant",
-                content: `⚠️ تعذر معالجة الصفحات ${batchStart}-${batchEnd}: ${batchErr.message}`,
-                id: Date.now() + batchIndex + 1000,
+                content: `⚠️ تعذر معالجة الصفحات ${chunkStart}-${chunkEnd}: ${chunkErr.message}`,
+                id: Date.now() + chunkIndex + 1000,
               },
             ])
           );
         }
 
-        if (batchIndex < totalBatches - 1) {
+        if (chunkIndex < totalChunks - 1) {
           await new Promise((r) => setTimeout(r, 2000));
         }
       }
 
-      let summary = `\n\n---\n**📊 ملخص المعالجة:**\n`;
-      summary += `- ✅ تمت معالجة: ${processedBatches.length} دفعة\n`;
-      if (processedBatches.length > 0) {
-        summary += `  (${processedBatches.join("، ")})\n`;
+      if (totalChunks > 1) {
+        let summary = `\n\n---\n**📊 ملخص المعالجة:**\n`;
+        summary += `- ✅ نجح: ${processedChunks.length} جزء\n`;
+        if (failedChunks.length > 0) {
+          summary += `- ❌ فشل: ${failedChunks.length} جزء\n`;
+        }
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: summary,
+              id: Date.now() + 9999,
+            },
+          ])
+        );
       }
-      if (failedBatches.length > 0) {
-        summary += `- ❌ فشلت: ${failedBatches.length} دفعة\n`;
-        summary += `  (${failedBatches.join("، ")})\n`;
-      }
-
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          {
-            role: "assistant",
-            content: summary,
-            id: Date.now() + 9999,
-          },
-        ])
-      );
     } catch (err) {
       console.error("[PDF] خطأ عام:", err);
       setMessages((prev) =>
@@ -1921,7 +1921,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     try {
       await executeRequest(sendText, displayText);
     } catch (err) {
-      // الخطأ تم عرضه بالفعل في executeRequest
+      // الخطأ تم عرضه بالفعل
     }
   }
 
@@ -2513,3 +2513,4 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
+  
