@@ -15,7 +15,9 @@ export const DEFAULT_KEY_DAILY_LIMIT = 200000;
 export const GROQ_MODEL = "openai/gpt-oss-120b";
 // النموذج السريع للمهام القصيرة: التصنيف وتلخيص المحادثة
 export const GROQ_FAST_MODEL = "llama-3.1-8b-instant";
-export const GROQ_MAX_TOKENS = 8000;
+// ✅ رُفع من 2000 إلى 6000 لدعم الردود الطويلة (HTML، أكواد، ملخصات مطولة)
+// ملاحظة: 6000 آمن مع حد Groq TPM = 8000 (نص الطلب + الرد)
+export const GROQ_MAX_TOKENS = 6000;
 export const GROQ_TEMPERATURE = 0.7;
 
 // إعدادات التطبيق
