@@ -1,7 +1,8 @@
 // ============================================
-// Chat.jsx — نسخة v9.6
-// ✅ إضافة: رفع الملفات قبل معالجة PDF
-// ✅ إضافة: رسالة واضحة عند فشل استخراج النص
+// Chat.jsx — نسخة v9.7
+// ✅ رفع الملفات فور اختيارها مع شريط تقدم
+// ✅ منع الإرسال قبل اكتمال الرفع
+// ✅ دعم TUS (Resumable Upload) للملفات الكبيرة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -364,6 +365,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [currentUser, setCurrentUser] = useState(user);
 
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -1105,9 +1107,26 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
     for (const f of filesToUpload) {
       try {
-        showToast(`⬆️ جاري رفع ${f.name} إلى التخزين...`, "info");
+        setUploadProgress({
+          name: f.name,
+          percentage: 0,
+          currentIndex: 1,
+          totalFiles: filesToUpload.length,
+        });
 
-        const { path } = await uploadFileToStorage(f.rawFile, user.id, chatId);
+        const { path } = await uploadFileToStorage(
+          f.rawFile,
+          user.id,
+          chatId,
+          (percentage) => {
+            setUploadProgress({
+              name: f.name,
+              percentage,
+              currentIndex: 1,
+              totalFiles: filesToUpload.length,
+            });
+          }
+        );
 
         const record = await insertUserFile({
           user_id: user.id,
@@ -1136,6 +1155,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
+    setUploadProgress(null);
     return uploadedFiles;
   }
 
@@ -1562,7 +1582,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         );
 
         if (!batchText || batchText.trim().length < 10) {
-          // ✅ إظهار رسالة واضحة بدلاً من التخطي الصامت
           setMessages((prev) =>
             sortMessagesByTime([
               ...prev,
@@ -1686,6 +1705,19 @@ export default function Chat({ user, onLogout, isAdmin }) {
   async function sendMessage() {
     if (loading) return;
 
+    if (uploadProgress) {
+      showToast("⏳ انتظر حتى يكتمل رفع الملف", "info");
+      return;
+    }
+
+    const hasUnuploaded = attachedFiles.some(
+      (f) => !f.fromStorage && f.rawFile
+    );
+    if (hasUnuploaded) {
+      showToast("⏳ الملف لم يُرفع بعد. انتظر قليلاً", "info");
+      return;
+    }
+
     const text = input.trim();
     if (!text && !attachedFiles.length) return;
 
@@ -1703,29 +1735,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     if (sendMode === "task" && !attachedFiles.length) {
       await createTask(text);
       return;
-    }
-
-    // ✅ جديد: رفع الملفات أولاً قبل أي معالجة PDF
-    if (attachedFiles.length > 0) {
-      const hasUnuploaded = attachedFiles.some(
-        (f) => !f.fromStorage && f.rawFile
-      );
-      if (hasUnuploaded) {
-        if (!currentChatIdRef.current) {
-          const newId = Date.now().toString();
-          currentChatIdRef.current = newId;
-          setCurrentChatId(newId);
-        }
-        try {
-          const uploaded = await uploadPendingFiles(currentChatIdRef.current);
-          setAttachedFiles(uploaded);
-          await new Promise((r) => setTimeout(r, 150));
-          // استخدم الملفات المرفوعة في هذه العملية بدلاً من attachedFiles القديمة
-          attachedFiles.splice(0, attachedFiles.length, ...uploaded);
-        } catch (err) {
-          console.warn("[Upload] خطأ في الرفع المسبق:", err);
-        }
-      }
     }
 
     const hasPdf = attachedFiles.some(
@@ -2053,102 +2062,163 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
 
+    if (!currentChatIdRef.current) {
+      const newId = Date.now().toString();
+      currentChatIdRef.current = newId;
+      setCurrentChatId(newId);
+    }
+
     setLoading(true);
     const newFiles = [];
 
-    for (const file of files) {
-      if (file.type === "application/pdf") {
-        try {
-          showToast(`📄 جاري قراءة ${file.name}...`, "info");
-
-          const pageCount = await getPdfPageCount(file);
-
-          newFiles.push({
-            id: Date.now() + Math.random(),
-            name: file.name,
-            type: "application/pdf",
-            size: file.size,
-            icon: "📄",
-            content: "",
-            rawFile: file,
-            pdfFile: file,
-            pageCount,
-            fromStorage: false,
-          });
-
-          showToast(
-            `✅ تم استلام ${file.name} (${pageCount} صفحة).`,
-            "success"
-          );
-        } catch (err) {
-          console.error("[PDF] خطأ:", err);
-          showToast(`❌ فشل قراءة ${file.name}`, "error");
-        }
-        continue;
-      }
-
-      if (file.type.startsWith("image/")) {
-        try {
-          showToast(`🔍 جاري استخراج النص من ${file.name}...`, "info");
-
-          const ocrText = await extractTextFromImage(file);
-
-          if (!ocrText || ocrText.length < 3) {
-            showToast(
-              `⚠️ لم يتم العثور على نص واضح في ${file.name}`,
-              "error"
-            );
-            continue;
+    try {
+      for (const file of files) {
+        if (file.type === "application/pdf") {
+          try {
+            showToast(`📄 جاري قراءة ${file.name}...`, "info");
+            const pageCount = await getPdfPageCount(file);
+            newFiles.push({
+              id: Date.now() + Math.random(),
+              name: file.name,
+              type: "application/pdf",
+              size: file.size,
+              icon: "📄",
+              content: "",
+              rawFile: file,
+              pdfFile: file,
+              pageCount,
+              fromStorage: false,
+            });
+            showToast(`✅ تم استلام ${file.name} (${pageCount} صفحة).`, "success");
+          } catch (err) {
+            console.error("[PDF] خطأ:", err);
+            showToast(`❌ فشل قراءة ${file.name}`, "error");
           }
+          continue;
+        }
 
+        if (file.type.startsWith("image/")) {
+          try {
+            showToast(`🔍 جاري استخراج النص من ${file.name}...`, "info");
+            const ocrText = await extractTextFromImage(file);
+            if (!ocrText || ocrText.length < 3) {
+              showToast(`⚠️ لم يتم العثور على نص واضح في ${file.name}`, "error");
+              continue;
+            }
+            newFiles.push({
+              id: Date.now() + Math.random(),
+              name: file.name,
+              type: "text/ocr",
+              size: file.size,
+              icon: "📝",
+              content: `[نص مستخرج من صورة: ${file.name}]\n\n${ocrText}`,
+              rawFile: file,
+              fromStorage: false,
+            });
+            showToast(`✅ تم استخراج النص من ${file.name}`, "success");
+          } catch (err) {
+            console.error("[OCR] خطأ:", err);
+            showToast(`❌ فشل استخراج النص من ${file.name}`, "error");
+          }
+          continue;
+        }
+
+        try {
           newFiles.push({
             id: Date.now() + Math.random(),
             name: file.name,
-            type: "text/ocr",
+            type: file.type,
             size: file.size,
-            icon: "📝",
-            content: `[نص مستخرج من صورة: ${file.name}]\n\n${ocrText}`,
+            icon: getFileIcon(file),
+            content: await readFileAsText(file),
             rawFile: file,
             fromStorage: false,
           });
+        } catch {
+          newFiles.push({
+            id: Date.now() + Math.random(),
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            icon: "❌",
+            content: "خطأ",
+          });
+        }
+      }
 
-          showToast(
-            `✅ تم استخراج النص من ${file.name} (${ocrText.length} حرف)`,
-            "success"
+      if (newFiles.length === 0) {
+        setLoading(false);
+        return;
+      }
+
+      setAttachedFiles((prev) => [...prev, ...newFiles]);
+
+      for (let i = 0; i < newFiles.length; i++) {
+        const f = newFiles[i];
+        if (!f.rawFile) continue;
+
+        try {
+          setUploadProgress({
+            name: f.name,
+            percentage: 0,
+            currentIndex: i + 1,
+            totalFiles: newFiles.length,
+          });
+
+          const { path } = await uploadFileToStorage(
+            f.rawFile,
+            user.id,
+            currentChatIdRef.current,
+            (percentage) => {
+              setUploadProgress({
+                name: f.name,
+                percentage,
+                currentIndex: i + 1,
+                totalFiles: newFiles.length,
+              });
+            }
+          );
+
+          const record = await insertUserFile({
+            user_id: user.id,
+            chat_id: currentChatIdRef.current,
+            file_name: f.name,
+            file_path: path,
+            file_type: f.type === "application/pdf" ? "application/pdf" : "text",
+            file_size: f.size || 0,
+            content_text: f.content || null,
+            page_count: f.pageCount || null,
+          });
+
+          setAttachedFiles((prev) =>
+            prev.map((u) =>
+              u.id === f.id
+                ? {
+                    ...u,
+                    id: record.id,
+                    filePath: path,
+                    fromStorage: true,
+                    rawFile: null,
+                  }
+                : u
+            )
           );
         } catch (err) {
-          console.error("[OCR] خطأ:", err);
-          showToast(`❌ فشل استخراج النص من ${file.name}`, "error");
+          console.error(`[Upload] فشل رفع ${f.name}:`, err);
+          showToast(`❌ فشل رفع ${f.name}`, "error");
+          setAttachedFiles((prev) => prev.filter((u) => u.id !== f.id));
         }
-        continue;
       }
 
-      try {
-        newFiles.push({
-          id: Date.now() + Math.random(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          icon: getFileIcon(file),
-          content: await readFileAsText(file),
-          rawFile: file,
-          fromStorage: false,
-        });
-      } catch {
-        newFiles.push({
-          id: Date.now() + Math.random(),
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          icon: "❌",
-          content: "خطأ",
-        });
-      }
+      showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
+    } catch (err) {
+      console.error("[handleFileUpload] خطأ عام:", err);
+      showToast("❌ خطأ في معالجة الملفات", "error");
+    } finally {
+      setUploadProgress(null);
+      setLoading(false);
+      inputRef.current?.focus();
     }
-
-    setAttachedFiles((prev) => [...prev, ...newFiles]);
-    setLoading(false);
-    inputRef.current?.focus();
   }
 
   function removeFile(fileId) {
@@ -2253,6 +2323,67 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onScrollToBottom={handleScrollToBottom}
         onScroll={handleMessagesScroll}
       />
+
+      {uploadProgress && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "100px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "#1e1b4b",
+            color: "#fff",
+            padding: "14px 20px",
+            borderRadius: "14px",
+            zIndex: 9998,
+            minWidth: "300px",
+            maxWidth: "90vw",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
+            direction: "rtl",
+            border: "1px solid #4c1d95",
+          }}
+        >
+          <div
+            style={{
+              fontSize: "13px",
+              marginBottom: "8px",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            ⬆️ جاري رفع ({uploadProgress.currentIndex}/
+            {uploadProgress.totalFiles}): {uploadProgress.name}
+          </div>
+          <div
+            style={{
+              height: "10px",
+              background: "#374151",
+              borderRadius: "5px",
+              overflow: "hidden",
+            }}
+          >
+            <div
+              style={{
+                height: "100%",
+                width: `${uploadProgress.percentage}%`,
+                background: "linear-gradient(90deg, #10b981, #3b82f6)",
+                transition: "width 0.3s ease",
+              }}
+            />
+          </div>
+          <div
+            style={{
+              fontSize: "11px",
+              marginTop: "6px",
+              color: "#a5b4fc",
+              textAlign: "left",
+            }}
+          >
+            {uploadProgress.percentage}% مكتمل
+          </div>
+        </div>
+      )}
 
       <ChatInput
         input={input}
