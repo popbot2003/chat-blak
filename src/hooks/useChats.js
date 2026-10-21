@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useChats.js
-// كل منطق إدارة المحادثات (Chats):
+// ✅ v2.0: يستقبل currentChatId من Chat.jsx
 // ============================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -18,12 +18,10 @@ export function useChats({
   setLongFormContext,
   loadChatTasksForChat,
   restoreChatFiles,
+  currentChatId,      // ✅ من Chat.jsx
+  setCurrentChatId,   // ✅ من Chat.jsx
 }) {
   const [allChats, setAllChats] = useState([]);
-  const [currentChatId, setCurrentChatId] = useState(() => {
-    return localStorage.getItem("black-last-chat-id") || null;
-  });
-
   const currentChatIdRef = useRef(currentChatId);
   const debouncedSaveRef = useRef(null);
 
@@ -65,10 +63,10 @@ export function useChats({
       )
       .subscribe();
     return () => ch.unsubscribe();
-  }, [user?.id, setMessages]);
+  }, [user?.id, setMessages, setCurrentChatId]);
 
   // ─────────────────────────────────────────
-  // 2. تحميل المحادثات من Supabase
+  // 2. loadChatsFromSupabase
   // ─────────────────────────────────────────
   const loadChatsFromSupabase = useCallback(async () => {
     try {
@@ -96,7 +94,7 @@ export function useChats({
   }, [user.id]);
 
   // ─────────────────────────────────────────
-  // 3. حفظ المحادثة الحالية
+  // 3. saveChatToSupabase
   // ─────────────────────────────────────────
   const saveChatToSupabase = useCallback(async () => {
     const msgs = messagesRef.current;
@@ -156,7 +154,7 @@ export function useChats({
   }, [user.id, messagesRef]);
 
   // ─────────────────────────────────────────
-  // 4. استعادة آخر محادثة (عند التحميل)
+  // 4. restoreLastChat
   // ─────────────────────────────────────────
   const restoreLastChat = useCallback(
     async (chats) => {
@@ -187,11 +185,11 @@ export function useChats({
         console.warn("[Chat] تعذر استعادة آخر محادثة:", err.message);
       }
     },
-    [setMessages, loadChatTasksForChat, restoreChatFiles]
+    [setMessages, setCurrentChatId, loadChatTasksForChat, restoreChatFiles]
   );
 
   // ─────────────────────────────────────────
-  // 5. إنشاء محادثة جديدة
+  // 5. newChat
   // ─────────────────────────────────────────
   const newChat = useCallback(async () => {
     if (currentChatIdRef.current) {
@@ -208,16 +206,10 @@ export function useChats({
     setInput("");
     setAttachedFiles([]);
     if (setLongFormContext) setLongFormContext(null);
-  }, [
-    setMessages,
-    setInput,
-    setAttachedFiles,
-    setLongFormContext,
-    saveChatToSupabase,
-  ]);
+  }, [setCurrentChatId, setMessages, setInput, setAttachedFiles, setLongFormContext, saveChatToSupabase]);
 
   // ─────────────────────────────────────────
-  // 6. فتح محادثة قديمة
+  // 6. openChat
   // ─────────────────────────────────────────
   const openChat = useCallback(
     async (chatId) => {
@@ -238,18 +230,11 @@ export function useChats({
       setInput("");
       setAttachedFiles([]);
     },
-    [
-      setMessages,
-      setInput,
-      setAttachedFiles,
-      loadChatTasksForChat,
-      restoreChatFiles,
-      saveChatToSupabase,
-    ]
+    [setCurrentChatId, setMessages, setInput, setAttachedFiles, loadChatTasksForChat, restoreChatFiles, saveChatToSupabase]
   );
 
   // ─────────────────────────────────────────
-  // 7. حذف محادثة
+  // 7. deleteChat
   // ─────────────────────────────────────────
   const deleteChat = useCallback(
     async (chatId) => {
@@ -323,11 +308,11 @@ export function useChats({
         showToast("❌ فشل حذف المحادثة", "error");
       }
     },
-    [setMessages, setAttachedFiles, setLongFormContext]
+    [setCurrentChatId, setMessages, setAttachedFiles, setLongFormContext]
   );
 
   // ─────────────────────────────────────────
-  // 8. حفظ تلقائي مع debounce
+  // 8. triggerAutoSave
   // ─────────────────────────────────────────
   const triggerAutoSave = useCallback(() => {
     if (!debouncedSaveRef.current) {
@@ -342,8 +327,6 @@ export function useChats({
   return {
     allChats,
     setAllChats,
-    currentChatId,
-    setCurrentChatId,
     loadChatsFromSupabase,
     saveChatToSupabase,
     restoreLastChat,
