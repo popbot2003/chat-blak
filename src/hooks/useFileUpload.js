@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useFileUpload.js
-// ✅ v2.0: يستقبل attachedFiles من Chat.jsx
+// ✅ v2.1: إصلاح حفظ المحادثة عند رفع ملف بدون رسائل
 // ============================================
 
 import { useState, useCallback } from "react";
@@ -21,13 +21,13 @@ export function useFileUpload({
   setCurrentChatId,
   messagesRef,
   setAllChats,
-  attachedFiles,      // ✅ من Chat.jsx
-  setAttachedFiles,   // ✅ من Chat.jsx
+  attachedFiles,
+  setAttachedFiles,
 }) {
   const [uploadProgress, setUploadProgress] = useState(null);
 
   // ─────────────────────────────────────────
-  // 1. رفع الملفات المعلقة
+  // 1. uploadPendingFiles
   // ─────────────────────────────────────────
   const uploadPendingFiles = useCallback(
     async (chatId) => {
@@ -251,18 +251,32 @@ export function useFileUpload({
 
       showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
 
+      // ✅ إصلاح: حفظ المحادثة حتى لو كانت فارغة
       if (chatId) {
         try {
           const now = new Date().toISOString();
+
+          const msgsToSave =
+            messagesRef.current.length > 0
+              ? messagesRef.current.slice(-CHAT_HISTORY_LIMIT)
+              : [
+                  {
+                    role: "assistant",
+                    content: "محادثة بالملفات",
+                    id: Date.now(),
+                  },
+                ];
+
           const { error: chatSaveErr } = await supabase
             .from("chats")
             .upsert({
               id: chatId,
               user_id: user.id,
               title: "محادثة بالملفات",
-              messages: messagesRef.current.slice(-CHAT_HISTORY_LIMIT),
+              messages: msgsToSave,
               updated_at: now,
             });
+
           if (chatSaveErr) {
             console.warn(
               "[Chat] فشل حفظ المحادثة بعد الرفع:",
@@ -275,7 +289,7 @@ export function useFileUpload({
                 id: chatId,
                 title: "محادثة بالملفات",
                 date: now,
-                messageCount: messagesRef.current.length,
+                messageCount: msgsToSave.length,
               };
               return exists
                 ? [updated, ...prev.filter((c) => c.id !== chatId)]
