@@ -1,11 +1,10 @@
 // ============================================
-// Chat.jsx — نسخة v10.2
-// ✅ استراتيجية Map-Reduce: تقسيم الملف إلى أجزاء صغيرة + دمج نهائي
-// ✅ OCR تلقائي للصفحات المصورة
-// ✅ حفظ المحادثة فور رفع الملف
-// ✅ رفع الملفات فور اختيارها مع شريط تقدم
-// ✅ دعم TUS للملفات الكبيرة
-// ✅ عرض فوري بدون تأثير كتابة
+// Chat.jsx — نسخة v11.0
+// ✅ الوضع السريع (Long-Form): تخطيط + تقسيم + كتابة تدريجية
+// ✅ وضع المهمة (Task): كما هو
+// ✅ Map-Reduce لملفات PDF
+// ✅ OCR تلقائي
+// ✅ TUS للملفات الكبيرة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -348,7 +347,6 @@ async function smartDetectIntent(text, session) {
   }
 }
 
-// ✅ دالة مساعدة: ترسل طلب تلخيص جزئي وتعيد النص فقط (بدون عرضه في المحادثة)
 async function executeRequestForSummary(text) {
   try {
     const {
@@ -369,7 +367,7 @@ async function executeRequestForSummary(text) {
           max_tokens: 800,
           temperature: 0.3,
           systemPrompt:
-            "أنت ملخّص دقيق. لخّص النص المعطى في نقاط مركزة. لا تضف معلومات من خارج النص.",
+            "أنت مساعد دقيق. اتبع التعليمات بدقة. لا تضف معلومات من خارج النص.",
           messages: [{ role: "user", content: text }],
         }),
       }
@@ -403,7 +401,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [showHistory, setShowHistory] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [sendMode, setSendMode] = useState("chat");
+  const [sendMode, setSendMode] = useState("fast");
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -423,6 +421,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(null);
+
+  // ✅ الوضع السريع: سياق التوليد الطويل
+  const [longFormContext, setLongFormContext] = useState(null);
+  // { prompt, plan, parts: [], currentPart: 0 }
 
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -1435,366 +1437,272 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setLoading(false);
         setStreamingText("");
         abortControllerRef.current = null;
-        // ✅ لا نرمي الخطأ — نترك handlePdfPagesRequest يكمل
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
     [user.id, attachedFiles]
   );
 
-  function handleStop() {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setLoading(false);
-    setStreamingText("");
-  }
+  // ✅ v11.0: الوضع السريع — تخطيط + تقسيم + كتابة تدريجية
 
-  async function createTask(text) {
-    if (creatingTaskRef.current) {
-      console.log("[Chat] createTask already in progress, skipping");
-      return;
-    }
-
-    creatingTaskRef.current = true;
-
-    try {
-      if (!currentChatIdRef.current) {
-        const newId = Date.now().toString();
-        currentChatIdRef.current = newId;
-        setCurrentChatId(newId);
-      }
-
-      const { data: taskId, error } = await supabase.rpc("create_task", {
-        task_input: text,
-        chat_id_input: currentChatIdRef.current,
-      });
-
-      if (error) {
-        showToast("❌ " + error.message, "error");
-        return;
-      }
-
-      showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
-
-      const { data: task, error: fetchErr } = await supabase
-        .from("tasks")
-        .select("*")
-        .eq("id", taskId)
-        .single();
-
-      if (fetchErr || !task) {
-        console.error("[Chat] فشل جلب المهمة:", fetchErr);
-        return;
-      }
-
-      const taskMsgId = `task-${task.id}`;
-
-      setMessages((prev) => {
-        const exists = prev.some((m) => m.id === taskMsgId);
-        if (exists) return prev;
-
-        return sortMessagesByTime([
-          ...prev,
-          {
-            id: taskMsgId,
-            role: "assistant",
-            type: "task",
-            task,
-          },
-        ]);
-      });
-
-      setAllActiveTasks((prev) => {
-        const exists = prev.some((t) => t.id === task.id);
-        if (exists) return prev;
-        return [task, ...prev];
-      });
-
-      setInput("");
-      setAttachedFiles([]);
-      setSendMode("chat");
-    } catch (err) {
-      console.error("[Chat] خطأ في createTask:", err);
-      showToast("❌ فشل إنشاء المهمة", "error");
-    } finally {
-      creatingTaskRef.current = false;
-    }
-  }
-
-  async function cancelTask(taskId) {
-    try {
-      const { error } = await supabase.rpc("cancel_task", {
-        target_task_id: taskId,
-      });
-
-      if (error) throw error;
-
-      showToast("🛑 تم إيقاف المهمة.", "info");
-    } catch (err) {
-      console.error("[Chat] خطأ في cancelTask:", err);
-      showToast("❌ فشل إيقاف المهمة", "error");
-    }
-  }
-
-  async function openTaskInChat(chatId) {
-    if (chatId === currentChatIdRef.current) {
-      showToast("✅ أنت بالفعل في هذه المحادثة.", "info");
-      return;
-    }
-
-    if (currentChatIdRef.current) {
-      await saveChatToSupabase();
-    }
-
-    const { data: chat } = await supabase
-      .from("chats")
-      .select("*")
-      .eq("id", chatId)
-      .single();
-
-    if (!chat) {
-      showToast("⚠️ المحادثة غير موجودة.", "error");
-      return;
-    }
-
-    setCurrentChatId(chatId);
-    setMessages(
-      chat.messages && chat.messages.length > 0
-        ? sortMessagesByTime(chat.messages)
-        : [
-            {
-              role: "assistant",
-              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
-              id: Date.now(),
-            },
-          ]
-    );
-
-    setShowHistory(false);
-    setShowMenu(false);
-    setInput("");
-    setAttachedFiles([]);
-
-    await loadChatTasksForChat(chatId);
-    await restoreChatFiles(chatId);
-
-    setTimeout(() => inputRef.current?.focus(), 100);
-  }
-
-  // ✅ v10.2: Map-Reduce — أجزاء 4 صفحات + دمج نهائي
-  async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-    const CHUNK_SIZE = 4;
-    const totalPages = pdfFile.pageCount || endPage;
-    const safeEnd = Math.min(endPage, totalPages);
-    const safeStart = Math.max(1, startPage);
-
-    if (safeStart > safeEnd) {
-      showToast("⚠️ نطاق صفحات غير صالح.", "error");
-      return;
-    }
-
+  async function handleLongFormRequest(userPrompt) {
     setInput("");
     setLoading(true);
     setStreamingText("");
     autoScrollRef.current = true;
     setShowScrollButton(false);
 
-    const totalChunks = Math.ceil((safeEnd - safeStart + 1) / CHUNK_SIZE);
-    const partialSummaries = [];
-    const failedChunks = [];
+    if (!currentChatIdRef.current) {
+      const newId = Date.now().toString();
+      currentChatIdRef.current = newId;
+      setCurrentChatId(newId);
+    }
+
+    // إضافة رسالة المستخدم
+    const userMsg = { role: "user", content: userPrompt, id: Date.now() };
+    setMessages((prev) => sortMessagesByTime([...prev, userMsg]));
+
+    showToast("📋 جاري وضع مخطط المحتوى...", "info");
 
     try {
-      // === المرحلة 1: الخريطة (Map) ===
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
-        const chunkStart = safeStart + chunkIndex * CHUNK_SIZE;
-        const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, safeEnd);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-        showToast(
-          `🔍 استخراج الصفحات ${chunkStart}-${chunkEnd} (${chunkIndex + 1}/${totalChunks})...`,
-          "info"
-        );
+      const planPrompt =
+        `ضع مخططاً مفصلاً لـ: ${userPrompt}\n\n` +
+        `المطلوب: قائمة أجزاء واضحة (5-10 أجزاء). كل جزء في سطر منفصل. ` +
+        `لا تكتب المحتوى نفسه، فقط العناوين. ` +
+        `مثال:\n1. المقدمة\n2. القسم الأول\n3. القسم الثاني\n...`;
 
-        try {
-          const pdfSource = pdfFile.filePath
-            ? await getFileSignedUrl(pdfFile.filePath, 3600)
-            : pdfFile.rawFile || pdfFile.pdfFile;
-
-          const chunkText = await extractPdfText(
-            pdfSource,
-            chunkStart,
-            chunkEnd,
-            {
-              enableOcr: true,
-              onOcrProgress: (pageNum, from, to) => {
-                const totalInChunk = to - from + 1;
-                const currentIdx = pageNum - from + 1;
-                showToast(
-                  `🔍 الصفحة ${pageNum} صورة — OCR (${currentIdx}/${totalInChunk})...`,
-                  "info"
-                );
-              },
-            }
-          );
-
-          if (!chunkText || chunkText.trim().length < 10) {
-            failedChunks.push(`${chunkStart}-${chunkEnd} (نص فارغ)`);
-            continue;
-          }
-
-          const mapRequestText =
-            `طلب المستخدم: ${userPrompt}\n\n` +
-            `[ملف: ${pdfFile.name} — الصفحات ${chunkStart}-${chunkEnd} من ${totalPages}]\n\n` +
-            `النص:\n${chunkText}\n\n` +
-            `المطلوب: لخّص هذا الجزء فقط في 3-5 نقاط مركزة، مع الحفاظ على المصطلحات والأفكار الرئيسية. ` +
-            `هذا الملخص سيُدمج لاحقاً مع ملخصات أجزاء أخرى، لذا ركّز على الجوهر.`;
-
-          const summary = await executeRequestForSummary(mapRequestText);
-          if (summary) {
-            partialSummaries.push(summary);
-          } else {
-            failedChunks.push(`${chunkStart}-${chunkEnd} (فشل التلخيص)`);
-          }
-        } catch (chunkErr) {
-          console.error(
-            `[PDF] فشل الجزء ${chunkStart}-${chunkEnd}:`,
-            chunkErr
-          );
-          failedChunks.push(`${chunkStart}-${chunkEnd} (${chunkErr.message})`);
+      const planRes = await fetch(
+        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            model: GROQ_MODEL,
+            max_tokens: 800,
+            temperature: 0.3,
+            systemPrompt:
+              "أنت مخطط محترف. ضع مخططاً منظماً. لا تكتب محتوى، فقط عناوين الأجزاء.",
+            messages: [{ role: "user", content: planPrompt }],
+          }),
         }
+      );
 
-        if (chunkIndex < totalChunks - 1) {
-          await new Promise((r) => setTimeout(r, 500));
-        }
+      if (!planRes.ok) {
+        const err = await planRes.json();
+        throw new Error(err.error?.message || "فشل وضع المخطط");
       }
 
-      // === المرحلة 2: الاختزال (Reduce) ===
-      if (partialSummaries.length === 0) {
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content:
-                "❌ لم أتمكن من تلخيص أي جزء من الملف. قد تكون الصفحات صوراً بدون نص واضح.",
-              id: Date.now(),
-            },
-          ])
-        );
-        setLoading(false);
-        return;
+      const planData = await planRes.json();
+      const planText =
+        planData.choices?.[0]?.message?.content?.trim() || "";
+
+      if (!planText) {
+        throw new Error("المخطط فارغ");
       }
 
-      showToast("🔄 جاري دمج الملخصات في ملخص نهائي...", "info");
+      // استخراج العناوين كأجزاء
+      const parts = planText
+        .split("\n")
+        .map((line) => line.replace(/^\d+[\.\)]\s*/, "").trim())
+        .filter((line) => line.length > 3);
 
-      const combinedSummaries = partialSummaries
-        .map((s, i) => `--- ملخص الجزء ${i + 1} ---\n${s}`)
-        .join("\n\n");
+      if (parts.length === 0) {
+        throw new Error("لم أتمكن من استخراج أجزاء من المخطط");
+      }
 
-      const reduceRequestText =
-        `طلب المستخدم الأصلي: ${userPrompt}\n\n` +
-        `لقد قمت بتلخيص أجزاء متعددة من الملف "${pdfFile.name}" (الصفحات ${safeStart}-${safeEnd}). ` +
-        `فيما يلي الملخصات الجزئية لكل جزء:\n\n` +
-        `${combinedSummaries}\n\n` +
-        `المطلوب: قم بدمج هذه الملخصات الجزئية في ملخص نهائي واحد مترابط ومنظم. ` +
-        `حافظ على التسلسل المنطقي، واذكر الأفكار الرئيسية بوضوح. ` +
-        `لا تكرر المعلومات، ولا تختلق معلومات غير موجودة في الملخصات.`;
+      setLongFormContext({
+        prompt: userPrompt,
+        plan: planText,
+        parts: [],
+        currentPart: 0,
+        partTitles: parts,
+      });
 
-      await executeRequest(reduceRequestText, userPrompt);
-    } catch (err) {
-      console.error("[PDF] خطأ عام:", err);
       setMessages((prev) =>
         sortMessagesByTime([
           ...prev,
           {
             role: "assistant",
-            content: "❌ خطأ في قراءة PDF: " + err.message,
+            content:
+              `📋 **المخطط (${parts.length} أجزاء):**\n\n${planText}\n\n` +
+              `هل تريد أن أبدأ بالجزء الأول؟ اكتب "ابدأ".`,
+            id: Date.now() + 1,
+          },
+        ])
+      );
+
+      showToast("✅ المخطط جاهز. اكتب 'ابدأ' للبدء.", "success");
+    } catch (err) {
+      console.error("[LongForm] خطأ في المخطط:", err);
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: "❌ خطأ في وضع المخطط: " + err.message,
             id: Date.now(),
           },
         ])
       );
-      showToast("❌ فشل قراءة PDF.", "error");
+      showToast("❌ فشل وضع المخطط", "error");
     } finally {
       setLoading(false);
       setStreamingText("");
     }
   }
 
-  async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
+  async function writeNextPart() {
+    if (!longFormContext) {
+      showToast("⚠️ لا يوجد سياق. اكتب طلباً أولاً.", "error");
+      return;
+    }
+
+    const { prompt, partTitles, parts, currentPart } = longFormContext;
+
+    if (currentPart >= partTitles.length) {
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: "✅ اكتمل المحتوى بكل أجزائه. يمكنك نسخه الآن.",
+            id: Date.now(),
+          },
+        ])
+      );
+      setLongFormContext(null);
+      return;
+    }
+
+    const partTitle = partTitles[currentPart];
+
     setLoading(true);
     setStreamingText("");
     autoScrollRef.current = true;
     setShowScrollButton(false);
 
-    setInput("");
+    showToast(
+      `✍️ جاري كتابة الجزء ${currentPart + 1}/${partTitles.length}: ${partTitle}...`,
+      "info"
+    );
 
     try {
-      showToast("🔍 جاري البحث عن الفصل في الفهرس...", "info");
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-      const pdfSource = pdfFile.filePath
-        ? await getFileSignedUrl(pdfFile.filePath, 3600)
-        : pdfFile.rawFile || pdfFile.pdfFile;
+      const previousPartsText =
+        parts.length > 0
+          ? `\n\nهذا ما كتبته في الأجزاء السابقة (حافظ على نفس الأسلوب والترابط):\n${parts.join(
+              "\n\n"
+            )}\n\n`
+          : "";
 
-      const result = await findSectionByTitle(pdfSource, sectionTitle);
+      const partPrompt =
+        `الطلب الأصلي: ${prompt}\n\n` +
+        `المخطط:\n${partTitles.map((t, i) => `${i + 1}. ${t}`).join("\n")}\n\n` +
+        `${previousPartsText}` +
+        `اكتب الآن الجزء: "${partTitle}"\n\n` +
+        `المطلوب: محتوى مفصل ومترابط. لا تكتب الأجزاء الأخرى، فقط هذا الجزء.`;
 
-      if (!result.found) {
-        setMessages((prev) =>
-          sortMessagesByTime([
-            ...prev,
-            { role: "user", content: userPrompt, id: Date.now() },
-            {
-              role: "assistant",
-              content:
-                `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
-                `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة.`,
-              id: Date.now() + 1,
-            },
-          ])
-        );
-        setLoading(false);
-        return;
+      const res = await fetch(
+        "https://yfglgxuhtidfkskgabk.supabase.co/functions/v1/hyper-responder",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+          body: JSON.stringify({
+            model: GROQ_MODEL,
+            max_tokens: GROQ_MAX_TOKENS,
+            temperature: GROQ_TEMPERATURE,
+            systemPrompt:
+              getPersonalityPrompt(
+                currentUserRef.current?.personality || DEFAULT_PERSONALITY,
+                currentUserRef.current?.gender || "ولد"
+              ) +
+              "\n\nأنت كاتب محترف. اكتب الجزء المطلوب فقط، وحافظ على الأسلوب والترابط مع ما سبق.",
+            messages: [{ role: "user", content: partPrompt }],
+          }),
+        }
+      );
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || "فشل كتابة الجزء");
       }
 
-      showToast(
-        `✅ وُجد "${result.title}" في الصفحات ${result.startPage}-${result.endPage}`,
-        "success"
-      );
+      const data = await res.json();
+      const partContent =
+        cleanResponse(data.choices?.[0]?.message?.content || "");
 
-      setMessages((prev) =>
-        sortMessagesByTime([
-          ...prev,
-          { role: "user", content: userPrompt, id: Date.now() },
-          {
-            role: "assistant",
-            content: `📖 وُجد **${result.title}** في الصفحات **${result.startPage}-${result.endPage}**. جاري المعالجة على دفعات...`,
-            id: Date.now() + 1,
-          },
-        ])
-      );
+      if (!partContent) {
+        throw new Error("الجزء فارغ");
+      }
 
-      setLoading(false);
+      const updatedParts = [...parts, partContent];
+      const nextPart = currentPart + 1;
 
-      await handlePdfPagesRequest(
-        pdfFile,
-        result.startPage,
-        result.endPage,
-        null
-      );
-    } catch (err) {
-      console.error("[PDF] خطأ في البحث عن الفصل:", err);
+      setLongFormContext({
+        ...longFormContext,
+        parts: updatedParts,
+        currentPart: nextPart,
+      });
+
       setMessages((prev) =>
         sortMessagesByTime([
           ...prev,
           {
             role: "assistant",
-            content: "❌ خطأ: " + err.message,
+            content: `### ${partTitle}\n\n${partContent}`,
             id: Date.now(),
           },
         ])
       );
-      showToast("❌ فشل البحث عن الفصل.", "error");
+
+      if (nextPart >= partTitles.length) {
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: "✅ اكتمل المحتوى بكل أجزائه. يمكنك نسخه الآن.",
+              id: Date.now() + 1,
+            },
+          ])
+        );
+        setLongFormContext(null);
+        showToast("✅ اكتمل المحتوى!", "success");
+      } else {
+        showToast(
+          `✅ تم الجزء ${nextPart}/${partTitles.length}. اكتب 'التالي' للمتابعة.`,
+          "success"
+        );
+      }
+    } catch (err) {
+      console.error("[LongForm] خطأ في الجزء:", err);
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: "❌ خطأ في كتابة الجزء: " + err.message,
+            id: Date.now(),
+          },
+        ])
+      );
+      showToast("❌ فشل كتابة الجزء", "error");
+    } finally {
       setLoading(false);
+      setStreamingText("");
     }
   }
 
@@ -1816,6 +1724,37 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
     const text = input.trim();
     if (!text && !attachedFiles.length) return;
+
+    // ✅ التحكم في الأوامر النصية للوضع السريع
+    if (longFormContext) {
+      const lower = text.toLowerCase();
+      if (
+        lower === "ابدأ" ||
+        lower === "التالي" ||
+        lower === "التالي" ||
+        lower === "continue" ||
+        lower === "next"
+      ) {
+        setInput("");
+        await writeNextPart();
+        return;
+      }
+      if (lower === "الغاء" || lower === "إلغاء" || lower === "cancel") {
+        setLongFormContext(null);
+        setInput("");
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content: "🗑️ تم إلغاء الوضع السريع. يمكنك البدء من جديد.",
+              id: Date.now(),
+            },
+          ])
+        );
+        return;
+      }
+    }
 
     const hasOnlyFiles = !text && attachedFiles.length > 0;
     const hasTocRequest = isTocRequest(text);
@@ -1898,6 +1837,19 @@ export default function Chat({ user, onLogout, isAdmin }) {
         }
       } catch (err) {
         console.warn("[SmartIntent] فشل:", err.message);
+      }
+    }
+
+    // ✅ الوضع السريع: اكتشاف تلقائي للمحتوى الطويل
+    if (sendMode === "fast" && !hasPdf) {
+      const isLongFormRequest =
+        /اكتب|لخص|أنشئ|اصنع|طور|صمم|article|essay|story|write|create/i.test(
+          text
+        ) && text.length > 30;
+
+      if (isLongFormRequest && text.length > 100) {
+        await handleLongFormRequest(text);
+        return;
       }
     }
 
@@ -2032,6 +1984,359 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
+  async function handlePdfSectionRequest(pdfFile, sectionTitle, userPrompt) {
+    setLoading(true);
+    setStreamingText("");
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
+
+    setInput("");
+
+    try {
+      showToast("🔍 جاري البحث عن الفصل في الفهرس...", "info");
+
+      const pdfSource = pdfFile.filePath
+        ? await getFileSignedUrl(pdfFile.filePath, 3600)
+        : pdfFile.rawFile || pdfFile.pdfFile;
+
+      const result = await findSectionByTitle(pdfSource, sectionTitle);
+
+      if (!result.found) {
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            { role: "user", content: userPrompt, id: Date.now() },
+            {
+              role: "assistant",
+              content:
+                `⚠️ لم أجد "${sectionTitle}" في الفهرس.\n\n` +
+                `يمكنك:\n- كتابة "اعرض الفهرس" لرؤية العناوين المتاحة.\n- أو تحديد أرقام صفحات مباشرة.`,
+              id: Date.now() + 1,
+            },
+          ])
+        );
+        setLoading(false);
+        return;
+      }
+
+      showToast(
+        `✅ وُجد "${result.title}" في الصفحات ${result.startPage}-${result.endPage}`,
+        "success"
+      );
+
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          { role: "user", content: userPrompt, id: Date.now() },
+          {
+            role: "assistant",
+            content: `📖 وُجد **${result.title}** في الصفحات **${result.startPage}-${result.endPage}**. جاري المعالجة على دفعات...`,
+            id: Date.now() + 1,
+          },
+        ])
+      );
+
+      setLoading(false);
+
+      await handlePdfPagesRequest(
+        pdfFile,
+        result.startPage,
+        result.endPage,
+        null
+      );
+    } catch (err) {
+      console.error("[PDF] خطأ في البحث عن الفصل:", err);
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: "❌ خطأ: " + err.message,
+            id: Date.now(),
+          },
+        ])
+      );
+      showToast("❌ فشل البحث عن الفصل.", "error");
+      setLoading(false);
+    }
+  }
+
+  async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
+    const CHUNK_SIZE = 4;
+    const totalPages = pdfFile.pageCount || endPage;
+    const safeEnd = Math.min(endPage, totalPages);
+    const safeStart = Math.max(1, startPage);
+
+    if (safeStart > safeEnd) {
+      showToast("⚠️ نطاق صفحات غير صالح.", "error");
+      return;
+    }
+
+    setInput("");
+    setLoading(true);
+    setStreamingText("");
+    autoScrollRef.current = true;
+    setShowScrollButton(false);
+
+    const totalChunks = Math.ceil((safeEnd - safeStart + 1) / CHUNK_SIZE);
+    const partialSummaries = [];
+    const failedChunks = [];
+
+    try {
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex++) {
+        const chunkStart = safeStart + chunkIndex * CHUNK_SIZE;
+        const chunkEnd = Math.min(chunkStart + CHUNK_SIZE - 1, safeEnd);
+
+        showToast(
+          `🔍 استخراج الصفحات ${chunkStart}-${chunkEnd} (${chunkIndex + 1}/${totalChunks})...`,
+          "info"
+        );
+
+        try {
+          const pdfSource = pdfFile.filePath
+            ? await getFileSignedUrl(pdfFile.filePath, 3600)
+            : pdfFile.rawFile || pdfFile.pdfFile;
+
+          const chunkText = await extractPdfText(
+            pdfSource,
+            chunkStart,
+            chunkEnd,
+            {
+              enableOcr: true,
+              onOcrProgress: (pageNum, from, to) => {
+                const totalInChunk = to - from + 1;
+                const currentIdx = pageNum - from + 1;
+                showToast(
+                  `🔍 الصفحة ${pageNum} صورة — OCR (${currentIdx}/${totalInChunk})...`,
+                  "info"
+                );
+              },
+            }
+          );
+
+          if (!chunkText || chunkText.trim().length < 10) {
+            failedChunks.push(`${chunkStart}-${chunkEnd} (نص فارغ)`);
+            continue;
+          }
+
+          const mapRequestText =
+            `طلب المستخدم: ${userPrompt}\n\n` +
+            `[ملف: ${pdfFile.name} — الصفحات ${chunkStart}-${chunkEnd} من ${totalPages}]\n\n` +
+            `النص:\n${chunkText}\n\n` +
+            `المطلوب: لخّص هذا الجزء فقط في 3-5 نقاط مركزة، مع الحفاظ على المصطلحات والأفكار الرئيسية. ` +
+            `هذا الملخص سيُدمج لاحقاً مع ملخصات أجزاء أخرى، لذا ركّز على الجوهر.`;
+
+          const summary = await executeRequestForSummary(mapRequestText);
+          if (summary) {
+            partialSummaries.push(summary);
+          } else {
+            failedChunks.push(`${chunkStart}-${chunkEnd} (فشل التلخيص)`);
+          }
+        } catch (chunkErr) {
+          console.error(
+            `[PDF] فشل الجزء ${chunkStart}-${chunkEnd}:`,
+            chunkErr
+          );
+          failedChunks.push(`${chunkStart}-${chunkEnd} (${chunkErr.message})`);
+        }
+
+        if (chunkIndex < totalChunks - 1) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+      }
+
+      if (partialSummaries.length === 0) {
+        setMessages((prev) =>
+          sortMessagesByTime([
+            ...prev,
+            {
+              role: "assistant",
+              content:
+                "❌ لم أتمكن من تلخيص أي جزء من الملف. قد تكون الصفحات صوراً بدون نص واضح.",
+              id: Date.now(),
+            },
+          ])
+        );
+        setLoading(false);
+        return;
+      }
+
+      showToast("🔄 جاري دمج الملخصات في ملخص نهائي...", "info");
+
+      const combinedSummaries = partialSummaries
+        .map((s, i) => `--- ملخص الجزء ${i + 1} ---\n${s}`)
+        .join("\n\n");
+
+      const reduceRequestText =
+        `طلب المستخدم الأصلي: ${userPrompt}\n\n` +
+        `لقد قمت بتلخيص أجزاء متعددة من الملف "${pdfFile.name}" (الصفحات ${safeStart}-${safeEnd}). ` +
+        `فيما يلي الملخصات الجزئية لكل جزء:\n\n` +
+        `${combinedSummaries}\n\n` +
+        `المطلوب: قم بدمج هذه الملخصات الجزئية في ملخص نهائي واحد مترابط ومنظم. ` +
+        `حافظ على التسلسل المنطقي، واذكر الأفكار الرئيسية بوضوح. ` +
+        `لا تكرر المعلومات، ولا تختلق معلومات غير موجودة في الملخصات.`;
+
+      await executeRequest(reduceRequestText, userPrompt);
+    } catch (err) {
+      console.error("[PDF] خطأ عام:", err);
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: "❌ خطأ في قراءة PDF: " + err.message,
+            id: Date.now(),
+          },
+        ])
+      );
+      showToast("❌ فشل قراءة PDF.", "error");
+    } finally {
+      setLoading(false);
+      setStreamingText("");
+    }
+  }
+
+  async function createTask(text) {
+    if (creatingTaskRef.current) {
+      console.log("[Chat] createTask already in progress, skipping");
+      return;
+    }
+
+    creatingTaskRef.current = true;
+
+    try {
+      if (!currentChatIdRef.current) {
+        const newId = Date.now().toString();
+        currentChatIdRef.current = newId;
+        setCurrentChatId(newId);
+      }
+
+      const { data: taskId, error } = await supabase.rpc("create_task", {
+        task_input: text,
+        chat_id_input: currentChatIdRef.current,
+      });
+
+      if (error) {
+        showToast("❌ " + error.message, "error");
+        return;
+      }
+
+      showToast("✅ تم استلام المهمة. جاري العمل في الخلفية.");
+
+      const { data: task, error: fetchErr } = await supabase
+        .from("tasks")
+        .select("*")
+        .eq("id", taskId)
+        .single();
+
+      if (fetchErr || !task) {
+        console.error("[Chat] فشل جلب المهمة:", fetchErr);
+        return;
+      }
+
+      const taskMsgId = `task-${task.id}`;
+
+      setMessages((prev) => {
+        const exists = prev.some((m) => m.id === taskMsgId);
+        if (exists) return prev;
+
+        return sortMessagesByTime([
+          ...prev,
+          {
+            id: taskMsgId,
+            role: "assistant",
+            type: "task",
+            task,
+          },
+        ]);
+      });
+
+      setAllActiveTasks((prev) => {
+        const exists = prev.some((t) => t.id === task.id);
+        if (exists) return prev;
+        return [task, ...prev];
+      });
+
+      setInput("");
+      setAttachedFiles([]);
+      setSendMode("fast");
+    } catch (err) {
+      console.error("[Chat] خطأ في createTask:", err);
+      showToast("❌ فشل إنشاء المهمة", "error");
+    } finally {
+      creatingTaskRef.current = false;
+    }
+  }
+
+  function handleStop() {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setLoading(false);
+    setStreamingText("");
+  }
+
+  async function cancelTask(taskId) {
+    try {
+      const { error } = await supabase.rpc("cancel_task", {
+        target_task_id: taskId,
+      });
+
+      if (error) throw error;
+
+      showToast("🛑 تم إيقاف المهمة.", "info");
+    } catch (err) {
+      console.error("[Chat] خطأ في cancelTask:", err);
+      showToast("❌ فشل إيقاف المهمة", "error");
+    }
+  }
+
+  async function openTaskInChat(chatId) {
+    if (chatId === currentChatIdRef.current) {
+      showToast("✅ أنت بالفعل في هذه المحادثة.", "info");
+      return;
+    }
+
+    if (currentChatIdRef.current) {
+      await saveChatToSupabase();
+    }
+
+    const { data: chat } = await supabase
+      .from("chats")
+      .select("*")
+      .eq("id", chatId)
+      .single();
+
+    if (!chat) {
+      showToast("⚠️ المحادثة غير موجودة.", "error");
+      return;
+    }
+
+    setCurrentChatId(chatId);
+    setMessages(
+      chat.messages && chat.messages.length > 0
+        ? sortMessagesByTime(chat.messages)
+        : [
+            {
+              role: "assistant",
+              content: "محادثة جديدة 🖤\nاتكلم، أنا هنا.",
+              id: Date.now(),
+            },
+          ]
+    );
+
+    setShowHistory(false);
+    setShowMenu(false);
+    setInput("");
+    setAttachedFiles([]);
+
+    await loadChatTasksForChat(chatId);
+    await restoreChatFiles(chatId);
+
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }
+
   async function newChat() {
     if (currentChatIdRef.current) {
       await saveChatToSupabase();
@@ -2048,6 +2353,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowHistory(false);
     setInput("");
     setAttachedFiles([]);
+    setLongFormContext(null);
 
     autoScrollRef.current = true;
     setShowScrollButton(false);
@@ -2142,6 +2448,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           },
         ]);
         setAttachedFiles([]);
+        setLongFormContext(null);
       }
 
       showToast("✅ تم حذف المحادثة وكل مهامها وملفاتها", "success");
@@ -2527,7 +2834,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onFileUpload={handleFileUpload}
         onRemoveFile={removeFile}
         onToggleMode={() =>
-          setSendMode((m) => (m === "chat" ? "task" : "chat"))
+          setSendMode((m) => (m === "fast" ? "task" : "fast"))
         }
       />
 
@@ -2542,3 +2849,4 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
+  
