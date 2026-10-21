@@ -1,6 +1,6 @@
 // ============================================
 // ChatInput.jsx
-// منطقة الإدخال + رفع الملفات + إرسال (رد/مهمة)
+// منطقة الإدخال + رفع الملفات + إرسال (سريع / مهمة)
 // ============================================
 
 import { useRef } from "react";
@@ -11,7 +11,7 @@ export default function ChatInput({
   loading,
   streamingText,
   attachedFiles,
-  sendMode = "chat",
+  sendMode = "fast",
   onSend,
   onStop,
   onFileUpload,
@@ -105,16 +105,20 @@ export default function ChatInput({
           accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*"
         />
 
-        {/* زر تبديل الوضع (رد / مهمة) */}
+        {/* زر تبديل الوضع (سريع / مهمة) */}
         <button
           onClick={onToggleMode}
           className={`mode-toggle ${
-            isTaskMode ? "mode-toggle-task" : "mode-toggle-chat"
+            isTaskMode ? "mode-toggle-task" : "mode-toggle-fast"
           }`}
-          title={isTaskMode ? "التبديل إلى رد سريع" : "التبديل إلى مهمة"}
+          title={
+            isTaskMode
+              ? "التبديل إلى الوضع السريع"
+              : "التبديل إلى وضع المهمة"
+          }
           disabled={loading}
         >
-          {isTaskMode ? "📋 مهمة" : "💬 رد"}
+          {isTaskMode ? "📋 مهمة" : "⚡ سريع"}
         </button>
 
         <textarea
@@ -129,7 +133,7 @@ export default function ChatInput({
               ? "اكتب سؤالك عن الملفات..."
               : isTaskMode
               ? "اكتب مهمة (سيتم تنفيذها في الخلفية)..."
-              : "اكتب لبلاك..."
+              : "اكتب لبلاك (سريع)..."
           }
           rows={1}
           className="textarea"
@@ -148,7 +152,7 @@ export default function ChatInput({
               : "",
             cursor: "pointer",
           }}
-          title={isTaskMode ? "إرسال كمهمة" : "إرسال كرد"}
+          title={isTaskMode ? "إرسال كمهمة" : "إرسال كرد سريع"}
         >
           {loading ? "⏹️" : "↑"}
         </button>
