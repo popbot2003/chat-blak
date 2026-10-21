@@ -51,17 +51,11 @@ async function extractPageText(page) {
   return pageText.trim();
 }
 
-/**
- * ✅ جديد: OCR على صفحة PDF (تحويلها إلى صورة ثم استخراج النص)
- * @param {PDFPageProxy} page
- * @param {number} pageNum
- * @returns {Promise<string>}
- */
+// ✅ دالة OCR: تحويل صفحة PDF إلى صورة ثم استخراج النص
 async function ocrPdfPage(page, pageNum) {
   try {
     const { extractTextFromImage } = await import("./ocr");
 
-    // 2.0 للحصول على دقة أعلى لـ OCR
     const viewport = page.getViewport({ scale: 2.0 });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
@@ -86,7 +80,6 @@ async function ocrPdfPage(page, pageNum) {
 
     const text = await extractTextFromImage(file);
 
-    // تحرير الذاكرة
     canvas.width = 0;
     canvas.height = 0;
 
@@ -102,17 +95,7 @@ export async function getPdfPageCount(source) {
   return pdf.numPages;
 }
 
-/**
- * ✅ استخراج النص من نطاق صفحات، مع OCR احتياطي
- * @param {File|string} source
- * @param {number} startPage
- * @param {number} endPage
- * @param {Object} [options]
- * @param {boolean} [options.enableOcr=true] - تفعيل OCR للصفحات المصورة
- * @param {(current: number, total: number) => void} [options.onProgress]
- * @param {(pageNum: number, from: number, to: number) => void} [options.onOcrProgress]
- * @returns {Promise<string>}
- */
+// ✅ extractPdfText مع دعم OCR
 export async function extractPdfText(source, startPage, endPage, options = {}) {
   const { enableOcr = true, onProgress, onOcrProgress } = options;
   const pdf = await loadPdf(source);
@@ -126,7 +109,6 @@ export async function extractPdfText(source, startPage, endPage, options = {}) {
     const page = await pdf.getPage(i);
     let pageText = await extractPageText(page);
 
-    // ✅ OCR احتياطي إذا كانت الصفحة صورة
     if ((!pageText || pageText.trim().length < 10) && enableOcr) {
       console.log(`[PDF] الصفحة ${i} بدون نص — تشغيل OCR...`);
       if (onOcrProgress) onOcrProgress(i, from, to);
@@ -142,9 +124,7 @@ export async function extractPdfText(source, startPage, endPage, options = {}) {
   return pagesText.join("\n\n");
 }
 
-/**
- * البحث عن الفهرس (بدون OCR — الفهرس عادةً نصي)
- */
+// البحث عن الفهرس (بدون OCR)
 export async function findToc(source, onProgress) {
   const pdf = await loadPdf(source);
   const numPages = pdf.numPages;
@@ -382,10 +362,6 @@ export async function deleteFilesFromStorage(filePaths) {
   }
   return true;
 }
-
-// ============================================
-// ✅ Supabase Database Functions (user_files)
-// ============================================
 
 export async function insertUserFile(fileData) {
   const { data, error } = await supabase
