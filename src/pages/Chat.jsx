@@ -1,11 +1,7 @@
 // ============================================
-// Chat.jsx — نسخة v9.5 (الحل الهجين لتذكر الملفات)
-// ✅ إصلاح 1-23 (كما في السابق)
-// ✅ جديد 24: smartDetectIntent (ذكاء مختلط)
-// ✅ جديد 25: تسريع streaming (5ms + 3 أحرف)
-// ✅ جديد 26: buildFileContextCard (تذكر الملفات دون إرسالها كاملة)
-// ✅ جديد 27: منع مسح attachedFiles بعد الإرسال
-// ✅ جديد 28: تأخير بين دفعات PDF لتفادي 429
+// Chat.jsx — نسخة v9.6
+// ✅ إضافة: رفع الملفات قبل معالجة PDF
+// ✅ إضافة: رسالة واضحة عند فشل استخراج النص
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -222,17 +218,14 @@ function detectSectionRequest(text) {
   return null;
 }
 
-// ✅ جديد 26: بناء بطاقة الملف (تُرسل مع كل رسالة بدلاً من النص الكامل)
 function buildFileContextCard(files) {
   if (!files || files.length === 0) return "";
 
   const cards = files.map((f) => {
     if (f.type === "application/pdf") {
-      // استخراج الفهرس المختصر إذا كان محفوظاً في content_text
       let tocBrief = "";
       const content = (f.content || "").trim();
       if (content && content.length > 50) {
-        // نأخذ أول 1500 حرف من النص كفهرس تقريبي
         const brief = content.slice(0, 1500).replace(/\s+/g, " ").trim();
         tocBrief = `\n   [فهرس/مقتطف أولي: ${brief}...]`;
       }
@@ -251,7 +244,6 @@ function buildFileContextCard(files) {
   );
 }
 
-// ✅ كاشف النية الذكي (عبر النموذج)
 async function smartDetectIntent(text, session) {
   if (!text || !session?.access_token) return null;
 
@@ -399,7 +391,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
-  // ── Realtime: تحديث بيانات المستخدم ──
   useEffect(() => {
     const ch = supabase
       .channel("user-updates")
@@ -420,7 +411,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Realtime: حذف الحساب ──
   useEffect(() => {
     const ch = supabase
       .channel("profile-delete")
@@ -440,7 +430,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Realtime: كل المهام ──
   useEffect(() => {
     const ch = supabase
       .channel(`tasks-${user.id}`)
@@ -560,7 +549,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Realtime: حذف المحادثات ──
   useEffect(() => {
     const ch = supabase
       .channel("chats-delete-" + user.id)
@@ -587,7 +575,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ── Presence ──
   useEffect(() => {
     let ch = null;
     (async () => {
@@ -614,14 +601,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
     };
   }, [user.id, user.name, user.email, user.personality]);
 
-  // ── تحميل أولي ──
   useEffect(() => {
     loadAllData();
     inputRef.current?.focus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ إصلاح التركيز
   useEffect(() => {
     if (!loading && !streamingText && isLoaded) {
       const timer = setTimeout(() => {
@@ -631,13 +616,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }, [loading, streamingText, isLoaded]);
 
-  // ✅ التمرير التلقائي
   useEffect(() => {
     if (!autoScrollRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streamingText]);
 
-  // ✅ كشف تمرير المستخدم
   function handleMessagesScroll(e) {
     const el = e.target;
     const distanceFromBottom =
@@ -659,14 +642,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ✅ زر العودة للأسفل
   function handleScrollToBottom() {
     autoScrollRef.current = true;
     setShowScrollButton(false);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
 
-  // ── حفظ تلقائي ──
   useEffect(() => {
     if (!isLoaded) return;
     if (!currentChatIdRef.current) return;
@@ -685,7 +666,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages, isLoaded]);
 
-  // ── حفظ عند إغلاق النافذة ──
   useEffect(() => {
     const handle = () => {
       if (currentChatIdRef.current) saveChatToSupabase();
@@ -695,9 +675,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoaded]);
 
-  // ─────────────────────────────────────────
-  // Data loading
-  // ─────────────────────────────────────────
   async function loadAllData() {
     const chats = await loadChatsFromSupabase();
     await loadAllActiveTasks();
@@ -1231,13 +1208,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         }
       }
 
-      // ✅ جديد 27: لا نمسح attachedFiles بعد الإرسال (يبقى السياق حياً)
-      // الكود القديم كان:
-      // setAttachedFiles((prev) =>
-      //   prev.filter((f) => f.type === "application/pdf" && f.fromStorage)
-      // );
-      // تم استبداله ببناء بطاقة الملف وإرسالها مع كل طلب.
-
       autoScrollRef.current = true;
       setShowScrollButton(false);
 
@@ -1287,7 +1257,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
             });
           });
 
-        // ✅ جديد 26: بناء بطاقة الملف وإرسالها مع كل طلب
         const fileCard = buildFileContextCard(filesForRequest);
 
         abortControllerRef.current = new AbortController();
@@ -1352,7 +1321,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
         const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
 
-        // ✅ streaming سريع: 3 أحرف كل 5ms
         let i = 0;
         function type() {
           if (abortControllerRef.current === null) return;
@@ -1550,9 +1518,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
-  // ✅ جديد 28: تحسين handlePdfPagesRequest مع تأخير بين الدفعات
   async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
-    const BATCH_SIZE = 5; // لا تتجاوز 5 صفحات لتفادي 8000 TPM
+    const BATCH_SIZE = 5;
     const totalPages = pdfFile.pageCount || endPage;
     const safeEnd = Math.min(endPage, totalPages);
     const safeStart = Math.max(1, startPage);
@@ -1572,7 +1539,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
     try {
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-        // ✅ جديد 28: تأخير بسيط بين الدفعات (بدءاً من الدفعة الثانية)
         if (batchIndex > 0) {
           await new Promise((resolve) => setTimeout(resolve, 1500));
         }
@@ -1596,12 +1562,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
         );
 
         if (!batchText || batchText.trim().length < 10) {
+          // ✅ إظهار رسالة واضحة بدلاً من التخطي الصامت
           setMessages((prev) =>
             sortMessagesByTime([
               ...prev,
               {
                 role: "assistant",
-                content: `⚠️ الصفحات ${batchStart}-${batchEnd} لا تحتوي على نص قابل للقراءة (قد تكون صورًا).`,
+                content: `⚠️ تعذر استخراج نص من الصفحات ${batchStart}-${batchEnd}. قد تكون صوراً ممسوحة ضوئياً، أو حدث خطأ في قراءة الملف.`,
                 id: Date.now() + batchIndex,
               },
             ])
@@ -1738,6 +1705,29 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
+    // ✅ جديد: رفع الملفات أولاً قبل أي معالجة PDF
+    if (attachedFiles.length > 0) {
+      const hasUnuploaded = attachedFiles.some(
+        (f) => !f.fromStorage && f.rawFile
+      );
+      if (hasUnuploaded) {
+        if (!currentChatIdRef.current) {
+          const newId = Date.now().toString();
+          currentChatIdRef.current = newId;
+          setCurrentChatId(newId);
+        }
+        try {
+          const uploaded = await uploadPendingFiles(currentChatIdRef.current);
+          setAttachedFiles(uploaded);
+          await new Promise((r) => setTimeout(r, 150));
+          // استخدم الملفات المرفوعة في هذه العملية بدلاً من attachedFiles القديمة
+          attachedFiles.splice(0, attachedFiles.length, ...uploaded);
+        } catch (err) {
+          console.warn("[Upload] خطأ في الرفع المسبق:", err);
+        }
+      }
+    }
+
     const hasPdf = attachedFiles.some(
       (f) => f.type === "application/pdf"
     );
@@ -1747,7 +1737,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         (f) => f.type === "application/pdf"
       );
 
-      // ✅ 1. RegEx أولًا (سريع)
       if (isTocRequest(text)) {
         await handleTocRequest();
         return;
@@ -1770,7 +1759,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
         return;
       }
 
-      // ✅ 2. إذا فشل RegEx → نستدعي كاشف النية الذكي
       try {
         const {
           data: { session },
@@ -1808,7 +1796,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
-    // 3. الوضع العادي
     const MAX_FILE_CHARS = 100000;
 
     let sendText = text;
