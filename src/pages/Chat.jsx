@@ -1,6 +1,8 @@
 // ============================================
-// Chat.jsx — نسخة v14.2 (مصححة)
-// ✅ إصلاح: copyToClipboard مستورد من helpers.js
+// Chat.jsx — نسخة v15.0
+// ✅ useFileUpload يدير attachedFiles بنفسه
+// ✅ ChatInput يعرض شريط تقدم دائري
+// ✅ التخصص الديناميكي (prompts.js v2.0)
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -36,7 +38,6 @@ import {
   detectSectionRequest,
   buildFileContextCard,
 } from "../utils/chatHelpers";
-// ✅ إصلاح: copyToClipboard من helpers.js
 import { copyToClipboard } from "../utils/helpers";
 import { smartDetectIntent } from "../utils/intentDetection";
 import { checkUserDailyLimit } from "../utils/validators";
@@ -76,7 +77,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [currentChatId, setCurrentChatId] = useState(() => {
     return localStorage.getItem("black-last-chat-id") || null;
   });
-  const [attachedFiles, setAttachedFiles] = useState([]);
 
   // ─── Refs ───
   const bottomRef = useRef(null);
@@ -148,7 +148,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // 3. Hooks (بالترتيب الصحيح)
   // ═══════════════════════════════════════════
 
-  // 3.1 useTasks
+  // 3.1 useFileUpload (يدير attachedFiles بنفسه)
+  const fileUploadHook = useFileUpload({
+    user,
+    currentChatId,
+    setCurrentChatId,
+    messagesRef,
+    setAllChats: () => {},
+  });
+
+  // 3.2 useTasks
   const tasksHook = useTasks({
     user,
     currentChatId,
@@ -156,20 +165,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     messagesRef,
     setMessages,
     setInput,
-    setAttachedFiles,
+    setAttachedFiles: fileUploadHook.setAttachedFiles,
     setSendMode,
     saveChatToSupabase: async () => {},
-  });
-
-  // 3.2 useFileUpload
-  const fileUploadHook = useFileUpload({
-    user,
-    currentChatId,
-    setCurrentChatId,
-    messagesRef,
-    setAllChats: () => {},
-    attachedFiles,
-    setAttachedFiles,
   });
 
   // 3.3 useChats
@@ -178,7 +176,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     messagesRef,
     setMessages,
     setInput,
-    setAttachedFiles,
+    setAttachedFiles: fileUploadHook.setAttachedFiles,
     setLongFormContext: null,
     currentChatId,
     setCurrentChatId,
@@ -259,13 +257,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
       setInput("");
 
-      let filesForRequest = attachedFiles;
-      if (attachedFiles.length > 0) {
+      let filesForRequest = fileUploadHook.attachedFiles;
+      if (fileUploadHook.attachedFiles.length > 0) {
         try {
           filesForRequest = await fileUploadHook.uploadPendingFiles(
             currentChatIdRef.current
           );
-          setAttachedFiles(filesForRequest);
+          fileUploadHook.setAttachedFiles(filesForRequest);
         } catch (err) {
           console.warn("[Upload] خطأ في رفع الملفات:", err);
         }
@@ -424,7 +422,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         abortControllerRef.current = null;
       }
     },
-    [user.id, attachedFiles]
+    [user.id, fileUploadHook.attachedFiles]
   );
 
   // ═══════════════════════════════════════════
@@ -432,8 +430,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
   // ═══════════════════════════════════════════
   const pdfHook = usePdfProcessing({
     user,
-    attachedFiles,
-    setAttachedFiles,
+    attachedFiles: fileUploadHook.attachedFiles,
+    setAttachedFiles: fileUploadHook.setAttachedFiles,
     executeRequest,
     setMessages,
     setLoading,
@@ -564,7 +562,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
     // ═══════════════════════════════════════════
-  // 9. sendMessage (المنسق الرئيسي)
+  // 9. sendMessage
   // ═══════════════════════════════════════════
   async function sendMessage() {
     if (loading) return;
@@ -574,7 +572,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    const hasUnuploaded = attachedFiles.some(
+    const hasUnuploaded = fileUploadHook.attachedFiles.some(
       (f) => !f.fromStorage && f.rawFile
     );
     if (hasUnuploaded) {
@@ -583,7 +581,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
 
     const text = input.trim();
-    if (!text && !attachedFiles.length) return;
+    if (!text && !fileUploadHook.attachedFiles.length) return;
 
     // التحكم في الوضع السريع
     if (longFormHook.longFormContext) {
@@ -600,7 +598,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
-    const hasOnlyFiles = !text && attachedFiles.length > 0;
+    const hasOnlyFiles = !text && fileUploadHook.attachedFiles.length > 0;
     const hasTocRequest = isTocRequest(text);
 
     if (hasOnlyFiles && !hasTocRequest) {
@@ -608,15 +606,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    if (sendMode === "task" && !attachedFiles.length) {
+    if (sendMode === "task" && !fileUploadHook.attachedFiles.length) {
       await tasksHook.createTask(text);
       return;
     }
 
-    const hasPdf = attachedFiles.some((f) => f.type === "application/pdf");
+    const hasPdf = fileUploadHook.attachedFiles.some(
+      (f) => f.type === "application/pdf"
+    );
 
     if (hasPdf && text) {
-      const pdfFile = attachedFiles.find(
+      const pdfFile = fileUploadHook.attachedFiles.find(
         (f) => f.type === "application/pdf"
       );
 
@@ -693,14 +693,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
     let sendText = text;
     let displayText = text;
 
-    if (attachedFiles.length > 0) {
-      const fileNamesLine = attachedFiles
+    if (fileUploadHook.attachedFiles.length > 0) {
+      const fileNamesLine = fileUploadHook.attachedFiles
         .map((f) => `📎 ${f.name}`)
         .join(" ");
 
       displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
 
-      const textFiles = attachedFiles.filter(
+      const textFiles = fileUploadHook.attachedFiles.filter(
         (f) => f.type !== "application/pdf"
       );
 
@@ -720,7 +720,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       sendText = (text || "الملفات المرفقة:") + filesFullText;
 
-      const pdfFiles = attachedFiles.filter(
+      const pdfFiles = fileUploadHook.attachedFiles.filter(
         (f) => f.type === "application/pdf"
       );
       if (pdfFiles.length > 0) {
@@ -911,74 +911,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onScroll={handleMessagesScroll}
       />
 
-      {fileUploadHook.uploadProgress && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: "100px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "#1e1b4b",
-            color: "#fff",
-            padding: "14px 20px",
-            borderRadius: "14px",
-            zIndex: 9998,
-            minWidth: "300px",
-            maxWidth: "90vw",
-            boxShadow: "0 6px 20px rgba(0,0,0,0.35)",
-            direction: "rtl",
-            border: "1px solid #4c1d95",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "13px",
-              marginBottom: "8px",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            ⬆️ جاري رفع ({fileUploadHook.uploadProgress.currentIndex}/
-            {fileUploadHook.uploadProgress.totalFiles}):{" "}
-            {fileUploadHook.uploadProgress.name}
-          </div>
-          <div
-            style={{
-              height: "10px",
-              background: "#374151",
-              borderRadius: "5px",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                height: "100%",
-                width: `${fileUploadHook.uploadProgress.percentage}%`,
-                background: "linear-gradient(90deg, #10b981, #3b82f6)",
-                transition: "width 0.3s ease",
-              }}
-            />
-          </div>
-          <div
-            style={{
-              fontSize: "11px",
-              marginTop: "6px",
-              color: "#a5b4fc",
-              textAlign: "left",
-            }}
-          >
-            {fileUploadHook.uploadProgress.percentage}% مكتمل
-          </div>
-        </div>
-      )}
-
       <ChatInput
         input={input}
         setInput={setInput}
         loading={loading}
         streamingText={streamingText}
-        attachedFiles={attachedFiles}
+        attachedFiles={fileUploadHook.attachedFiles}
         sendMode={sendMode}
         onSend={sendMessage}
         onStop={handleStop}
@@ -987,6 +925,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onToggleMode={() =>
           setSendMode((m) => (m === "fast" ? "task" : "fast"))
         }
+        uploadProgress={fileUploadHook.uploadProgress}
       />
 
       {showSettings && (
@@ -1000,4 +939,3 @@ export default function Chat({ user, onLogout, isAdmin }) {
     </div>
   );
 }
-  
