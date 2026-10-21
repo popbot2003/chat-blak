@@ -1,16 +1,12 @@
 // ============================================
 // src/hooks/useChats.js
 // كل منطق إدارة المحادثات (Chats):
-// - تحميل المحادثات
-// - حفظ المحادثة
-// - استعادة آخر محادثة
-// - فتح / حذف / إنشاء محادثة
-// - Realtime subscription
 // ============================================
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { showToast, sortMessagesByTime } from "../utils/chatHelpers";
+import { debounce } from "../utils/helpers";
 import { CHAT_HISTORY_LIMIT } from "../config/constants";
 
 export function useChats({
@@ -212,7 +208,13 @@ export function useChats({
     setInput("");
     setAttachedFiles([]);
     if (setLongFormContext) setLongFormContext(null);
-  }, [setMessages, setInput, setAttachedFiles, setLongFormContext, saveChatToSupabase]);
+  }, [
+    setMessages,
+    setInput,
+    setAttachedFiles,
+    setLongFormContext,
+    saveChatToSupabase,
+  ]);
 
   // ─────────────────────────────────────────
   // 6. فتح محادثة قديمة
@@ -254,7 +256,6 @@ export function useChats({
       if (!window.confirm("حذف هذه المحادثة؟")) return;
 
       try {
-        // حذف الملفات من Storage
         try {
           const { data: files } = await supabase
             .from("user_files")
@@ -271,7 +272,6 @@ export function useChats({
           console.warn("[Chat] خطأ في حذف الملفات من Storage:", err.message);
         }
 
-        // إلغاء المهام المرتبطة
         const { error: cancelErr } = await supabase
           .from("tasks")
           .update({
@@ -292,7 +292,6 @@ export function useChats({
           console.warn("[Chat] خطأ في إلغاء المهام:", cancelErr.message);
         }
 
-        // حذف المحادثة
         const { error: chatErr } = await supabase
           .from("chats")
           .delete()
@@ -332,8 +331,6 @@ export function useChats({
   // ─────────────────────────────────────────
   const triggerAutoSave = useCallback(() => {
     if (!debouncedSaveRef.current) {
-      // استيراد debounce من helpers
-      const { debounce } = require("../utils/helpers");
       debouncedSaveRef.current = debounce(
         () => saveChatToSupabase(),
         3000
