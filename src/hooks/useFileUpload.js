@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useFileUpload.js
-// ✅ v2.1: إصلاح حفظ المحادثة عند رفع ملف بدون رسائل
+// ✅ v3.0: يدير attachedFiles بنفسه (يحل مشكلة الاختفاء)
 // ============================================
 
 import { useState, useCallback } from "react";
@@ -21,14 +21,10 @@ export function useFileUpload({
   setCurrentChatId,
   messagesRef,
   setAllChats,
-  attachedFiles,
-  setAttachedFiles,
 }) {
+  const [attachedFiles, setAttachedFiles] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(null);
 
-  // ─────────────────────────────────────────
-  // 1. uploadPendingFiles
-  // ─────────────────────────────────────────
   const uploadPendingFiles = useCallback(
     async (chatId) => {
       const filesToUpload = attachedFiles.filter(
@@ -95,9 +91,6 @@ export function useFileUpload({
     [attachedFiles, user.id]
   );
 
-  // ─────────────────────────────────────────
-  // 2. handleFileUpload
-  // ─────────────────────────────────────────
   const handleFileUpload = useCallback(
     async (e) => {
       const files = Array.from(e.target.files || []);
@@ -190,8 +183,10 @@ export function useFileUpload({
 
       if (newFiles.length === 0) return;
 
+      // ✅ أضف الملفات أولاً (تظهر في الواجهة)
       setAttachedFiles((prev) => [...prev, ...newFiles]);
 
+      // ✅ ثم ارفعها
       for (let i = 0; i < newFiles.length; i++) {
         const f = newFiles[i];
         if (!f.rawFile) continue;
@@ -230,6 +225,7 @@ export function useFileUpload({
             page_count: f.pageCount || null,
           });
 
+          // ✅ حدّث الملف في مكانه (لا تحذفه)
           setAttachedFiles((prev) =>
             prev.map((u) =>
               u.id === f.id
@@ -251,7 +247,6 @@ export function useFileUpload({
 
       showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
 
-      // ✅ إصلاح: حفظ المحادثة حتى لو كانت فارغة
       if (chatId) {
         try {
           const now = new Date().toISOString();
@@ -309,13 +304,9 @@ export function useFileUpload({
       setCurrentChatId,
       messagesRef,
       setAllChats,
-      setAttachedFiles,
     ]
   );
 
-  // ─────────────────────────────────────────
-  // 3. removeFile
-  // ─────────────────────────────────────────
   const removeFile = useCallback(
     (fileId) => {
       const fileToRemove = attachedFiles.find((f) => f.id === fileId);
@@ -334,12 +325,9 @@ export function useFileUpload({
 
       setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
     },
-    [attachedFiles, setAttachedFiles]
+    [attachedFiles]
   );
 
-  // ─────────────────────────────────────────
-  // 4. restoreChatFiles
-  // ─────────────────────────────────────────
   const restoreChatFiles = useCallback(async (chatId) => {
     if (!chatId) return;
 
@@ -377,9 +365,11 @@ export function useFileUpload({
     } catch (err) {
       console.warn("[Chat] خطأ في استرجاع الملفات:", err.message);
     }
-  }, [setAttachedFiles]);
+  }, []);
 
   return {
+    attachedFiles,
+    setAttachedFiles,
     uploadProgress,
     uploadPendingFiles,
     handleFileUpload,
