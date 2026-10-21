@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useFileUpload.js
-// كل منطق رفع الملفات (TUS + OCR + حفظ المحادثة)
+// ✅ v2.0: يستقبل attachedFiles من Chat.jsx
 // ============================================
 
 import { useState, useCallback } from "react";
@@ -21,12 +21,13 @@ export function useFileUpload({
   setCurrentChatId,
   messagesRef,
   setAllChats,
+  attachedFiles,      // ✅ من Chat.jsx
+  setAttachedFiles,   // ✅ من Chat.jsx
 }) {
-  const [attachedFiles, setAttachedFiles] = useState([]);
   const [uploadProgress, setUploadProgress] = useState(null);
 
   // ─────────────────────────────────────────
-  // 1. رفع الملفات المعلقة (التي لم تُرفع بعد)
+  // 1. رفع الملفات المعلقة
   // ─────────────────────────────────────────
   const uploadPendingFiles = useCallback(
     async (chatId) => {
@@ -95,7 +96,7 @@ export function useFileUpload({
   );
 
   // ─────────────────────────────────────────
-  // 2. معالجة رفع الملفات (يُستدعى من ChatInput)
+  // 2. handleFileUpload
   // ─────────────────────────────────────────
   const handleFileUpload = useCallback(
     async (e) => {
@@ -110,9 +111,7 @@ export function useFileUpload({
 
       const newFiles = [];
 
-      // ─── معالجة كل ملف حسب نوعه ───
       for (const file of files) {
-        // PDF
         if (file.type === "application/pdf") {
           try {
             showToast(`📄 جاري قراءة ${file.name}...`, "info");
@@ -137,7 +136,6 @@ export function useFileUpload({
           continue;
         }
 
-        // صورة (OCR)
         if (file.type.startsWith("image/")) {
           try {
             showToast(`🔍 جاري استخراج النص من ${file.name}...`, "info");
@@ -167,7 +165,6 @@ export function useFileUpload({
           continue;
         }
 
-        // ملفات نصية
         try {
           newFiles.push({
             id: Date.now() + Math.random(),
@@ -193,10 +190,8 @@ export function useFileUpload({
 
       if (newFiles.length === 0) return;
 
-      // إضافة الملفات للحالة
       setAttachedFiles((prev) => [...prev, ...newFiles]);
 
-      // ─── رفع الملفات فوراً ───
       for (let i = 0; i < newFiles.length; i++) {
         const f = newFiles[i];
         if (!f.rawFile) continue;
@@ -256,7 +251,6 @@ export function useFileUpload({
 
       showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
 
-      // حفظ المحادثة بعد الرفع
       if (chatId) {
         try {
           const now = new Date().toISOString();
@@ -301,11 +295,12 @@ export function useFileUpload({
       setCurrentChatId,
       messagesRef,
       setAllChats,
+      setAttachedFiles,
     ]
   );
 
   // ─────────────────────────────────────────
-  // 3. حذف ملف مرفق
+  // 3. removeFile
   // ─────────────────────────────────────────
   const removeFile = useCallback(
     (fileId) => {
@@ -325,11 +320,11 @@ export function useFileUpload({
 
       setAttachedFiles((prev) => prev.filter((f) => f.id !== fileId));
     },
-    [attachedFiles]
+    [attachedFiles, setAttachedFiles]
   );
 
   // ─────────────────────────────────────────
-  // 4. استعادة ملفات محادثة قديمة
+  // 4. restoreChatFiles
   // ─────────────────────────────────────────
   const restoreChatFiles = useCallback(async (chatId) => {
     if (!chatId) return;
@@ -368,13 +363,10 @@ export function useFileUpload({
     } catch (err) {
       console.warn("[Chat] خطأ في استرجاع الملفات:", err.message);
     }
-  }, []);
+  }, [setAttachedFiles]);
 
   return {
-    attachedFiles,
-    setAttachedFiles,
     uploadProgress,
-    setUploadProgress,
     uploadPendingFiles,
     handleFileUpload,
     removeFile,
