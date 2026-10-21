@@ -1,9 +1,11 @@
 // ============================================
-// Chat.jsx — نسخة v9.8
+// Chat.jsx — نسخة v10.0
 // ✅ OCR تلقائي للصفحات المصورة
+// ✅ detectPageRange يلتقط "لخص من 4 إلى 13"
+// ✅ handlePdfPagesRequest مع تقرير مفصل لكل دفعة
+// ✅ حفظ المحادثة فور رفع الملف
 // ✅ رفع الملفات فور اختيارها مع شريط تقدم
-// ✅ منع الإرسال قبل اكتمال الرفع
-// ✅ دعم TUS (Resumable Upload) للملفات الكبيرة
+// ✅ دعم TUS للملفات الكبيرة
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -191,7 +193,21 @@ function detectPageRange(text) {
     if (match) {
       const start = parseInt(match[1], 10);
       const end = match[2] ? parseInt(match[2], 10) : start;
-      if (start > 0 && end >= start) {
+      if (start > 0 && end >= start && end - start < 200) {
+        return { startPage: start, endPage: end };
+      }
+    }
+  }
+
+  const hasPageContext = /لخص|اقرأ|ملخص|محتوى|read|summar/i.test(text);
+  if (hasPageContext) {
+    const rangePattern =
+      /(?:من\s+)?(\d{1,4})\s*(?:إلى|الى|لـ|ل|-|–|—|حتى|لغاية)\s*(\d{1,4})/i;
+    const match = text.match(rangePattern);
+    if (match) {
+      const start = parseInt(match[1], 10);
+      const end = parseInt(match[2], 10);
+      if (start > 0 && end >= start && end - start < 200) {
         return { startPage: start, endPage: end };
       }
     }
@@ -268,9 +284,8 @@ async function smartDetectIntent(text, session) {
 
 قواعد:
 - "من صفحة 4 إلى 10" → {"action":"pages","start":4,"end":10}
-- "من بداية الصفحة رقم 4-10" → {"action":"pages","start":4,"end":10}
 - "لخص 4 لـ 10" → {"action":"pages","start":4,"end":10}
-- "اقرأ الصفحات 4,5,6" → {"action":"pages","start":4,"end":6}
+- "لخص من 4 الي 13" → {"action":"pages","start":4,"end":13}
 - "الفصل الأول" → {"action":"section","title":"الفصل الأول"}
 - "اعرض الفهرس" → {"action":"toc"}
 - "ما هو القانون التجاري" → {"action":"chat"}
@@ -1144,10 +1159,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
         if (idx !== -1) {
           uploadedFiles[idx] = {
             ...uploadedFiles[idx],
-            id: record.id,
             filePath: path,
             fromStorage: true,
-            rawFile: null,
+            recordId: record.id,
           };
         }
       } catch (err) {
@@ -1203,7 +1217,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           ])
         );
         setLoading(false);
-        return;
+        throw new Error(limitCheck.reason);
       }
 
       const addUserMessage = displayText !== null;
@@ -1392,6 +1406,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setLoading(false);
         setStreamingText("");
         abortControllerRef.current = null;
+        throw err;
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     },
@@ -1539,7 +1554,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
-  // ✅ دالة handlePdfPagesRequest مع OCR
+  // ✅ v10.0: دالة محسّنة مع تقرير مفصل لكل دفعة
   async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
     const BATCH_SIZE = 5;
     const totalPages = pdfFile.pageCount || endPage;
@@ -1558,69 +1573,108 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowScrollButton(false);
 
     const totalBatches = Math.ceil((safeEnd - safeStart + 1) / BATCH_SIZE);
+    const processedBatches = [];
+    const failedBatches = [];
 
     try {
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
-        if (batchIndex > 0) {
-          await new Promise((resolve) => setTimeout(resolve, 1500));
-        }
-
         const batchStart = safeStart + batchIndex * BATCH_SIZE;
         const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, safeEnd);
 
         showToast(
-          `🔍 جاري استخراج الصفحات ${batchStart}-${batchEnd} (${batchIndex + 1}/${totalBatches})...`,
+          `🔍 استخراج الصفحات ${batchStart}-${batchEnd} (${batchIndex + 1}/${totalBatches})...`,
           "info"
         );
 
-        const pdfSource = pdfFile.filePath
-          ? await getFileSignedUrl(pdfFile.filePath, 3600)
-          : pdfFile.rawFile || pdfFile.pdfFile;
+        try {
+          const pdfSource = pdfFile.filePath
+            ? await getFileSignedUrl(pdfFile.filePath, 3600)
+            : pdfFile.rawFile || pdfFile.pdfFile;
 
-        const batchText = await extractPdfText(
-          pdfSource,
-          batchStart,
-          batchEnd,
-          {
-            enableOcr: true,
-            onOcrProgress: (pageNum, from, to) => {
-              const totalInBatch = to - from + 1;
-              const currentIdx = pageNum - from + 1;
-              showToast(
-                `🔍 الصفحة ${pageNum} صورة — OCR جارٍ (${currentIdx}/${totalInBatch})... قد يستغرق دقيقة`,
-                "info"
-              );
-            },
+          const batchText = await extractPdfText(
+            pdfSource,
+            batchStart,
+            batchEnd,
+            {
+              enableOcr: true,
+              onOcrProgress: (pageNum, from, to) => {
+                const totalInBatch = to - from + 1;
+                const currentIdx = pageNum - from + 1;
+                showToast(
+                  `🔍 الصفحة ${pageNum} صورة — OCR (${currentIdx}/${totalInBatch})...`,
+                  "info"
+                );
+              },
+            }
+          );
+
+          if (!batchText || batchText.trim().length < 10) {
+            failedBatches.push(`${batchStart}-${batchEnd} (نص فارغ)`);
+            setMessages((prev) =>
+              sortMessagesByTime([
+                ...prev,
+                {
+                  role: "assistant",
+                  content: `⚠️ لم أستطع قراءة الصفحات ${batchStart}-${batchEnd} (صور بدون نص واضح).`,
+                  id: Date.now() + batchIndex,
+                },
+              ])
+            );
+            continue;
           }
-        );
 
-        if (!batchText || batchText.trim().length < 10) {
+          const requestText =
+            `طلب المستخدم: ${userPrompt}\n\n` +
+            `[ملف: ${pdfFile.name} — الصفحات ${batchStart}-${batchEnd} من ${totalPages}]\n` +
+            `[دفعة ${batchIndex + 1} من ${totalBatches}]\n\n` +
+            `النص:\n${batchText}\n\n` +
+            `نفّذ الطلب على هذا النص فقط.`;
+
+          const displayForThisBatch = batchIndex === 0 ? userPrompt : null;
+          await executeRequest(requestText, displayForThisBatch);
+          processedBatches.push(`${batchStart}-${batchEnd}`);
+        } catch (batchErr) {
+          console.error(`[PDF] فشل الدفعة ${batchStart}-${batchEnd}:`, batchErr);
+          failedBatches.push(`${batchStart}-${batchEnd} (${batchErr.message})`);
           setMessages((prev) =>
             sortMessagesByTime([
               ...prev,
               {
                 role: "assistant",
-                content: `⚠️ تعذر استخراج نص من الصفحات ${batchStart}-${batchEnd} حتى بعد OCR.`,
-                id: Date.now() + batchIndex,
+                content: `⚠️ تعذر معالجة الصفحات ${batchStart}-${batchEnd}: ${batchErr.message}`,
+                id: Date.now() + batchIndex + 1000,
               },
             ])
           );
-          continue;
         }
 
-        const requestText =
-          `طلب المستخدم: ${userPrompt}\n\n` +
-          `[ملف PDF: ${pdfFile.name} — الصفحات ${batchStart}-${batchEnd} من ${totalPages}]\n` +
-          `[دفعة ${batchIndex + 1} من ${totalBatches}]\n\n` +
-          `النص المستخرج:\n${batchText}\n\n` +
-          `نفّذ طلب المستخدم على هذا النص فقط. ` +
-          `إذا كان الطلب يتعلق بالتنسيق (مثل قائمة أسئلة)، فالتزم به.`;
-
-        const displayForThisBatch = batchIndex === 0 ? userPrompt : null;
-        await executeRequest(requestText, displayForThisBatch);
+        if (batchIndex < totalBatches - 1) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
       }
+
+      let summary = `\n\n---\n**📊 ملخص المعالجة:**\n`;
+      summary += `- ✅ تمت معالجة: ${processedBatches.length} دفعة\n`;
+      if (processedBatches.length > 0) {
+        summary += `  (${processedBatches.join("، ")})\n`;
+      }
+      if (failedBatches.length > 0) {
+        summary += `- ❌ فشلت: ${failedBatches.length} دفعة\n`;
+        summary += `  (${failedBatches.join("، ")})\n`;
+      }
+
+      setMessages((prev) =>
+        sortMessagesByTime([
+          ...prev,
+          {
+            role: "assistant",
+            content: summary,
+            id: Date.now() + 9999,
+          },
+        ])
+      );
     } catch (err) {
-      console.error("[PDF] خطأ في معالجة الصفحات:", err);
+      console.error("[PDF] خطأ عام:", err);
       setMessages((prev) =>
         sortMessagesByTime([
           ...prev,
@@ -1864,7 +1918,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
-    executeRequest(sendText, displayText);
+    try {
+      await executeRequest(sendText, displayText);
+    } catch (err) {
+      // الخطأ تم عرضه بالفعل في executeRequest
+    }
   }
 
   async function handleTocRequest() {
@@ -2208,10 +2266,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
               u.id === f.id
                 ? {
                     ...u,
-                    id: record.id,
                     filePath: path,
                     fromStorage: true,
-                    rawFile: null,
+                    recordId: record.id,
                   }
                 : u
             )
@@ -2224,6 +2281,37 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
 
       showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
+
+      if (currentChatIdRef.current) {
+        try {
+          const now = new Date().toISOString();
+          const { error: chatSaveErr } = await supabase.from("chats").upsert({
+            id: currentChatIdRef.current,
+            user_id: user.id,
+            title: "محادثة بالملفات",
+            messages: messagesRef.current.slice(-CHAT_HISTORY_LIMIT),
+            updated_at: now,
+          });
+          if (chatSaveErr) {
+            console.warn("[Chat] فشل حفظ المحادثة بعد الرفع:", chatSaveErr.message);
+          } else {
+            setAllChats((prev) => {
+              const exists = prev.find((c) => c.id === currentChatIdRef.current);
+              const updated = {
+                id: currentChatIdRef.current,
+                title: "محادثة بالملفات",
+                date: now,
+                messageCount: messagesRef.current.length,
+              };
+              return exists
+                ? [updated, ...prev.filter((c) => c.id !== currentChatIdRef.current)]
+                : [updated, ...prev];
+            });
+          }
+        } catch (err) {
+          console.warn("[Chat] خطأ في حفظ المحادثة:", err);
+        }
+      }
     } catch (err) {
       console.error("[handleFileUpload] خطأ عام:", err);
       showToast("❌ خطأ في معالجة الملفات", "error");
