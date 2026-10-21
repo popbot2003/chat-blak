@@ -7,6 +7,7 @@
 // ✅ جديد 3: استخراج نص الدفعات (للصفحات الكبيرة)
 // ✅ جديد 4: تحميل PDF من URL (Supabase Storage)
 // ✅ جديد 5: الرفع القابل للاستئناف (TUS) للملفات الكبيرة
+// ✅ جديد 6: دعم onProgress لتمرير نسبة الرفع للواجهة
 // ============================================
 
 import { supabase } from "../lib/supabase";
@@ -302,12 +303,14 @@ export async function findSectionByTitle(source, title) {
 /**
  * رفع ملف إلى Supabase Storage باستخدام الرفع القابل للاستئناف (TUS)
  * ✅ يعمل مع الملفات الكبيرة (أكثر من 6 ميغابايت) والشبكات غير المستقرة
+ * ✅ يدعم onProgress لتمرير نسبة الرفع للواجهة
  * @param {File} file - الملف
  * @param {string} userId - معرف المستخدم
  * @param {string} chatId - معرف المحادثة
+ * @param {(percentage: number, bytesUploaded: number, bytesTotal: number) => void} [onProgress] - callback لتحديث نسبة الرفع
  * @returns {Promise<{path: string}>}
  */
-export async function uploadFileToStorage(file, userId, chatId) {
+export async function uploadFileToStorage(file, userId, chatId, onProgress) {
   if (!supabase) {
     throw new Error("Supabase غير متاح.");
   }
@@ -317,6 +320,7 @@ export async function uploadFileToStorage(file, userId, chatId) {
   const filePath = `${userId}/${chatId}/${timestamp}_${safeName}`;
 
   // استخراج projectId من رابط Supabase
+  // مثال: https://abcdefgh.supabase.co -> abcdefgh
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
   const projectId = supabaseUrl.replace("https://", "").split(".")[0];
 
@@ -335,31 +339,38 @@ export async function uploadFileToStorage(file, userId, chatId) {
 
   return new Promise((resolve, reject) => {
     const upload = new tus.Upload(file, {
+      // ✅ استخدام نطاق التخزين المباشر لتحسين الأداء مع الملفات الكبيرة
       endpoint: `https://${projectId}.storage.supabase.co/storage/v1/upload/resumable`,
       retryDelays: [0, 3000, 5000, 10000, 20000],
       headers: {
         authorization: `Bearer ${session.access_token}`,
-        "x-upsert": "false",
+        "x-upsert": "false", // لا نريد استبدال الملفات الموجودة
       },
       uploadDataDuringCreation: true,
-      removeFingerprintOnSuccess: true,
+      removeFingerprintOnSuccess: true, // مهم للسماح بإعادة رفع نفس الملف لاحقاً
       metadata: {
         bucketName: "user-files",
         objectName: filePath,
         contentType: file.type || "application/octet-stream",
         cacheControl: "3600",
       },
-      chunkSize: 6 * 1024 * 1024,
+      chunkSize: 6 * 1024 * 1024, // ✅ 6 ميغابايت لكل جزء (قيمة ثابتة في Supabase)
       onError: function (error) {
         console.error("[Upload] فشل الرفع القابل للاستئناف:", error);
         reject(new Error("فشل رفع الملف: " + error.message));
       },
       onProgress: function (bytesUploaded, bytesTotal) {
-        const percentage = ((bytesUploaded / bytesTotal) * 100).toFixed(1);
-        console.log(`[Upload] ${percentage}% (${bytesUploaded} / ${bytesTotal})`);
+        const percentage = parseFloat(
+          ((bytesUploaded / bytesTotal) * 100).toFixed(1)
+        );
+        console.log(
+          `[Upload] ${percentage}% (${bytesUploaded} / ${bytesTotal})`
+        );
+        if (onProgress) onProgress(percentage, bytesUploaded, bytesTotal);
       },
       onSuccess: function () {
         console.log("[Upload] ✅ تم رفع الملف بنجاح:", filePath);
+        if (onProgress) onProgress(100);
         resolve({
           path: filePath,
           publicUrl: null,
@@ -367,12 +378,14 @@ export async function uploadFileToStorage(file, userId, chatId) {
       },
     });
 
+    // محاولة استئناف رفع سابق (إذا كان قد بدأ ثم انقطع)
     upload.findPreviousUploads().then(function (previousUploads) {
       if (previousUploads.length) {
         upload.resumeFromPreviousUpload(previousUploads[0]);
       }
       upload.start();
     }).catch(() => {
+      // إذا فشل البحث عن رفع سابق، ابدأ من جديد
       upload.start();
     });
   });
