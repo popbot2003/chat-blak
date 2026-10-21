@@ -1,5 +1,6 @@
 // ============================================
-// Chat.jsx — نسخة v9.7
+// Chat.jsx — نسخة v9.8
+// ✅ OCR تلقائي للصفحات المصورة
 // ✅ رفع الملفات فور اختيارها مع شريط تقدم
 // ✅ منع الإرسال قبل اكتمال الرفع
 // ✅ دعم TUS (Resumable Upload) للملفات الكبيرة
@@ -1538,6 +1539,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setTimeout(() => inputRef.current?.focus(), 100);
   }
 
+  // ✅ دالة handlePdfPagesRequest مع OCR
   async function handlePdfPagesRequest(pdfFile, startPage, endPage, userPrompt) {
     const BATCH_SIZE = 5;
     const totalPages = pdfFile.pageCount || endPage;
@@ -1578,7 +1580,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
         const batchText = await extractPdfText(
           pdfSource,
           batchStart,
-          batchEnd
+          batchEnd,
+          {
+            enableOcr: true,
+            onOcrProgress: (pageNum, from, to) => {
+              const totalInBatch = to - from + 1;
+              const currentIdx = pageNum - from + 1;
+              showToast(
+                `🔍 الصفحة ${pageNum} صورة — OCR جارٍ (${currentIdx}/${totalInBatch})... قد يستغرق دقيقة`,
+                "info"
+              );
+            },
+          }
         );
 
         if (!batchText || batchText.trim().length < 10) {
@@ -1587,7 +1600,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
               ...prev,
               {
                 role: "assistant",
-                content: `⚠️ تعذر استخراج نص من الصفحات ${batchStart}-${batchEnd}. قد تكون صوراً ممسوحة ضوئياً، أو حدث خطأ في قراءة الملف.`,
+                content: `⚠️ تعذر استخراج نص من الصفحات ${batchStart}-${batchEnd} حتى بعد OCR.`,
                 id: Date.now() + batchIndex,
               },
             ])
