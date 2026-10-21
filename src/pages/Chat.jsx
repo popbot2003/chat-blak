@@ -1,11 +1,6 @@
 // ============================================
-// Chat.jsx — نسخة v13.0 (بعد التفكيك الكامل)
-// يجمع كل الـ hooks:
-// - useFileUpload: رفع الملفات + TUS + OCR
-// - usePdfProcessing: معالجة PDF (Map-Reduce)
-// - useLongForm: الوضع السريع
-// - useTasks: المهام
-// - useChats: المحادثات
+// Chat.jsx — نسخة v14.0 (مصححة)
+// الحالة المركزية في Chat.jsx، والـ hooks تستقبلها
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -23,6 +18,7 @@ import ActiveTasksNotification from "../components/chat/ActiveTasksNotification"
 import { supabase } from "../lib/supabase";
 import {
   GROQ_MODEL,
+  GROQ_FAST_MODEL,
   GROQ_MAX_TOKENS,
   GROQ_TEMPERATURE,
   SAVE_CHAT_DELAY_MS,
@@ -40,6 +36,7 @@ import {
   detectPageRange,
   detectSectionRequest,
   buildFileContextCard,
+  copyToClipboard,
 } from "../utils/chatHelpers";
 import { smartDetectIntent } from "../utils/intentDetection";
 import {
@@ -55,7 +52,9 @@ import { useTasks } from "../hooks/useTasks";
 import { useChats } from "../hooks/useChats";
 
 export default function Chat({ user, onLogout, isAdmin }) {
-  // ─── State ───
+  // ═══════════════════════════════════════════
+  // 1. الحالة المركزية (State)
+  // ═══════════════════════════════════════════
   const [messages, setMessages] = useState([
     {
       role: "assistant",
@@ -77,10 +76,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [sendMode, setSendMode] = useState("fast");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
+  // ✅ الحالة المركزية للمحادثات والملفات
+  const [currentChatId, setCurrentChatId] = useState(() => {
+    return localStorage.getItem("black-last-chat-id") || null;
+  });
+  const [attachedFiles, setAttachedFiles] = useState([]);
+
+  // ─── Refs ───
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
   const messagesRef = useRef(messages);
   const currentUserRef = useRef(currentUser);
+  const currentChatIdRef = useRef(currentChatId);
   const abortControllerRef = useRef(null);
   const autoScrollRef = useRef(true);
 
@@ -90,8 +97,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
+  useEffect(() => {
+    currentChatIdRef.current = currentChatId;
+    if (currentChatId) {
+      localStorage.setItem("black-last-chat-id", currentChatId);
+    } else {
+      localStorage.removeItem("black-last-chat-id");
+    }
+  }, [currentChatId]);
 
-  // ─── Realtime: تحديث بيانات المستخدم ───
+  // ═══════════════════════════════════════════
+  // 2. Realtime: تحديث بيانات المستخدم
+  // ═══════════════════════════════════════════
   useEffect(() => {
     const ch = supabase
       .channel("user-updates")
@@ -112,7 +129,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ─── Realtime: حذف الحساب ───
+  // ═══════════════════════════════════════════
+  // 3. Realtime: حذف الحساب
+  // ═══════════════════════════════════════════
   useEffect(() => {
     const ch = supabase
       .channel("profile-delete")
@@ -132,56 +151,57 @@ export default function Chat({ user, onLogout, isAdmin }) {
     return () => ch.unsubscribe();
   }, [user.id]);
 
-  // ─── Hook: useChats (يعتمد على useTasks و useFileUpload) ───
-  // ملاحظة: الترتيب مهم. ننشئ useTasks أولاً (لأنه لا يعتمد على شيء)،
-  // ثم useFileUpload، ثم useChats (الذي يعتمد على الاثنين).
-
+  // ═══════════════════════════════════════════
+  // 4. Hook: useTasks (لا يعتمد على شيء)
+  // ═══════════════════════════════════════════
   const tasksHook = useTasks({
     user,
-    currentChatId: null, // سيُمرَّر لاحقاً
-    setCurrentChatId: () => {},
+    currentChatId,
+    setCurrentChatId,
     messagesRef,
     setMessages,
     setInput,
-    setAttachedFiles: () => {},
+    setAttachedFiles,
     setSendMode,
-    saveChatToSupabase: async () => {},
+    saveChatToSupabase: async () => {
+      // سيُمرَّر لاحقاً من chatsHook
+    },
   });
 
+  // ═══════════════════════════════════════════
+  // 5. Hook: useFileUpload (يعتمد على currentChatId)
+  // ═══════════════════════════════════════════
   const fileUploadHook = useFileUpload({
     user,
-    currentChatId: null,
-    setCurrentChatId: () => {},
+    currentChatId,
+    setCurrentChatId,
     messagesRef,
-    setAllChats: () => {},
+    setAllChats: () => {
+      // سيُمرَّر لاحقاً من chatsHook
+    },
+    attachedFiles,
+    setAttachedFiles,
   });
 
+  // ═══════════════════════════════════════════
+  // 6. Hook: useChats (يعتمد على currentChatId + fileUpload + tasks)
+  // ═══════════════════════════════════════════
   const chatsHook = useChats({
     user,
     messagesRef,
     setMessages,
     setInput,
-    setAttachedFiles: fileUploadHook.setAttachedFiles,
-    setLongFormContext: null,
+    setAttachedFiles,
+    setLongFormContext: null, // سيُمرَّر لاحقاً
+    currentChatId,
+    setCurrentChatId,
     loadChatTasksForChat: tasksHook.loadChatTasksForChat,
     restoreChatFiles: fileUploadHook.restoreChatFiles,
   });
 
-  // ─── Hook: usePdfProcessing ───
-  const pdfHook = usePdfProcessing({
-    user,
-    attachedFiles: fileUploadHook.attachedFiles,
-    setAttachedFiles: fileUploadHook.setAttachedFiles,
-    executeRequest: (text, display) => executeRequest(text, display),
-    setMessages,
-    setLoading,
-    setStreamingText,
-    setInput,
-    sortMessagesByTime,
-    messagesRef,
-  });
-
-  // ─── Hook: useLongForm ───
+  // ═══════════════════════════════════════════
+  // 7. Hook: useLongForm
+  // ═══════════════════════════════════════════
   const longFormHook = useLongForm({
     user,
     currentUser,
@@ -193,7 +213,30 @@ export default function Chat({ user, onLogout, isAdmin }) {
     sortMessagesByTime,
   });
 
-  // ─── التحقق اليومي ───
+  // ═══════════════════════════════════════════
+  // 8. Hook: usePdfProcessing (يعتمد على executeRequest)
+  // ═══════════════════════════════════════════
+  const executeRequestRef = useRef(null);
+  const pdfHook = usePdfProcessing({
+    user,
+    attachedFiles,
+    setAttachedFiles,
+    executeRequest: (text, display) => {
+      if (executeRequestRef.current) {
+        return executeRequestRef.current(text, display);
+      }
+    },
+    setMessages,
+    setLoading,
+    setStreamingText,
+    setInput,
+    sortMessagesByTime,
+    messagesRef,
+  });
+
+  // ═══════════════════════════════════════════
+  // 9. refreshUserData
+  // ═══════════════════════════════════════════
   const refreshUserData = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -211,7 +254,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }, [user.id]);
 
-  // ─── loadAllData ───
+  // ═══════════════════════════════════════════
+  // 10. loadAllData
+  // ═══════════════════════════════════════════
   useEffect(() => {
     (async () => {
       const chats = await chatsHook.loadChatsFromSupabase();
@@ -266,8 +311,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowScrollButton(false);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
-
-  // ─── executeRequest (الدردشة العادية) ───
+    // ═══════════════════════════════════════════
+  // 11. executeRequest (الدردشة العادية)
+  // ═══════════════════════════════════════════
   const executeRequest = useCallback(
     async (text, displayText) => {
       try {
@@ -292,9 +338,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
         console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
       }
 
-      if (!chatsHook.currentChatId) {
+      if (!currentChatIdRef.current) {
         const newId = Date.now().toString();
-        chatsHook.setCurrentChatId(newId);
+        setCurrentChatId(newId);
       }
 
       const limitCheck = checkUserDailyLimit(currentUserRef.current);
@@ -326,13 +372,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
       setInput("");
 
-      let filesForRequest = fileUploadHook.attachedFiles;
-      if (fileUploadHook.attachedFiles.length > 0) {
+      let filesForRequest = attachedFiles;
+      if (attachedFiles.length > 0) {
         try {
           filesForRequest = await fileUploadHook.uploadPendingFiles(
-            chatsHook.currentChatId
+            currentChatIdRef.current
           );
-          fileUploadHook.setAttachedFiles(filesForRequest);
+          setAttachedFiles(filesForRequest);
         } catch (err) {
           console.warn("[Upload] خطأ في رفع الملفات:", err);
         }
@@ -491,10 +537,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
         abortControllerRef.current = null;
       }
     },
-    [user.id, fileUploadHook.attachedFiles]
+    [user.id, attachedFiles]
   );
 
-  // ─── summarizeOldMessages ───
+  // ✅ تخزين executeRequest في ref (لاستخدامه في usePdfProcessing)
+  useEffect(() => {
+    executeRequestRef.current = executeRequest;
+  }, [executeRequest]);
+
+  // ═══════════════════════════════════════════
+  // 12. summarizeOldMessages
+  // ═══════════════════════════════════════════
   async function summarizeOldMessages(oldMessages, session) {
     if (!oldMessages || oldMessages.length === 0) return null;
 
@@ -535,7 +588,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ─── sendMessage (المنسق الرئيسي) ───
+  // ═══════════════════════════════════════════
+  // 13. sendMessage (المنسق الرئيسي)
+  // ═══════════════════════════════════════════
   async function sendMessage() {
     if (loading) return;
 
@@ -544,7 +599,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    const hasUnuploaded = fileUploadHook.attachedFiles.some(
+    const hasUnuploaded = attachedFiles.some(
       (f) => !f.fromStorage && f.rawFile
     );
     if (hasUnuploaded) {
@@ -553,7 +608,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
 
     const text = input.trim();
-    if (!text && !fileUploadHook.attachedFiles.length) return;
+    if (!text && !attachedFiles.length) return;
 
     // التحكم في الوضع السريع
     if (longFormHook.longFormContext) {
@@ -570,7 +625,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
-    const hasOnlyFiles = !text && fileUploadHook.attachedFiles.length > 0;
+    const hasOnlyFiles = !text && attachedFiles.length > 0;
     const hasTocRequest = isTocRequest(text);
 
     if (hasOnlyFiles && !hasTocRequest) {
@@ -578,17 +633,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    if (sendMode === "task" && !fileUploadHook.attachedFiles.length) {
+    if (sendMode === "task" && !attachedFiles.length) {
       await tasksHook.createTask(text);
       return;
     }
 
-    const hasPdf = fileUploadHook.attachedFiles.some(
-      (f) => f.type === "application/pdf"
-    );
+    const hasPdf = attachedFiles.some((f) => f.type === "application/pdf");
 
     if (hasPdf && text) {
-      const pdfFile = fileUploadHook.attachedFiles.find(
+      const pdfFile = attachedFiles.find(
         (f) => f.type === "application/pdf"
       );
 
@@ -665,14 +718,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
     let sendText = text;
     let displayText = text;
 
-    if (fileUploadHook.attachedFiles.length > 0) {
-      const fileNamesLine = fileUploadHook.attachedFiles
+    if (attachedFiles.length > 0) {
+      const fileNamesLine = attachedFiles
         .map((f) => `📎 ${f.name}`)
         .join(" ");
 
       displayText = text ? `${text}\n${fileNamesLine}` : fileNamesLine;
 
-      const textFiles = fileUploadHook.attachedFiles.filter(
+      const textFiles = attachedFiles.filter(
         (f) => f.type !== "application/pdf"
       );
 
@@ -692,7 +745,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       sendText = (text || "الملفات المرفقة:") + filesFullText;
 
-      const pdfFiles = fileUploadHook.attachedFiles.filter(
+      const pdfFiles = attachedFiles.filter(
         (f) => f.type === "application/pdf"
       );
       if (pdfFiles.length > 0) {
@@ -713,7 +766,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ─── handleStop ───
+  // ═══════════════════════════════════════════
+  // 14. handleStop
+  // ═══════════════════════════════════════════
   function handleStop() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -723,7 +778,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setStreamingText("");
   }
 
-  // ─── copyMessage ───
+  // ═══════════════════════════════════════════
+  // 15. copyMessage
+  // ═══════════════════════════════════════════
   function copyMessage(content, id) {
     copyToClipboard(content, () => {
       setCopiedId(id);
@@ -731,7 +788,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     });
   }
 
-  // ─── Settings ───
+  // ═══════════════════════════════════════════
+  // 16. Settings
+  // ═══════════════════════════════════════════
   async function handleSaveSettings({ profileUpdates, newPassword }) {
     if (Object.keys(profileUpdates).length) {
       const { error } = await supabase
@@ -789,7 +848,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
-  // ─── Render ───
+  // ═══════════════════════════════════════════
+  // 17. Render
+  // ═══════════════════════════════════════════
   const isDark = theme === "dark";
 
   if (!isLoaded) {
@@ -847,14 +908,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       <ActiveTasksNotification
         tasks={tasksHook.allActiveTasks}
-        currentChatId={chatsHook.currentChatId}
+        currentChatId={currentChatId}
         onOpenTask={tasksHook.openTaskInChat}
       />
 
       {showHistory && (
         <ChatHistory
           chats={chatsHook.allChats}
-          currentChatId={chatsHook.currentChatId}
+          currentChatId={currentChatId}
           onClose={() => setShowHistory(false)}
           onOpenChat={chatsHook.openChat}
           onDeleteChat={chatsHook.deleteChat}
@@ -942,7 +1003,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setInput={setInput}
         loading={loading}
         streamingText={streamingText}
-        attachedFiles={fileUploadHook.attachedFiles}
+        attachedFiles={attachedFiles}
         sendMode={sendMode}
         onSend={sendMessage}
         onStop={handleStop}
