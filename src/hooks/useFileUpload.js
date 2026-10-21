@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useFileUpload.js
-// ✅ v3.0: يدير attachedFiles بنفسه (يحل مشكلة الاختفاء)
+// ✅ v4.0: يستخدم isUploaded بدلاً من fromStorage
 // ============================================
 
 import { useState, useCallback } from "react";
@@ -28,7 +28,7 @@ export function useFileUpload({
   const uploadPendingFiles = useCallback(
     async (chatId) => {
       const filesToUpload = attachedFiles.filter(
-        (f) => !f.fromStorage && f.rawFile
+        (f) => !f.isUploaded && f.rawFile
       );
 
       if (filesToUpload.length === 0) return attachedFiles;
@@ -75,7 +75,7 @@ export function useFileUpload({
             uploadedFiles[idx] = {
               ...uploadedFiles[idx],
               filePath: path,
-              fromStorage: true,
+              isUploaded: true,
               recordId: record.id,
             };
           }
@@ -120,6 +120,7 @@ export function useFileUpload({
               pdfFile: file,
               pageCount,
               fromStorage: false,
+              isUploaded: false,
             });
             showToast(`✅ تم استلام ${file.name} (${pageCount} صفحة).`, "success");
           } catch (err) {
@@ -149,6 +150,7 @@ export function useFileUpload({
               content: `[نص مستخرج من صورة: ${file.name}]\n\n${ocrText}`,
               rawFile: file,
               fromStorage: false,
+              isUploaded: false,
             });
             showToast(`✅ تم استخراج النص من ${file.name}`, "success");
           } catch (err) {
@@ -168,6 +170,7 @@ export function useFileUpload({
             content: await readFileAsText(file),
             rawFile: file,
             fromStorage: false,
+            isUploaded: false,
           });
         } catch {
           newFiles.push({
@@ -177,13 +180,14 @@ export function useFileUpload({
             size: file.size,
             icon: "❌",
             content: "خطأ",
+            isUploaded: false,
           });
         }
       }
 
       if (newFiles.length === 0) return;
 
-      // ✅ أضف الملفات أولاً (تظهر في الواجهة)
+      // ✅ أضف الملفات أولاً
       setAttachedFiles((prev) => [...prev, ...newFiles]);
 
       // ✅ ثم ارفعها
@@ -225,14 +229,14 @@ export function useFileUpload({
             page_count: f.pageCount || null,
           });
 
-          // ✅ حدّث الملف في مكانه (لا تحذفه)
+          // ✅ حدّث الملف: isUploaded فقط (احتفظ بـ rawFile و fromStorage)
           setAttachedFiles((prev) =>
             prev.map((u) =>
               u.id === f.id
                 ? {
                     ...u,
                     filePath: path,
-                    fromStorage: true,
+                    isUploaded: true,
                     recordId: record.id,
                   }
                 : u
@@ -355,6 +359,7 @@ export function useFileUpload({
         pageCount: f.page_count,
         filePath: f.file_path,
         fromStorage: true,
+        isUploaded: true,
       }));
 
       setAttachedFiles((prev) => {
