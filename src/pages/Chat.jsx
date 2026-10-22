@@ -1,8 +1,8 @@
 // ============================================
-// Chat.jsx — نسخة v15.0
+// Chat.jsx — نسخة v16.0 (النهائية)
 // ✅ useFileUpload يدير attachedFiles بنفسه
-// ✅ ChatInput يعرض شريط تقدم دائري
-// ✅ التخصص الديناميكي (prompts.js v2.0)
+// ✅ ChatInput يعرض الملفات دائماً
+// ✅ شريط تقدم دائري
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -145,7 +145,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }, [user.id]);
 
   // ═══════════════════════════════════════════
-  // 3. Hooks (بالترتيب الصحيح)
+  // 3. Hooks
   // ═══════════════════════════════════════════
 
   // 3.1 useFileUpload (يدير attachedFiles بنفسه)
@@ -258,7 +258,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       setInput("");
 
       let filesForRequest = fileUploadHook.attachedFiles;
-      if (fileUploadHook.attachedFiles.length > 0) {
+      if (fileUploadHook.attachedFiles.some((f) => !f.isUploaded && f.rawFile)) {
         try {
           filesForRequest = await fileUploadHook.uploadPendingFiles(
             currentChatIdRef.current
@@ -573,7 +573,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
 
     const hasUnuploaded = fileUploadHook.attachedFiles.some(
-      (f) => !f.fromStorage && f.rawFile
+      (f) => !f.isUploaded && f.rawFile
     );
     if (hasUnuploaded) {
       showToast("⏳ الملف لم يُرفع بعد. انتظر قليلاً", "info");
