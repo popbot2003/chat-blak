@@ -150,13 +150,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   // 3.1 useFileUpload (يدير attachedFiles بنفسه)
   const fileUploadHook = useFileUpload({
-    user,
-    currentChatId,
-    setCurrentChatId,
-    messagesRef,
-    setAllChats: () => {},
-  });
-
+  user,
+  currentChatIdRef,
+  messagesRef,
+  setAllChats: () => {},
+});
   // 3.2 useTasks
   const tasksHook = useTasks({
     user,
