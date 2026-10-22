@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useFileUpload.js
-// ✅ v5.0: لا يستدعي setCurrentChatId (يحل مشكلة الاختفاء)
+// ✅ v6.0: لا يحذف الملف عند الفشل + رسائل دقيقة
 // ============================================
 
 import { useState, useCallback } from "react";
@@ -95,11 +95,9 @@ export function useFileUpload({
       const files = Array.from(e.target.files || []);
       if (!files.length) return;
 
-      // ✅ استخدم chatId المحلي فقط (لا setCurrentChatId)
       let chatId = currentChatIdRef.current;
       if (!chatId) {
         chatId = Date.now().toString();
-        // ❌ لا تستدعِ setCurrentChatId هنا
       }
 
       const newFiles = [];
@@ -187,7 +185,12 @@ export function useFileUpload({
 
       if (newFiles.length === 0) return;
 
+      // ✅ أضف الملفات للواجهة (ستبقى حتى لو فشل الرفع)
       setAttachedFiles((prev) => [...prev, ...newFiles]);
+
+      // ✅ ارفع الملفات، مع تتبع النتائج
+      let successCount = 0;
+      let errorCount = 0;
 
       for (let i = 0; i < newFiles.length; i++) {
         const f = newFiles[i];
@@ -239,16 +242,37 @@ export function useFileUpload({
                 : u
             )
           );
+          successCount++;
         } catch (err) {
           console.error(`[Upload] فشل رفع ${f.name}:`, err);
-          showToast(`❌ فشل رفع ${f.name}`, "error");
-          setAttachedFiles((prev) => prev.filter((u) => u.id !== f.id));
+          showToast(
+            `❌ فشل رفع ${f.name}: ${err.message || "خطأ غير معروف"}. الملف ما زال مرفقاً، يمكنك حذفه أو المحاولة مرة أخرى.`,
+            "error"
+          );
+          // ✅ لا تحذف الملف — يبقى في الواجهة
+          errorCount++;
         }
       }
 
-      showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
+      // ✅ رسالة دقيقة بناءً على النتائج الفعلية
+      if (errorCount === 0 && successCount > 0) {
+        showToast("✅ اكتمل رفع الملف. يمكنك الإرسال الآن.", "success");
+      } else if (successCount > 0 && errorCount > 0) {
+        showToast(
+          `⚠️ ${successCount} نجح، ${errorCount} فشل. تحقق من الملفات.`,
+          "error"
+        );
+      } else if (errorCount > 0) {
+        showToast(
+          `❌ لم يُرفع أي ملف. ${errorCount} فشل.`,
+          "error"
+        );
+      }
 
-      if (chatId) {
+      setUploadProgress(null);
+
+      // محاولة حفظ المحادثة (لا يؤثر على رفع الملفات)
+      if (chatId && successCount > 0) {
         try {
           const now = new Date().toISOString();
 
@@ -296,8 +320,6 @@ export function useFileUpload({
           console.warn("[Chat] خطأ في حفظ المحادثة:", err);
         }
       }
-
-      setUploadProgress(null);
     },
     [user.id, messagesRef, setAllChats]
   );
