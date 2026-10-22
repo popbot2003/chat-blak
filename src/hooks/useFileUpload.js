@@ -1,6 +1,6 @@
 // ============================================
 // src/hooks/useFileUpload.js
-// ✅ v4.0: يستخدم isUploaded بدلاً من fromStorage
+// ✅ v5.0: لا يستدعي setCurrentChatId (يحل مشكلة الاختفاء)
 // ============================================
 
 import { useState, useCallback } from "react";
@@ -17,8 +17,7 @@ import { CHAT_HISTORY_LIMIT } from "../config/constants";
 
 export function useFileUpload({
   user,
-  currentChatId,
-  setCurrentChatId,
+  currentChatIdRef,
   messagesRef,
   setAllChats,
 }) {
@@ -96,10 +95,11 @@ export function useFileUpload({
       const files = Array.from(e.target.files || []);
       if (!files.length) return;
 
-      let chatId = currentChatId;
+      // ✅ استخدم chatId المحلي فقط (لا setCurrentChatId)
+      let chatId = currentChatIdRef.current;
       if (!chatId) {
         chatId = Date.now().toString();
-        setCurrentChatId(chatId);
+        // ❌ لا تستدعِ setCurrentChatId هنا
       }
 
       const newFiles = [];
@@ -187,10 +187,8 @@ export function useFileUpload({
 
       if (newFiles.length === 0) return;
 
-      // ✅ أضف الملفات أولاً
       setAttachedFiles((prev) => [...prev, ...newFiles]);
 
-      // ✅ ثم ارفعها
       for (let i = 0; i < newFiles.length; i++) {
         const f = newFiles[i];
         if (!f.rawFile) continue;
@@ -229,7 +227,6 @@ export function useFileUpload({
             page_count: f.pageCount || null,
           });
 
-          // ✅ حدّث الملف: isUploaded فقط (احتفظ بـ rawFile و fromStorage)
           setAttachedFiles((prev) =>
             prev.map((u) =>
               u.id === f.id
@@ -302,13 +299,7 @@ export function useFileUpload({
 
       setUploadProgress(null);
     },
-    [
-      user.id,
-      currentChatId,
-      setCurrentChatId,
-      messagesRef,
-      setAllChats,
-    ]
+    [user.id, messagesRef, setAllChats]
   );
 
   const removeFile = useCallback(
