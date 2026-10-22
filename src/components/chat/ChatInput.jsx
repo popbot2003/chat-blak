@@ -1,14 +1,11 @@
 // ============================================
 // ChatInput.jsx
-// ✅ v2.0: شريط تقدم دائري حول أيقونة الملف
+// ✅ v3.0: يعرض الملفات دائماً + شريط تقدم دائري
 // ============================================
 
 import { useRef } from "react";
 
-/**
- * مكون شريط التقدم الدائري
- */
-function CircularProgress({ percentage, size = 40, strokeWidth = 3 }) {
+function CircularProgress({ percentage, size = 44, strokeWidth = 3 }) {
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const offset = circumference - (percentage / 100) * circumference;
@@ -25,7 +22,6 @@ function CircularProgress({ percentage, size = 40, strokeWidth = 3 }) {
         pointerEvents: "none",
       }}
     >
-      {/* الخلفية (رمادية) */}
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -34,7 +30,6 @@ function CircularProgress({ percentage, size = 40, strokeWidth = 3 }) {
         stroke="rgba(108,92,231,0.2)"
         strokeWidth={strokeWidth}
       />
-      {/* التقدم (بنفسجي) */}
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -69,7 +64,7 @@ export default function ChatInput({
   onFileUpload,
   onRemoveFile,
   onToggleMode,
-  uploadProgress, // ✅ جديد: يُمرَّر من Chat.jsx
+  uploadProgress,
 }) {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -86,14 +81,13 @@ export default function ChatInput({
   const showStop = loading;
   const isTaskMode = sendMode === "task";
 
-  // ✅ هل هذا الملف هو الذي يُرفع حالياً؟
   const isUploadingFile = (file) => {
     return uploadProgress && uploadProgress.name === file.name;
   };
 
   return (
     <>
-      {/* الملفات المرفقة */}
+      {/* ✅ عرض الملفات دائماً (إذا كانت موجودة) */}
       {attachedFiles.length > 0 && (
         <div
           style={{
@@ -118,7 +112,6 @@ export default function ChatInput({
                   position: "relative",
                 }}
               >
-                {/* الأيقونة + شريط التقدم الدائري */}
                 <div
                   style={{
                     position: "relative",
@@ -129,24 +122,18 @@ export default function ChatInput({
                     justifyContent: "center",
                   }}
                 >
-                  {/* شريط التقدم الدائري (يظهر فقط أثناء الرفع) */}
                   {uploading && (
                     <CircularProgress percentage={percentage} size={44} strokeWidth={3} />
                   )}
-
-                  {/* أيقونة الملف */}
                   <span
                     style={{
                       fontSize: "22px",
                       zIndex: 1,
                       opacity: uploading ? 0.7 : 1,
-                      transition: "opacity 0.2s",
                     }}
                   >
                     {f.icon || "📎"}
                   </span>
-
-                  {/* زر الحذف (صغير، في الزاوية) */}
                   {!uploading && (
                     <button
                       onClick={() => onRemoveFile(f.id)}
@@ -166,7 +153,6 @@ export default function ChatInput({
                         alignItems: "center",
                         justifyContent: "center",
                         padding: 0,
-                        lineHeight: 1,
                       }}
                       title="حذف الملف"
                     >
@@ -174,8 +160,6 @@ export default function ChatInput({
                     </button>
                   )}
                 </div>
-
-                {/* اسم الملف (تحت الأيقونة) */}
                 <span
                   style={{
                     fontSize: "10px",
@@ -195,7 +179,6 @@ export default function ChatInput({
         </div>
       )}
 
-      {/* منطقة الإدخال */}
       <div className="input-area">
         <button
           onClick={() => fileInputRef.current?.click()}
@@ -215,7 +198,6 @@ export default function ChatInput({
           accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*"
         />
 
-        {/* زر تبديل الوضع (سريع / مهمة) */}
         <button
           onClick={onToggleMode}
           className={`mode-toggle ${
