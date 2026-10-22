@@ -65,10 +65,10 @@ export default function App() {
         // ✅ الدور من قاعدة البيانات فقط
         setVerifiedRole(data.role);
 
-        // تحديث الـ localStorage بالدور الصحيح
+        // ✅ حدّث localStorage فقط، دون إعادة إنشاء Chat
         const updated = { ...user, role: data.role };
         localStorage.setItem("black-user", JSON.stringify(updated));
-        setUser(updated);
+        // ❌ لا تستدعِ setUser(updated) — هذا يُعيد إنشاء Chat ويفقد attachedFiles
 
       } catch (err) {
         console.error("❌ خطأ في التحقق من الدور:", err.message);
