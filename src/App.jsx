@@ -1,14 +1,22 @@
+// ============================================
+// App.jsx — بلاك 🖤
+// ✅ يستخدم LoadingScreen بدل inline loading
+// ✅ صفر inline styles
+// ============================================
+
 import { useState, useEffect } from "react";
-import ErrorBoundary from "./components/ErrorBoundary";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import Chat from "./pages/Chat";
-import Admin from "./pages/Admin";
-import { supabase } from './lib/supabase';
+import ErrorBoundary   from "./components/ErrorBoundary";
+import LoadingScreen   from "./components/LoadingScreen";
+import Login           from "./pages/Login";
+import Register        from "./pages/Register";
+import ForgotPassword  from "./pages/ForgotPassword";
+import ResetPassword   from "./pages/ResetPassword";
+import Chat            from "./pages/Chat";
+import Admin           from "./pages/Admin";
+import { supabase }    from "./lib/supabase";
 
 export default function App() {
+
   const [user, setUser] = useState(() => {
     try {
       const saved = localStorage.getItem("black-user");
@@ -26,12 +34,12 @@ export default function App() {
     }
   });
 
-  const [verifiedRole, setVerifiedRole] = useState(null);
-  const [roleChecked, setRoleChecked]   = useState(false);
-  const [showRegister, setShowRegister] = useState(false);
+  const [verifiedRole, setVerifiedRole]           = useState(null);
+  const [roleChecked, setRoleChecked]             = useState(false);
+  const [showRegister, setShowRegister]           = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
 
-  // ✅ التحقق من الدور من قاعدة البيانات مباشرة — ليس من localStorage
+  // ── التحقق من الدور من قاعدة البيانات مباشرة ──
   useEffect(() => {
     if (!user) {
       setVerifiedRole(null);
@@ -48,7 +56,6 @@ export default function App() {
           .single();
 
         if (error || !data) {
-          // المستخدم غير موجود في قاعدة البيانات — سجّل خروج
           localStorage.removeItem("black-user");
           setUser(null);
           setRoleChecked(true);
@@ -62,13 +69,11 @@ export default function App() {
           return;
         }
 
-        // ✅ الدور من قاعدة البيانات فقط
         setVerifiedRole(data.role);
 
-        // ✅ حدّث localStorage فقط، دون إعادة إنشاء Chat
+        // ✅ حدّث localStorage فقط — بدون setUser لتجنب إعادة إنشاء Chat
         const updated = { ...user, role: data.role };
         localStorage.setItem("black-user", JSON.stringify(updated));
-        // ❌ لا تستدعِ setUser(updated) — هذا يُعيد إنشاء Chat ويفقد attachedFiles
 
       } catch (err) {
         console.error("❌ خطأ في التحقق من الدور:", err.message);
@@ -82,6 +87,7 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
+  // ── كشف صفحة Reset Password ──
   const params = new URLSearchParams(window.location.search);
   const isResetPassword =
     window.location.pathname === "/reset-password" ||
@@ -89,6 +95,7 @@ export default function App() {
     params.get("code") !== null ||
     params.get("token_hash") !== null;
 
+  // ── Handlers ──
   function handleLogout() {
     try {
       localStorage.removeItem("black-user");
@@ -107,6 +114,7 @@ export default function App() {
     window.location.href = "/";
   }
 
+  // ── Reset Password Page ──
   if (isResetPassword) {
     return (
       <ErrorBoundary>
@@ -115,6 +123,7 @@ export default function App() {
     );
   }
 
+  // ── Auth Pages ──
   if (!user) {
     if (showRegister) {
       return (
@@ -129,6 +138,7 @@ export default function App() {
         </ErrorBoundary>
       );
     }
+
     if (showForgotPassword) {
       return (
         <ErrorBoundary>
@@ -141,6 +151,7 @@ export default function App() {
         </ErrorBoundary>
       );
     }
+
     return (
       <ErrorBoundary>
         <Login
@@ -155,24 +166,12 @@ export default function App() {
     );
   }
 
-  // ⏳ انتظار التحقق من الدور قبل عرض أي شيء
+  // ── Loading — انتظار التحقق من الدور ──
   if (!roleChecked) {
-    return (
-      <div style={{
-        height: "100dvh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#0f0f1a",
-        color: "#e0e0e0",
-        fontFamily: "system-ui, sans-serif"
-      }}>
-        🖤 جاري التحقق...
-      </div>
-    );
+    return <LoadingScreen message="جاري التحقق..." />;
   }
 
-  // ✅ الدور المتحقق منه من قاعدة البيانات
+  // ── Admin ──
   if (verifiedRole === "admin") {
     const isChatWindow = window.location.search === "?chat";
     if (isChatWindow) {
@@ -189,6 +188,7 @@ export default function App() {
     );
   }
 
+  // ── Chat ──
   return (
     <ErrorBoundary>
       <Chat user={user} onLogout={handleLogout} />
