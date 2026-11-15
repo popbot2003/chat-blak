@@ -1,22 +1,23 @@
 // ============================================
-// Register.jsx — Supabase Auth (آمن ✅)
+// Register.jsx — بلاك 🖤
+// ✅ CSS classes من theme.css — صفر inline styles
 // ============================================
 
 import { useState } from "react";
-import { supabase } from '../lib/supabase';
-import { validateEmail, validatePassword } from '../utils/validators';
-import { DEFAULT_USER_DAILY_LIMIT } from '../config/constants';
+import { supabase } from "../lib/supabase";
+import { validateEmail, validatePassword } from "../utils/validators";
+import { DEFAULT_USER_DAILY_LIMIT } from "../config/constants";
 
 export default function Register({ onRegister, onSwitchToLogin }) {
-  const [name, setName]                         = useState("");
-  const [email, setEmail]                       = useState("");
-  const [password, setPassword]                 = useState("");
-  const [confirmPassword, setConfirmPassword]   = useState("");
-  const [gender, setGender]                     = useState("ولد");
-  const [showPassword, setShowPassword]         = useState(false);
+  const [name, setName]                               = useState("");
+  const [email, setEmail]                             = useState("");
+  const [password, setPassword]                       = useState("");
+  const [confirmPassword, setConfirmPassword]         = useState("");
+  const [gender, setGender]                           = useState("ولد");
+  const [showPassword, setShowPassword]               = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [error, setError]                       = useState("");
-  const [loading, setLoading]                   = useState(false);
+  const [error, setError]                             = useState("");
+  const [loading, setLoading]                         = useState(false);
 
   async function handleRegister(e) {
     e.preventDefault();
@@ -53,9 +54,8 @@ export default function Register({ onRegister, onSwitchToLogin }) {
         password,
         options: {
           data: { name: displayName, gender },
-          // ✅ إعادة التوجيه بعد تأكيد الإيميل
-          emailRedirectTo: `${window.location.origin}`
-        }
+          emailRedirectTo: `${window.location.origin}`,
+        },
       });
 
       if (signUpError) {
@@ -70,48 +70,41 @@ export default function Register({ onRegister, onSwitchToLogin }) {
 
       if (!data.user) throw new Error("حدث خطأ أثناء التسجيل، حاول مرة أخرى");
 
-      // 2. إنشاء profile مرتبط بنفس الـ id من Auth
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          id:              data.user.id,
-          email:           email,
-          name:            displayName,
-          gender:          gender,
-          role:            "user",
-          personality:     "blak",
-          is_blocked:      false,
-          daily_limit:     DEFAULT_USER_DAILY_LIMIT,
-          used_today:      0,
-          last_reset_date: today,
-          last_seen:       new Date().toISOString(),
-          created_at:      new Date().toISOString()
-        });
+      // 2. إنشاء profile
+      const { error: profileError } = await supabase.from("profiles").insert({
+        id:              data.user.id,
+        email,
+        name:            displayName,
+        gender,
+        role:            "user",
+        personality:     "blak",
+        is_blocked:      false,
+        daily_limit:     DEFAULT_USER_DAILY_LIMIT,
+        used_today:      0,
+        last_reset_date: today,
+        last_seen:       new Date().toISOString(),
+        created_at:      new Date().toISOString(),
+      });
 
-      if (profileError) {
-        // ✅ لا يمكن حذف Auth user من client-side، نعطي رسالة واضحة بدلاً من ذلك
-        throw new Error("حدث خطأ في إنشاء الحساب، تواصل مع الدعم");
-      }
+      if (profileError) throw new Error("حدث خطأ في إنشاء الحساب، تواصل مع الدعم");
 
-      // 3. التحقق: هل Supabase يتطلب تأكيد الإيميل؟
+      // 3. دخول مباشر أو تأكيد إيميل
       if (data.session) {
-        // ✅ تسجيل دخول مباشر (email confirmation معطّل في Supabase)
         const newUser = {
           id:              data.user.id,
-          email:           email,
+          email,
           name:            displayName,
           role:            "user",
-          gender:          gender,
+          gender,
           personality:     "blak",
           daily_limit:     DEFAULT_USER_DAILY_LIMIT,
           used_today:      0,
           last_reset_date: today,
-          is_blocked:      false
+          is_blocked:      false,
         };
         localStorage.setItem("black-user", JSON.stringify(newUser));
         onRegister(newUser);
       } else {
-        // ✅ Supabase أرسل بريد تأكيد — أخبر المستخدم
         alert("✅ تم إنشاء حسابك! تحقق من بريدك الإلكتروني لتأكيد الحساب.");
         onSwitchToLogin();
       }
@@ -124,147 +117,95 @@ export default function Register({ onRegister, onSwitchToLogin }) {
     }
   }
 
-  const inputStyle = {
-    width: "100%",
-    padding: "14px",
-    marginBottom: "15px",
-    borderRadius: "12px",
-    border: "1px solid rgba(255,255,255,0.1)",
-    background: "rgba(255,255,255,0.05)",
-    color: "#e0e0e0",
-    fontSize: "16px",
-    outline: "none",
-    boxSizing: "border-box"
-  };
-
   return (
-    <div style={{
-      height: "100dvh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#0f0f1a",
-      fontFamily: "system-ui, sans-serif",
-      overflowY: "auto"
-    }}>
-      <div style={{
-        background: "#1a1a2e",
-        padding: "40px",
-        borderRadius: "20px",
-        width: "100%",
-        maxWidth: "400px",
-        textAlign: "center",
-        margin: "20px"
-      }}>
-        <div style={{ fontSize: "50px", marginBottom: "20px" }}>🖤</div>
-        <h2 style={{ color: "#e0e0e0", marginBottom: "30px" }}>إنشاء حساب جديد</h2>
+    <div className="auth-page">
+      <div className="auth-card" style={{ maxWidth: "420px" }}>
 
+        {/* أيقونة + عنوان */}
+        <span className="auth-card__icon">🖤</span>
+        <h2 className="auth-card__title">إنشاء حساب جديد</h2>
+        <p className="auth-card__subtitle">انضم لبلاك دلوقتي</p>
+
+        {/* رسالة الخطأ */}
         {error && (
-          <div style={{
-            background: "rgba(248,113,113,0.1)",
-            color: "#f87171",
-            padding: "12px",
-            borderRadius: "10px",
-            marginBottom: "20px",
-            fontSize: "14px"
-          }}>
-            {error}
-          </div>
+          <div className="auth-alert auth-alert--error">{error}</div>
         )}
 
         <form onSubmit={handleRegister}>
+
+          {/* الاسم */}
           <input
             type="text"
             placeholder="الاسم (اختياري)"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            style={inputStyle}
+            className="auth-input"
+            autoComplete="name"
           />
 
+          {/* البريد الإلكتروني */}
           <input
             type="email"
             placeholder="البريد الإلكتروني"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ ...inputStyle, direction: "ltr" }}
+            className="auth-input ltr"
+            autoComplete="email"
             required
           />
 
-          <div style={{ position: "relative", marginBottom: "15px" }}>
+          {/* كلمة المرور */}
+          <div className="auth-input-wrap">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="كلمة المرور"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={{ ...inputStyle, marginBottom: 0, paddingLeft: "50px", direction: "ltr" }}
+              className="auth-input ltr"
+              autoComplete="new-password"
               required
             />
             <button
               type="button"
+              className="auth-eye-btn"
               onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "20px",
-                color: "#a29bfe"
-              }}>
+              tabIndex={-1}
+            >
               {showPassword ? "🙈" : "👁️"}
             </button>
           </div>
 
-          <div style={{ position: "relative", marginBottom: "20px" }}>
+          {/* تأكيد كلمة المرور */}
+          <div className="auth-input-wrap">
             <input
               type={showConfirmPassword ? "text" : "password"}
               placeholder="تأكيد كلمة المرور"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              style={{ ...inputStyle, marginBottom: 0, paddingLeft: "50px", direction: "ltr" }}
+              className="auth-input ltr"
+              autoComplete="new-password"
               required
             />
             <button
               type="button"
+              className="auth-eye-btn"
               onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              style={{
-                position: "absolute",
-                left: "12px",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                fontSize: "20px",
-                color: "#a29bfe"
-              }}>
+              tabIndex={-1}
+            >
               {showConfirmPassword ? "🙈" : "👁️"}
             </button>
           </div>
 
           {/* اختيار الجنس */}
-          <div style={{ marginBottom: "20px" }}>
-            <p style={{ color: "rgba(255,255,255,0.5)", fontSize: "13px", marginBottom: "10px" }}>أنت؟</p>
-            <div style={{ display: "flex", gap: "10px" }}>
-              {["ولد", "بنت"].map(g => (
+          <div className="auth-gender-group">
+            <span className="auth-gender-label">أنت؟</span>
+            <div className="auth-gender-options">
+              {["ولد", "بنت"].map((g) => (
                 <button
                   key={g}
                   type="button"
+                  className={`auth-gender-btn${gender === g ? " active" : ""}`}
                   onClick={() => setGender(g)}
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: gender === g ? "2px solid #8b5cf6" : "2px solid rgba(255,255,255,0.1)",
-                    background: gender === g ? "rgba(139,92,246,0.2)" : "rgba(255,255,255,0.03)",
-                    color: gender === g ? "#a29bfe" : "rgba(255,255,255,0.5)",
-                    fontSize: "15px",
-                    fontWeight: gender === g ? "bold" : "normal",
-                    cursor: "pointer",
-                    transition: "all 0.2s"
-                  }}
                 >
                   {g === "ولد" ? "👦 ولد" : "👧 بنت"}
                 </button>
@@ -272,37 +213,28 @@ export default function Register({ onRegister, onSwitchToLogin }) {
             </div>
           </div>
 
+          {/* زر التسجيل */}
           <button
             type="submit"
+            className="auth-btn-primary"
             disabled={loading}
-            style={{
-              width: "100%",
-              padding: "14px",
-              background: "linear-gradient(135deg, #6c5ce7, #8b5cf6)",
-              color: "#fff",
-              border: "none",
-              borderRadius: "12px",
-              fontSize: "16px",
-              fontWeight: "bold",
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.6 : 1,
-              marginBottom: "15px"
-            }}>
-            {loading ? "جاري الإنشاء..." : "إنشاء حساب"}
+          >
+            {loading ? "جاري الإنشاء..." : "إنشاء حساب 🖤"}
           </button>
+
         </form>
 
-        <button
-          onClick={onSwitchToLogin}
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "#a29bfe",
-            cursor: "pointer",
-            fontSize: "14px"
-          }}>
-          عندك حساب بالفعل؟ سجل دخول
-        </button>
+        {/* رابط الدخول */}
+        <div className="auth-links">
+          <button
+            type="button"
+            className="auth-btn-link"
+            onClick={onSwitchToLogin}
+          >
+            عندك حساب بالفعل؟ سجّل دخول
+          </button>
+        </div>
+
       </div>
     </div>
   );
