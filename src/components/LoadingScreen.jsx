@@ -1,22 +1,28 @@
 // ============================================
-// LoadingScreen.jsx
-// شاشة التحميل المؤقتة
+// LoadingScreen.jsx — بلاك 🖤
+// ✅ CSS classes من theme.css — صفر inline styles
+// ✅ يُستخدم في App.jsx بدل الـ inline loading
 // ============================================
 
-export default function LoadingScreen() {
+export default function LoadingScreen({ message = "جاري التحميل...", sub = "" }) {
   return (
-    <div style={{
-      height: "100dvh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#0f0f1a",
-      color: "#e0e0e0",
-      fontFamily: "system-ui, sans-serif"
-    }}>
-      <div style={{ textAlign: "center" }}>
-        <div style={{ fontSize: "50px" }}>🖤</div>
-        <div style={{ fontSize: "18px", marginTop: "10px" }}>جاري التحميل...</div>
+    <div className="loading-screen">
+      <div className="loading-screen__inner">
+
+        {/* أيقونة بلاك */}
+        <span className="loading-screen__icon">🖤</span>
+
+        {/* Spinner */}
+        <div className="loading-screen__spinner" />
+
+        {/* نص */}
+        <p className="loading-screen__text">{message}</p>
+
+        {/* نص ثانوي اختياري */}
+        {sub && (
+          <p className="loading-screen__sub">{sub}</p>
+        )}
+
       </div>
     </div>
   );
