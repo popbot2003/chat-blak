@@ -1,0 +1,538 @@
+/* ============================================================
+   theme.css — مصدر الحقيقة الوحيد لألوان بلاك 🖤
+   Electric Violet — النظام الكامل للألوان
+   
+   الاستخدام في أي ملف:
+     background: var(--bg-main);
+     color: var(--text-primary);
+     border: 1px solid var(--border);
+   
+   ⚠️ لا تكتب أي لون hardcoded في أي ملف آخر.
+      كل تغيير في الألوان يتم هنا فقط.
+   ============================================================ */
+
+:root {
+
+  /* ══════════════════════════════════════
+     🎨 الألوان الأساسية — Brand Colors
+     ══════════════════════════════════════ */
+
+  --brand-primary:        #7c3aed;   /* البنفسجي الرئيسي */
+  --brand-primary-hover:  #6d28d9;   /* hover أغمق */
+  --brand-primary-light:  #a78bfa;   /* نص / أيقونات على خلفية داكنة */
+  --brand-primary-soft:   rgba(124, 58, 237, 0.15);  /* خلفية ناعمة */
+  --brand-primary-border: rgba(124, 58, 237, 0.25);  /* حدود */
+
+  --brand-accent:         #f59e0b;   /* ذهبي للتفاصيل المميزة */
+  --brand-accent-soft:    rgba(245, 158, 11, 0.15);
+
+  --brand-gradient:       linear-gradient(135deg, #7c3aed, #6d28d9);
+  --brand-gradient-soft:  linear-gradient(135deg, rgba(124,58,237,0.12), rgba(109,40,217,0.06));
+
+
+  /* ══════════════════════════════════════
+     🌑 خلفيات — Backgrounds (Dark Mode)
+     ══════════════════════════════════════ */
+
+  --bg-main:        #0a0a14;   /* الخلفية الرئيسية — أعمق */
+  --bg-surface:     #111120;   /* سطح فوق الخلفية */
+  --bg-card:        #16162a;   /* كروت، هيدر، sidebar */
+  --bg-elevated:    #1e1e35;   /* عناصر مرتفعة: modals, dropdowns */
+  --bg-input:       rgba(255, 255, 255, 0.06);  /* حقول الإدخال */
+  --bg-hover:       rgba(255, 255, 255, 0.07);  /* hover عام */
+  --bg-active:      rgba(124, 58, 237, 0.12);   /* عنصر محدد/نشط */
+
+  /* ══════════════════════════════════════
+     📝 نصوص — Text Colors (Dark Mode)
+     ══════════════════════════════════════ */
+
+  --text-primary:   #e8e8f0;   /* النص الرئيسي */
+  --text-secondary: rgba(232, 232, 240, 0.65);  /* نص ثانوي */
+  --text-muted:     rgba(232, 232, 240, 0.35);  /* نص خافت */
+  --text-inverse:   #0a0a14;   /* نص على خلفية فاتحة */
+  --text-brand:     #a78bfa;   /* نص بلون البراند */
+  --text-accent:    #f59e0b;   /* نص بلون الـ accent */
+
+
+  /* ══════════════════════════════════════
+     🔲 حدود — Borders (Dark Mode)
+     ══════════════════════════════════════ */
+
+  --border:         rgba(255, 255, 255, 0.08);
+  --border-medium:  rgba(255, 255, 255, 0.12);
+  --border-brand:   rgba(124, 58, 237, 0.30);
+  --border-brand-strong: rgba(124, 58, 237, 0.50);
+
+
+  /* ══════════════════════════════════════
+     🟢 حالات — Status Colors
+     ══════════════════════════════════════ */
+
+  --color-success:        #4ade80;
+  --color-success-soft:   rgba(74, 222, 128, 0.12);
+  --color-success-border: rgba(74, 222, 128, 0.25);
+
+  --color-error:          #f87171;
+  --color-error-soft:     rgba(248, 113, 113, 0.12);
+  --color-error-border:   rgba(248, 113, 113, 0.25);
+
+  --color-warning:        #fbbf24;
+  --color-warning-soft:   rgba(251, 191, 36, 0.12);
+  --color-warning-border: rgba(251, 191, 36, 0.25);
+
+  --color-info:           #38bdf8;
+  --color-info-soft:      rgba(56, 189, 248, 0.12);
+  --color-info-border:    rgba(56, 189, 248, 0.25);
+
+  --color-online:         #4ade80;   /* نقطة الاتصال */
+
+
+  /* ══════════════════════════════════════
+     💬 فقاعات الرسائل — Bubbles
+     ══════════════════════════════════════ */
+
+  --bubble-user-bg:       var(--brand-gradient);
+  --bubble-user-color:    #ffffff;
+  --bubble-user-shadow:   0 2px 12px rgba(124, 58, 237, 0.35);
+
+  --bubble-ai-bg:         #1e1e35;
+  --bubble-ai-color:      var(--text-primary);
+  --bubble-ai-border:     var(--border-brand);
+  --bubble-ai-shadow:     0 1px 4px rgba(0, 0, 0, 0.3);
+
+
+  /* ══════════════════════════════════════
+     🔘 أزرار — Buttons
+     ══════════════════════════════════════ */
+
+  --btn-primary-bg:       var(--brand-gradient);
+  --btn-primary-color:    #ffffff;
+  --btn-primary-shadow:   0 4px 15px rgba(124, 58, 237, 0.4);
+
+  --btn-secondary-bg:     var(--brand-primary-soft);
+  --btn-secondary-color:  var(--text-brand);
+  --btn-secondary-border: var(--border-brand);
+
+  --btn-ghost-bg:         transparent;
+  --btn-ghost-hover:      var(--bg-hover);
+
+
+  /* ══════════════════════════════════════
+     📋 حقول الإدخال — Inputs
+     ══════════════════════════════════════ */
+
+  --input-bg:             var(--bg-input);
+  --input-border:         rgba(255, 255, 255, 0.10);
+  --input-border-focus:   var(--brand-primary);
+  --input-color:          var(--text-primary);
+  --input-placeholder:    var(--text-muted);
+  --input-radius:         12px;
+
+
+  /* ══════════════════════════════════════
+     🎭 شاشات Auth — Auth Pages
+     ══════════════════════════════════════ */
+
+  --auth-bg:              var(--bg-main);
+  --auth-card-bg:         var(--bg-card);
+  --auth-card-radius:     20px;
+  --auth-card-shadow:     0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-brand);
+  --auth-card-padding:    40px;
+  --auth-card-max-width:  400px;
+
+
+  /* ══════════════════════════════════════
+     🎨 Scrollbar
+     ══════════════════════════════════════ */
+
+  --scrollbar-thumb:      rgba(124, 58, 237, 0.3);
+  --scrollbar-thumb-hover: rgba(124, 58, 237, 0.5);
+  --scrollbar-track:      transparent;
+
+
+  /* ══════════════════════════════════════
+     ⏱️ Transitions
+     ══════════════════════════════════════ */
+
+  --transition-fast:   0.15s ease;
+  --transition-normal: 0.25s ease;
+  --transition-slow:   0.4s ease;
+
+
+  /* ══════════════════════════════════════
+     📐 Radius
+     ══════════════════════════════════════ */
+
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-full: 9999px;
+
+
+  /* ══════════════════════════════════════
+     💠 Shadows
+     ══════════════════════════════════════ */
+
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md:   0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.5);
+  --shadow-xl:   0 20px 60px rgba(0, 0, 0, 0.6);
+  --shadow-brand: 0 4px 20px rgba(124, 58, 237, 0.35);
+
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   ☀️ وضع Light — Light Mode
+   كل الألوان تُعاد تعريفها هنا فقط
+   ══════════════════════════════════════════════════════════ */
+
+.light {
+
+  --bg-main:        #f0f0f8;
+  --bg-surface:     #f7f7fc;
+  --bg-card:        #ffffff;
+  --bg-elevated:    #ffffff;
+  --bg-input:       rgba(0, 0, 0, 0.04);
+  --bg-hover:       rgba(0, 0, 0, 0.04);
+  --bg-active:      rgba(124, 58, 237, 0.08);
+
+  --text-primary:   #1a1a2e;
+  --text-secondary: rgba(26, 26, 46, 0.65);
+  --text-muted:     rgba(26, 26, 46, 0.40);
+  --text-inverse:   #ffffff;
+  --text-brand:     #7c3aed;
+  --text-accent:    #d97706;
+
+  --border:         rgba(0, 0, 0, 0.08);
+  --border-medium:  rgba(0, 0, 0, 0.12);
+  --border-brand:   rgba(124, 58, 237, 0.20);
+  --border-brand-strong: rgba(124, 58, 237, 0.40);
+
+  --bubble-ai-bg:         #ffffff;
+  --bubble-ai-color:      #1a1a2e;
+  --bubble-ai-border:     rgba(124, 58, 237, 0.15);
+  --bubble-ai-shadow:     0 1px 4px rgba(0, 0, 0, 0.08);
+
+  --input-bg:             rgba(0, 0, 0, 0.04);
+  --input-border:         rgba(0, 0, 0, 0.12);
+  --input-border-focus:   var(--brand-primary);
+  --input-color:          #1a1a2e;
+  --input-placeholder:    rgba(26, 26, 46, 0.40);
+
+  --auth-bg:              #f0f0f8;
+  --auth-card-bg:         #ffffff;
+  --auth-card-shadow:     0 20px 60px rgba(124, 58, 237, 0.12), 0 0 0 1px rgba(124, 58, 237, 0.10);
+
+  --scrollbar-thumb:      rgba(124, 58, 237, 0.2);
+  --scrollbar-thumb-hover: rgba(124, 58, 237, 0.4);
+
+  --shadow-sm:   0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md:   0 4px 12px rgba(0, 0, 0, 0.10);
+  --shadow-lg:   0 8px 32px rgba(0, 0, 0, 0.12);
+  --shadow-xl:   0 20px 60px rgba(124, 58, 237, 0.12);
+  --shadow-brand: 0 4px 20px rgba(124, 58, 237, 0.20);
+
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   🎨 CSS Classes جاهزة للاستخدام المباشر في JSX
+   بدل inline styles في صفحات Auth والـ components
+   ══════════════════════════════════════════════════════════ */
+
+/* ── Auth Page Wrapper ── */
+.auth-page {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--auth-bg);
+  font-family: var(--font-body);
+  padding: 16px;
+}
+
+/* ── Auth Card ── */
+.auth-card {
+  background: var(--auth-card-bg);
+  border-radius: var(--auth-card-radius);
+  box-shadow: var(--auth-card-shadow);
+  border: 1px solid var(--border-brand);
+  padding: var(--auth-card-padding);
+  width: 100%;
+  max-width: var(--auth-card-max-width);
+  text-align: center;
+}
+
+.auth-card__icon {
+  font-size: 52px;
+  margin-bottom: 12px;
+  display: block;
+}
+
+.auth-card__title {
+  font-family: var(--font-heading);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.auth-card__subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-bottom: 28px;
+}
+
+/* ── Auth Inputs ── */
+.auth-input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: var(--input-radius);
+  border: 1px solid var(--input-border);
+  background: var(--input-bg);
+  color: var(--input-color);
+  font-size: 15px;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  box-sizing: border-box;
+  margin-bottom: 14px;
+}
+
+.auth-input:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+}
+
+.auth-input::placeholder {
+  color: var(--input-placeholder);
+}
+
+.auth-input[dir="ltr"],
+.auth-input.ltr {
+  direction: ltr;
+  text-align: left;
+}
+
+/* ── Auth Password Wrapper ── */
+.auth-input-wrap {
+  position: relative;
+  margin-bottom: 14px;
+}
+
+.auth-input-wrap .auth-input {
+  margin-bottom: 0;
+  padding-left: 48px;
+}
+
+.auth-eye-btn {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  color: var(--text-brand);
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Primary Button ── */
+.auth-btn-primary {
+  width: 100%;
+  padding: 13px;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-color);
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: opacity var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+  margin-bottom: 16px;
+  box-shadow: var(--btn-primary-shadow);
+}
+
+.auth-btn-primary:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(124, 58, 237, 0.5);
+}
+
+.auth-btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.auth-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── Ghost / Link Button ── */
+.auth-btn-link {
+  background: transparent;
+  border: none;
+  color: var(--text-brand);
+  cursor: pointer;
+  font-size: 14px;
+  font-family: var(--font-body);
+  padding: 6px;
+  transition: opacity var(--transition-fast);
+  display: block;
+  width: 100%;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.auth-btn-link:hover { opacity: 0.75; }
+
+.auth-btn-link--muted {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* ── Alert Messages ── */
+.auth-alert {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  margin-bottom: 18px;
+  text-align: right;
+  line-height: 1.6;
+}
+
+.auth-alert--error {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+  border: 1px solid var(--color-error-border);
+}
+
+.auth-alert--success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+/* ── Gender Selector ── */
+.auth-gender-group {
+  margin-bottom: 20px;
+}
+
+.auth-gender-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+  display: block;
+}
+
+.auth-gender-options {
+  display: flex;
+  gap: 10px;
+}
+
+.auth-gender-btn {
+  flex: 1;
+  padding: 11px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-weight: 500;
+}
+
+.auth-gender-btn.active {
+  border-color: var(--brand-primary);
+  background: var(--brand-primary-soft);
+  color: var(--text-brand);
+  font-weight: 700;
+}
+
+.auth-gender-btn:hover:not(.active) {
+  border-color: var(--border-brand);
+  background: var(--bg-hover);
+}
+
+/* ── Auth Divider ── */
+.auth-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* ── Loading Screen ── */
+.loading-screen {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-main);
+  font-family: var(--font-body);
+}
+
+.loading-screen__inner {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.loading-screen__icon {
+  font-size: 56px;
+  animation: loading-pulse 2s ease-in-out infinite;
+}
+
+@keyframes loading-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1;    }
+  50%       { transform: scale(1.08); opacity: 0.75; }
+}
+
+.loading-screen__spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border-brand);
+  border-top-color: var(--brand-primary);
+  border-radius: 50%;
+  animation: loading-spin 0.8s linear infinite;
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-screen__text {
+  font-size: 16px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.loading-screen__sub {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ── Responsive: Mobile ── */
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 28px 20px;
+    border-radius: var(--radius-lg);
+  }
+
+  .auth-card__icon   { font-size: 44px; }
+  .auth-card__title  { font-size: 20px; }
+  .auth-input        { font-size: 16px; padding: 12px 14px; }
+  .auth-btn-primary  { font-size: 15px; padding: 12px; }
+}
