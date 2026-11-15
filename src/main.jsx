@@ -1,10 +1,16 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import App from './App.jsx'
-import './App.css'
+// ============================================
+// main.jsx — بلاك 🖤
+// ✅ theme.css يُستورد أول — يمنع الـ flash
+// ============================================
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App.jsx";
+import "./styles/theme.css";   // ← أول — المتغيرات والألوان
+import "./App.css";            // ← ثاني — الـ classes
+
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <App />
-  </React.StrictMode>,
-)
+  </React.StrictMode>
+);
