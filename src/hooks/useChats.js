@@ -177,6 +177,7 @@ export function useChats({
 
         if (data?.messages && data.messages.length > 0) {
           setCurrentChatId(lastChatId);
+          // ✅ ضمان فرز الرسائل زمنياً بدقة منعاً لاختفائها أو انعكاس ترتيبها
           setMessages(sortMessagesByTime(data.messages));
           await loadChatTasksForChat(lastChatId);
           await restoreChatFiles(lastChatId);
@@ -221,8 +222,10 @@ export function useChats({
         .select("*")
         .eq("id", chatId)
         .single();
+        
       if (data?.messages) {
         setCurrentChatId(chatId);
+        // ✅ ضمان فرز الرسائل زمنياً بدقة عند فتح أي محادثة قديمة
         setMessages(sortMessagesByTime(data.messages));
         await loadChatTasksForChat(chatId);
         await restoreChatFiles(chatId);
