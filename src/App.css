@@ -155,3 +155,73 @@ body{overflow:hidden}button,textarea,input{font:inherit}button{color:inherit}but
 }
 @media(max-width:390px){.prompt-grid{grid-template-columns:1fr;}.prompt-grid button{min-height:67px;}.welcome-screen{padding-top:5px;}.welcome-mark{margin-bottom:12px;}}
 @media(prefers-reduced-motion:reduce){.welcome-screen,.prompt-grid button,.app-sidebar{animation:none!important;transition:none!important;}}
+
+/* Unified sidebar: chat history + platform/account menu */
+.sidebar-account-section{flex:0 0 auto;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.07);display:flex;flex-direction:column;gap:3px}
+.sidebar-usage{padding:10px 10px 11px;margin-bottom:5px;border:1px solid rgba(139,124,255,.14);border-radius:10px;background:rgba(139,124,255,.055)}
+.sidebar-usage-top{display:flex;align-items:center;justify-content:space-between;color:#d9d6eb;font-size:10px}
+.sidebar-usage-top span{color:#aaa0ff;font-variant-numeric:tabular-nums}
+.sidebar-usage-track{height:4px;margin:8px 0 6px;border-radius:10px;background:rgba(255,255,255,.09);overflow:hidden}
+.sidebar-usage-track span{display:block;height:100%;border-radius:10px;transition:width .25s ease}
+.sidebar-usage small{color:#858797;font-size:9px}
+.sidebar-action{width:100%;min-height:35px;display:flex;align-items:center;gap:10px;padding:0 10px;border:0;border-radius:8px;background:transparent;color:#b8bac8;text-align:right;font-size:11px;cursor:pointer;transition:background .18s,color .18s}
+.sidebar-action:hover{background:rgba(255,255,255,.055);color:#f1efff}
+.sidebar-action>span{width:17px;text-align:center;color:#aaa0ff;font-size:14px}
+.sidebar-action.sidebar-logout{color:#e58c93}
+.sidebar-action.sidebar-logout>span{color:#e58c93}
+.container.light .sidebar-usage{background:rgba(108,92,231,.045);border-color:rgba(108,92,231,.12)}
+.container.light .sidebar-usage-top{color:#39364d}
+.container.light .sidebar-usage small{color:#77798a}
+.container.light .sidebar-action{color:#55586a}
+.container.light .sidebar-action:hover{background:rgba(30,30,50,.05);color:#292b3b}
+@media(max-width:900px){.sidebar-account-section{margin-top:8px}}
+
+
+/* Light theme: accessible contrast for chat messages */
+.container.light .bubble-ai,
+.container.light .bubble-ai-light {
+  background: #ffffff !important;
+  color: #202334 !important;
+  border: 1px solid #e1e3ec !important;
+}
+.container.light .bubble-user {
+  background: #e9e5ff !important;
+  color: #29234f !important;
+  border: 1px solid #c9c0ff !important;
+}
+.container.light .bubble-ai *,
+.container.light .bubble-ai-light *,
+.container.light .bubble-user * {
+  color: inherit;
+}
+.container.light .bubble-ai a,
+.container.light .bubble-ai-light a,
+.container.light .bubble-user a {
+  color: #5142b5 !important;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.container.light .bubble-ai pre,
+.container.light .bubble-ai-light pre,
+.container.light .bubble-user pre {
+  background: #202334 !important;
+  color: #f4f5fb !important;
+  border: 1px solid #34384b;
+  border-radius: 10px;
+  padding: 12px;
+  overflow-x: auto;
+}
+.container.light .bubble-ai pre *,
+.container.light .bubble-ai-light pre *,
+.container.light .bubble-user pre * {
+  color: #f4f5fb !important;
+}
+.container.light .bubble-ai :not(pre) > code,
+.container.light .bubble-ai-light :not(pre) > code,
+.container.light .bubble-user :not(pre) > code {
+  background: #eeeff5;
+  color: #29234f !important;
+  border-radius: 5px;
+  padding: 2px 5px;
+}
+.container.light .copy-msg-btn { color: #555a70; }
