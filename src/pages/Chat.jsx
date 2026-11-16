@@ -13,7 +13,6 @@ import "../App.css";
 
 import ChatHeader              from "../components/chat/ChatHeader";
 import ChatTokenBar            from "../components/chat/ChatTokenBar";
-import ChatMenu                from "../components/chat/ChatMenu";
 import ChatHistory             from "../components/chat/ChatHistory";
 import ChatMessages            from "../components/chat/ChatMessages";
 import ChatSettings            from "../components/chat/ChatSettings";
@@ -76,7 +75,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [isLoaded, setIsLoaded]         = useState(false);
   const [currentUser, setCurrentUser]   = useState(user);
   const [showHistory, setShowHistory]   = useState(false);
-  const [showMenu, setShowMenu]         = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sendMode, setSendMode]         = useState("fast");
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -759,7 +757,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
 
-      {/* ── Header + Menu ── */}
+      {/* ── Unified workspace sidebar + header ── */}
       <div className="chat-shell">
         <ChatHistory
           chats={chatsHook.allChats}
@@ -769,6 +767,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
           onDeleteChat={chatsHook.deleteChat}
           onNewChat={() => { chatsHook.newChat(); setShowHistory(false); }}
           isOpen={showHistory}
+          user={currentUser}
+          isDark={isDark}
+          onOpenSettings={() => { setShowSettings(true); setShowHistory(false); }}
+          onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          onLogout={onLogout}
         />
         <main className="chat-workspace">
         <div className="chat-topbar-wrap">
@@ -776,24 +779,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
           user={currentUser}
           loading={loading}
           isAdmin={isAdmin}
-          showMenu={showMenu}
-          onToggleMenu={() => setShowMenu(!showMenu)}
           onToggleHistory={() => setShowHistory((v) => !v)}
           onNewChat={chatsHook.newChat}
           onGoToAdmin={() => (window.location.href = "/admin")}
         />
 
-        {showMenu && (
-          <ChatMenu
-            user={currentUser}
-            isDark={isDark}
-            onClose={() => setShowMenu(false)}
-            onOpenSettings={() => { setShowSettings(true); setShowMenu(false); }}
-            onOpenHistory={() => { setShowHistory(!showHistory); setShowMenu(false); }}
-            onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-            onLogout={onLogout}
-          />
-        )}
       </div>
 
       {/* ── Token Bar ── */}
