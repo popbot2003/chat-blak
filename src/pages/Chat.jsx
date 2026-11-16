@@ -1,34 +1,35 @@
 // ============================================
-// Chat.jsx — نسخة v16.0 (النهائية)
-// ✅ useFileUpload يدير attachedFiles بنفسه
-// ✅ ChatInput يعرض الملفات دائماً
-// ✅ شريط تقدم دائري
+// Chat.jsx — بلاك 🖤 v17.0
+// ✅ نظام الذاكرة الجديد
+// ✅ Sliding Window بدل summarizeOldMessages
+// ✅ DuckDuckGo بس لما يُطلب
+// ✅ Cache لفحص is_blocked
+// ✅ LoadingScreen بدل inline loading
+// ✅ صفر inline styles
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import "../App.css";
 
-import ChatHeader from "../components/chat/ChatHeader";
-import ChatTokenBar from "../components/chat/ChatTokenBar";
-import ChatMenu from "../components/chat/ChatMenu";
-import ChatHistory from "../components/chat/ChatHistory";
-import ChatMessages from "../components/chat/ChatMessages";
-import ChatSettings from "../components/chat/ChatSettings";
-import ChatInput from "../components/chat/ChatInput";
+import ChatHeader              from "../components/chat/ChatHeader";
+import ChatTokenBar            from "../components/chat/ChatTokenBar";
+import ChatMenu                from "../components/chat/ChatMenu";
+import ChatHistory             from "../components/chat/ChatHistory";
+import ChatMessages            from "../components/chat/ChatMessages";
+import ChatSettings            from "../components/chat/ChatSettings";
+import ChatInput               from "../components/chat/ChatInput";
 import ActiveTasksNotification from "../components/chat/ActiveTasksNotification";
+import LoadingScreen           from "../components/LoadingScreen";
 
 import { supabase } from "../lib/supabase";
 import {
   GROQ_MODEL,
-  GROQ_FAST_MODEL,
   GROQ_MAX_TOKENS,
   GROQ_TEMPERATURE,
 } from "../config/constants";
+import { getPersonalityPrompt } from "../config/personalities";
 import {
-  getChatSystemPrompt,
-  SUMMARIZE_SYSTEM_PROMPT,
-} from "../config/prompts";
-import {
+  needsWebSearch,
   searchDuckDuckGo,
   cleanResponse,
   showToast,
@@ -37,83 +38,99 @@ import {
   detectPageRange,
   detectSectionRequest,
   buildFileContextCard,
+  buildContextWindow,
+  checkIsBlocked,
+  loadMemories,
+  extractAndSaveMemory,
 } from "../utils/chatHelpers";
-import { copyToClipboard } from "../utils/helpers";
+import { copyToClipboard }   from "../utils/helpers";
 import { smartDetectIntent } from "../utils/intentDetection";
 import { checkUserDailyLimit } from "../utils/validators";
 
 // ─── Hooks ───
-import { useFileUpload } from "../hooks/useFileUpload";
+import { useFileUpload }    from "../hooks/useFileUpload";
 import { usePdfProcessing } from "../hooks/usePdfProcessing";
-import { useLongForm } from "../hooks/useLongForm";
-import { useTasks } from "../hooks/useTasks";
-import { useChats } from "../hooks/useChats";
+import { useLongForm }      from "../hooks/useLongForm";
+import { useTasks }         from "../hooks/useTasks";
+import { useChats }         from "../hooks/useChats";
+
 
 export default function Chat({ user, onLogout, isAdmin }) {
+
   // ═══════════════════════════════════════════
   // 1. State
   // ═══════════════════════════════════════════
+
   const [messages, setMessages] = useState([
     {
-      role: "assistant",
-      content:
-        "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎",
-      id: Date.now(),
+      role:    "assistant",
+      content: "أهلاً.. أنا بلاك 🖤\nاتكلم، أنا هنا. تقدر ترفع ملفات كمان 📎",
+      id:      Date.now(),
     },
   ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [input, setInput]               = useState("");
+  const [loading, setLoading]           = useState(false);
   const [streamingText, setStreamingText] = useState("");
-  const [copiedId, setCopiedId] = useState(null);
-  const [theme, setTheme] = useState("light");
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [currentUser, setCurrentUser] = useState(user);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
+  const [copiedId, setCopiedId]         = useState(null);
+  const [isLoaded, setIsLoaded]         = useState(false);
+  const [currentUser, setCurrentUser]   = useState(user);
+  const [showHistory, setShowHistory]   = useState(false);
+  const [showMenu, setShowMenu]         = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [sendMode, setSendMode] = useState("fast");
+  const [sendMode, setSendMode]         = useState("fast");
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [messageCount, setMessageCount] = useState(0);
+
+  // ✅ theme من localStorage — يمنع الـ flash
+  const [theme, setTheme] = useState(() => {
+    return localStorage.getItem("black-theme") || "dark";
+  });
+
+  // ✅ الذاكرة
+  const [memories, setMemories] = useState([]);
 
   const [currentChatId, setCurrentChatId] = useState(() => {
     return localStorage.getItem("black-last-chat-id") || null;
   });
 
   // ─── Refs ───
-  const bottomRef = useRef(null);
-  const inputRef = useRef(null);
-  const messagesRef = useRef(messages);
-  const currentUserRef = useRef(currentUser);
-  const currentChatIdRef = useRef(currentChatId);
+  const bottomRef         = useRef(null);
+  const inputRef          = useRef(null);
+  const messagesRef       = useRef(messages);
+  const currentUserRef    = useRef(currentUser);
+  const currentChatIdRef  = useRef(currentChatId);
   const abortControllerRef = useRef(null);
-  const autoScrollRef = useRef(true);
+  const autoScrollRef     = useRef(true);
 
-  useEffect(() => {
-    messagesRef.current = messages;
-  }, [messages]);
-  useEffect(() => {
-    currentUserRef.current = currentUser;
-  }, [currentUser]);
+  useEffect(() => { messagesRef.current    = messages;    }, [messages]);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+
   useEffect(() => {
     currentChatIdRef.current = currentChatId;
-    if (currentChatId) {
-      localStorage.setItem("black-last-chat-id", currentChatId);
-    } else {
-      localStorage.removeItem("black-last-chat-id");
-    }
+    if (currentChatId) localStorage.setItem("black-last-chat-id", currentChatId);
+    else               localStorage.removeItem("black-last-chat-id");
   }, [currentChatId]);
 
+  // ✅ حفظ الـ theme في localStorage
+  useEffect(() => {
+    localStorage.setItem("black-theme", theme);
+  }, [theme]);
+
+
   // ═══════════════════════════════════════════
-  // 2. Realtime
+  // 2. Realtime — دمج الـ channels في واحد
   // ═══════════════════════════════════════════
+
   useEffect(() => {
     const ch = supabase
-      .channel("user-updates")
+      .channel(`user-profile-${user.id}`)
       .on(
         "postgres_changes",
         {
-          event: "UPDATE",
+          event:  "UPDATE",
           schema: "public",
-          table: "profiles",
+          table:  "profiles",
           filter: `id=eq.${user.id}`,
         },
         (payload) => {
@@ -121,16 +138,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
           localStorage.setItem("black-user", JSON.stringify(payload.new));
         }
       )
-      .subscribe();
-    return () => ch.unsubscribe();
-  }, [user.id]);
-
-  useEffect(() => {
-    const ch = supabase
-      .channel("profile-delete")
       .on(
         "postgres_changes",
-        { event: "DELETE", schema: "public", table: "profiles" },
+        {
+          event:  "DELETE",
+          schema: "public",
+          table:  "profiles",
+        },
         (payload) => {
           if (payload.old.id === user.id) {
             showToast("⚠️ تم حذف حسابك بواسطة المدير.", "error");
@@ -141,21 +155,22 @@ export default function Chat({ user, onLogout, isAdmin }) {
         }
       )
       .subscribe();
+
     return () => ch.unsubscribe();
   }, [user.id]);
+
 
   // ═══════════════════════════════════════════
   // 3. Hooks
   // ═══════════════════════════════════════════
 
-  // 3.1 useFileUpload (يدير attachedFiles بنفسه)
   const fileUploadHook = useFileUpload({
-  user,
-  currentChatIdRef,
-  messagesRef,
-  setAllChats: () => {},
-});
-  // 3.2 useTasks
+    user,
+    currentChatIdRef,
+    messagesRef,
+    setAllChats: () => {},
+  });
+
   const tasksHook = useTasks({
     user,
     currentChatId,
@@ -168,21 +183,19 @@ export default function Chat({ user, onLogout, isAdmin }) {
     saveChatToSupabase: async () => {},
   });
 
-  // 3.3 useChats
   const chatsHook = useChats({
     user,
     messagesRef,
     setMessages,
     setInput,
-    setAttachedFiles: fileUploadHook.setAttachedFiles,
+    setAttachedFiles:  fileUploadHook.setAttachedFiles,
     setLongFormContext: null,
     currentChatId,
     setCurrentChatId,
     loadChatTasksForChat: tasksHook.loadChatTasksForChat,
-    restoreChatFiles: fileUploadHook.restoreChatFiles,
+    restoreChatFiles:    fileUploadHook.restoreChatFiles,
   });
 
-  // 3.4 useLongForm
   const longFormHook = useLongForm({
     user,
     currentUser,
@@ -194,36 +207,35 @@ export default function Chat({ user, onLogout, isAdmin }) {
     sortMessagesByTime,
   });
 
+
   // ═══════════════════════════════════════════
-  // 4. executeRequest
+  // 4. تحميل الذاكرة عند بداية كل محادثة
   // ═══════════════════════════════════════════
+
+  useEffect(() => {
+    if (!user?.id) return;
+    loadMemories(user.id).then((mems) => setMemories(mems));
+  }, [user.id]);
+
+
+  // ═══════════════════════════════════════════
+  // 5. executeRequest — محسّن
+  // ═══════════════════════════════════════════
+
   const executeRequest = useCallback(
     async (text, displayText) => {
-      try {
-        const { data: freshUser, error } = await supabase
-          .from("profiles")
-          .select("id, is_blocked")
-          .eq("id", user.id)
-          .single();
 
-        if (error || !freshUser) {
-          localStorage.removeItem("black-user");
-          window.location.reload();
-          return;
-        }
-        if (freshUser.is_blocked) {
-          showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
-          localStorage.removeItem("black-user");
-          setTimeout(() => window.location.reload(), 2000);
-          return;
-        }
-      } catch (err) {
-        console.warn("[Chat] تعذر التحقق من المستخدم:", err.message);
+      // ✅ فحص is_blocked مع Cache — بدل DB query في كل رسالة
+      const isBlocked = await checkIsBlocked(user.id);
+      if (isBlocked) {
+        showToast("⚠️ تم حظر حسابك بواسطة المدير.", "error");
+        localStorage.removeItem("black-user");
+        setTimeout(() => window.location.reload(), 2000);
+        return;
       }
 
       if (!currentChatIdRef.current) {
-        const newId = Date.now().toString();
-        setCurrentChatId(newId);
+        setCurrentChatId(Date.now().toString());
       }
 
       const limitCheck = checkUserDailyLimit(currentUserRef.current);
@@ -231,11 +243,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         setMessages((prev) =>
           sortMessagesByTime([
             ...prev,
-            {
-              role: "assistant",
-              content: limitCheck.reason,
-              id: Date.now(),
-            },
+            { role: "assistant", content: limitCheck.reason, id: Date.now() },
           ])
         );
         setLoading(false);
@@ -243,108 +251,78 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
 
       const addUserMessage = displayText !== null;
-      const shownText = displayText ?? text;
-
-      const userMsg = { role: "user", content: shownText, id: Date.now() };
+      const shownText      = displayText ?? text;
+      const userMsg        = { role: "user", content: shownText, id: Date.now() };
       const updatedMessages = addUserMessage
         ? [...messagesRef.current, userMsg]
         : messagesRef.current;
 
-      if (addUserMessage) {
-        setMessages(updatedMessages);
-      }
+      if (addUserMessage) setMessages(updatedMessages);
       setInput("");
 
+      // رفع الملفات المعلقة
       let filesForRequest = fileUploadHook.attachedFiles;
       if (fileUploadHook.attachedFiles.some((f) => !f.isUploaded && f.rawFile)) {
         try {
-          filesForRequest = await fileUploadHook.uploadPendingFiles(
-            currentChatIdRef.current
-          );
+          filesForRequest = await fileUploadHook.uploadPendingFiles(currentChatIdRef.current);
           fileUploadHook.setAttachedFiles(filesForRequest);
         } catch (err) {
-          console.warn("[Upload] خطأ في رفع الملفات:", err);
+          console.warn("[Upload] خطأ:", err);
         }
       }
 
       autoScrollRef.current = true;
       setShowScrollButton(false);
-
       setLoading(true);
       setStreamingText("");
 
       try {
+        // ✅ DuckDuckGo بس لما يُطلب — مش على كل رسالة
         let enhancedText = text;
-        const searchResult = await searchDuckDuckGo(text);
-        if (searchResult) {
-          enhancedText =
-            text +
-            "\n\n[نتائج البحث]:\n" +
-            searchResult +
-            "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
+        if (needsWebSearch(text)) {
+          const searchResult = await searchDuckDuckGo(text);
+          if (searchResult) {
+            enhancedText =
+              text +
+              "\n\n[نتائج البحث]:\n" +
+              searchResult +
+              "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
+          }
         }
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
 
-        const KEEP_FULL = 5;
-        const MAX_CHARS_PER_MSG = 500;
+        // ✅ Sliding Window — آخر 15 رسالة بدل كل التاريخ + summarize
+        const fileCard    = buildFileContextCard(filesForRequest);
+        const contextMsgs = buildContextWindow(
+          updatedMessages.filter((m) => m.type !== "task"),
+          enhancedText + fileCard
+        );
 
-        const allMsgs = updatedMessages
-          .filter((m) => m.type !== "task")
-          .slice(0, -1);
-        const recentMsgs = allMsgs.slice(-KEEP_FULL);
-        const oldMsgs = allMsgs.slice(0, -KEEP_FULL);
-
-        let summaryText = null;
-        if (oldMsgs.length > 0) {
-          summaryText = await summarizeOldMessages(oldMsgs, session);
-        }
-
-        const chatMessages = [];
-
-        recentMsgs
-          .filter((m) => m.role === "user" || m.role === "assistant")
-          .forEach((m) => {
-            chatMessages.push({
-              role: m.role,
-              content:
-                m.content.length > MAX_CHARS_PER_MSG
-                  ? m.content.slice(0, MAX_CHARS_PER_MSG) + "..."
-                  : m.content,
-            });
-          });
-
-        const fileCard = buildFileContextCard(filesForRequest);
+        // ✅ System prompt مع الذاكرة
+        const systemPrompt = getPersonalityPrompt(
+          currentUserRef.current?.personality || "blak",
+          currentUserRef.current?.gender      || "ولد",
+          memories
+        );
 
         abortControllerRef.current = new AbortController();
 
         const res = await fetch(
           "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
           {
-            method: "POST",
+            method:  "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${session?.access_token}`,
+              Authorization:  `Bearer ${session?.access_token}`,
             },
             signal: abortControllerRef.current.signal,
             body: JSON.stringify({
-              model: GROQ_MODEL,
-              max_tokens: GROQ_MAX_TOKENS,
-              temperature: GROQ_TEMPERATURE,
-              systemPrompt:
-                getChatSystemPrompt(
-                  currentUserRef.current?.personality,
-                  currentUserRef.current?.gender
-                ) +
-                (summaryText
-                  ? `\n\nملخص المحادثة السابقة: ${summaryText}`
-                  : ""),
-              messages: [
-                ...chatMessages,
-                { role: "user", content: enhancedText + fileCard },
-              ],
+              model:        GROQ_MODEL,
+              max_tokens:   GROQ_MAX_TOKENS,
+              temperature:  GROQ_TEMPERATURE,
+              systemPrompt,
+              messages:     contextMsgs,
             }),
           }
         );
@@ -361,21 +339,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
           ) {
             const retryAfter = Number(
               data.error?.retry_after_seconds ||
-                data.retry_after_seconds ||
-                0
+              data.retry_after_seconds || 0
             );
-
             showToast(
               retryAfter > 0
-                ? `⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول بعد ${retryAfter} ثانية.`
-                : "⏳ جميع مفاتيح API المتاحة مشغولة مؤقتًا. حاول مرة أخرى لاحقًا.",
+                ? `⏳ جميع مفاتيح API مشغولة. حاول بعد ${retryAfter} ثانية.`
+                : "⏳ جميع مفاتيح API مشغولة. حاول مرة أخرى.",
               "error"
             );
           }
-
-          throw new Error(
-            data.error?.message || data.error || `خطأ: ${res.status}`
-          );
+          throw new Error(data.error?.message || data.error || `خطأ: ${res.status}`);
         }
 
         const reply = cleanResponse(data.choices?.[0]?.message?.content || "");
@@ -389,29 +362,29 @@ export default function Chat({ user, onLogout, isAdmin }) {
         );
         setLoading(false);
         abortControllerRef.current = null;
+
+        // ✅ استخراج وحفظ الذاكرة — كل 3 رسائل فقط
+        const newCount = messageCount + 1;
+        setMessageCount(newCount);
+        extractAndSaveMemory(user.id, text, reply, newCount, session).then(() => {
+          // تحديث الذاكرة المحلية بعد الحفظ
+          loadMemories(user.id).then((mems) => setMemories(mems));
+        });
+
       } catch (err) {
         if (err.name === "AbortError") {
-          console.log("[Chat] تم إلغاء الطلب بواسطة المستخدم");
           setMessages((prev) =>
             sortMessagesByTime([
               ...prev,
-              {
-                role: "assistant",
-                content: "⏹️ تم إيقاف التوليد.",
-                id: Date.now(),
-              },
+              { role: "assistant", content: "⏹️ تم إيقاف التوليد.", id: Date.now() },
             ])
           );
         } else {
-          console.error("[Chat] خطأ في executeRequest:", err.message);
+          console.error("[Chat] خطأ:", err.message);
           setMessages((prev) =>
             sortMessagesByTime([
               ...prev,
-              {
-                role: "assistant",
-                content: "❌ حدث خطأ: " + err.message,
-                id: Date.now(),
-              },
+              { role: "assistant", content: "❌ حدث خطأ: " + err.message, id: Date.now() },
             ])
           );
         }
@@ -420,15 +393,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
         abortControllerRef.current = null;
       }
     },
-    [user.id, fileUploadHook.attachedFiles]
+    [user.id, fileUploadHook.attachedFiles, memories, messageCount]
   );
 
+
   // ═══════════════════════════════════════════
-  // 5. usePdfProcessing
+  // 6. usePdfProcessing
   // ═══════════════════════════════════════════
+
   const pdfHook = usePdfProcessing({
     user,
-    attachedFiles: fileUploadHook.attachedFiles,
+    attachedFiles:    fileUploadHook.attachedFiles,
     setAttachedFiles: fileUploadHook.setAttachedFiles,
     executeRequest,
     setMessages,
@@ -439,52 +414,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     messagesRef,
   });
 
-  // ═══════════════════════════════════════════
-  // 6. summarizeOldMessages
-  // ═══════════════════════════════════════════
-  async function summarizeOldMessages(oldMessages, session) {
-    if (!oldMessages || oldMessages.length === 0) return null;
-
-    const text = oldMessages
-      .map(
-        (m) =>
-          `${m.role === "user" ? "المستخدم" : "بلاك"}: ${m.content.slice(
-            0,
-            300
-          )}`
-      )
-      .join("\n");
-
-    try {
-      const res = await fetch(
-        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token}`,
-          },
-          body: JSON.stringify({
-            model: GROQ_FAST_MODEL,
-            max_tokens: 200,
-            temperature: 0.3,
-            systemPrompt: SUMMARIZE_SYSTEM_PROMPT,
-            messages: [{ role: "user", content: text }],
-          }),
-        }
-      );
-
-      if (!res.ok) return null;
-      const data = await res.json();
-      return data.choices?.[0]?.message?.content?.trim() || null;
-    } catch {
-      return null;
-    }
-  }
 
   // ═══════════════════════════════════════════
   // 7. refreshUserData
   // ═══════════════════════════════════════════
+
   const refreshUserData = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -498,13 +432,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
         localStorage.setItem("black-user", JSON.stringify(data));
       }
     } catch (err) {
-      console.error("[Chat] خطأ في تحديث بيانات المستخدم:", err.message);
+      console.error("[Chat] خطأ في تحديث البيانات:", err.message);
     }
   }, [user.id]);
+
 
   // ═══════════════════════════════════════════
   // 8. loadAllData
   // ═══════════════════════════════════════════
+
   useEffect(() => {
     (async () => {
       const chats = await chatsHook.loadChatsFromSupabase();
@@ -517,17 +453,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── التركيز التلقائي ───
+  // ─── Focus تلقائي ───
   useEffect(() => {
     if (!loading && !streamingText && isLoaded) {
-      const timer = setTimeout(() => {
-        inputRef.current?.focus();
-      }, 150);
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => inputRef.current?.focus(), 150);
+      return () => clearTimeout(t);
     }
   }, [loading, streamingText, isLoaded]);
 
-  // ─── التمرير التلقائي ───
+  // ─── Scroll تلقائي ───
   useEffect(() => {
     if (!autoScrollRef.current) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -535,8 +469,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   function handleMessagesScroll(e) {
     const el = e.target;
-    const distanceFromBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
 
     if (distanceFromBottom < 50) {
       if (!autoScrollRef.current) {
@@ -546,11 +479,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       return;
     }
 
-    if (distanceFromBottom > 100) {
-      if (autoScrollRef.current) {
-        autoScrollRef.current = false;
-        setShowScrollButton(true);
-      }
+    if (distanceFromBottom > 100 && autoScrollRef.current) {
+      autoScrollRef.current = false;
+      setShowScrollButton(true);
     }
   }
 
@@ -559,9 +490,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setShowScrollButton(false);
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }
-    // ═══════════════════════════════════════════
+
+
+  // ═══════════════════════════════════════════
   // 9. sendMessage
   // ═══════════════════════════════════════════
+
   async function sendMessage() {
     if (loading) return;
 
@@ -581,7 +515,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     const text = input.trim();
     if (!text && !fileUploadHook.attachedFiles.length) return;
 
-    // التحكم في الوضع السريع
+    // وضع الكتابة الطويلة
     if (longFormHook.longFormContext) {
       const lower = text.toLowerCase();
       if (lower === "ابدأ" || lower === "التالي" || lower === "next") {
@@ -596,11 +530,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
-    const hasOnlyFiles = !text && fileUploadHook.attachedFiles.length > 0;
+    const hasOnlyFiles  = !text && fileUploadHook.attachedFiles.length > 0;
     const hasTocRequest = isTocRequest(text);
 
     if (hasOnlyFiles && !hasTocRequest) {
-      showToast("⚠️ اكتب سؤالًا مع الملف، أو اطلب (اعرض الفهرس).", "info");
+      showToast("⚠️ اكتب سؤالاً مع الملف، أو اطلب (اعرض الفهرس).", "info");
       return;
     }
 
@@ -625,12 +559,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       const pageRange = detectPageRange(text);
       if (pageRange) {
-        await pdfHook.handlePdfPagesRequest(
-          pdfFile,
-          pageRange.startPage,
-          pageRange.endPage,
-          text
-        );
+        await pdfHook.handlePdfPagesRequest(pdfFile, pageRange.startPage, pageRange.endPage, text);
         return;
       }
 
@@ -641,22 +570,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
 
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           showToast("🔍 جاري تحليل طلبك...", "info");
           const intent = await smartDetectIntent(text, session);
-
           if (intent) {
             if (intent.action === "pages") {
-              await pdfHook.handlePdfPagesRequest(
-                pdfFile,
-                intent.start,
-                intent.end,
-                text
-              );
+              await pdfHook.handlePdfPagesRequest(pdfFile, intent.start, intent.end, text);
               return;
             }
             if (intent.action === "section") {
@@ -674,21 +594,20 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
     }
 
-    // الوضع السريع
+    // وضع الكتابة الطويلة التلقائي
     if (sendMode === "fast" && !hasPdf) {
       const isLongFormRequest =
-        /اكتب|لخص|أنشئ|اصنع|طور|صمم|article|essay|story|write|create/i.test(
-          text
-        ) && text.length > 100;
-
+        /اكتب|لخص|أنشئ|اصنع|طور|صمم|article|essay|story|write|create/i.test(text) &&
+        text.length > 100;
       if (isLongFormRequest) {
         await longFormHook.handleLongFormRequest(text);
         return;
       }
     }
 
+    // بناء نص الإرسال مع الملفات
     const MAX_FILE_CHARS = 100000;
-    let sendText = text;
+    let sendText    = text;
     let displayText = text;
 
     if (fileUploadHook.attachedFiles.length > 0) {
@@ -704,15 +623,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       const filesFullText = textFiles
         .map((f) => {
-          const content = f.content || "";
+          const content   = f.content || "";
           const truncated = content.length > MAX_FILE_CHARS;
-          const body = truncated
-            ? content.slice(0, MAX_FILE_CHARS) +
-              "\n\n... [تم اقتصار الملف: تجاوز 100,000 حرف]"
+          const body      = truncated
+            ? content.slice(0, MAX_FILE_CHARS) + "\n\n... [تم اقتصار الملف]"
             : content;
-          return `\n\n📎 ${f.name}${
-            truncated ? " ⚠️ (تم اقتصاره)" : ""
-          }\n\`\`\`\n${body}\n\`\`\``;
+          return `\n\n📎 ${f.name}${truncated ? " ⚠️ (تم اقتصاره)" : ""}\n\`\`\`\n${body}\n\`\`\``;
         })
         .join("");
 
@@ -726,22 +642,23 @@ export default function Chat({ user, onLogout, isAdmin }) {
           .map((f) => `"${f.name}" (${f.pageCount || "?"} صفحة)`)
           .join(", ");
         sendText +=
-          `\n\n[معلومات ملفات PDF المرفقة: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
-          `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات، ` +
-          `أو اسم فصل/درس.]`;
+          `\n\n[ملفات PDF: ${pdfInfo}. لم يُقرأ محتواها بعد. ` +
+          `اطلب من المستخدم كتابة (اعرض الفهرس)، أو تحديد أرقام صفحات، أو اسم فصل.]`;
       }
     }
 
     try {
       await executeRequest(sendText, displayText);
-    } catch (err) {
+    } catch {
       // الخطأ تم عرضه بالفعل
     }
   }
 
+
   // ═══════════════════════════════════════════
   // 10. handleStop
   // ═══════════════════════════════════════════
+
   function handleStop() {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -751,9 +668,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     setStreamingText("");
   }
 
+
   // ═══════════════════════════════════════════
   // 11. copyMessage
   // ═══════════════════════════════════════════
+
   function copyMessage(content, id) {
     copyToClipboard(content, () => {
       setCopiedId(id);
@@ -761,9 +680,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
     });
   }
 
+
   // ═══════════════════════════════════════════
   // 12. Settings
   // ═══════════════════════════════════════════
+
   async function handleSaveSettings({ profileUpdates, newPassword }) {
     if (Object.keys(profileUpdates).length) {
       const { error } = await supabase
@@ -774,9 +695,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
 
     if (newPassword) {
-      const { error: authError } = await supabase.auth.updateUser({
-        password: newPassword,
-      });
+      const { error: authError } = await supabase.auth.updateUser({ password: newPassword });
       if (authError) throw authError;
     }
 
@@ -787,25 +706,20 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }
 
   async function handleDeleteAccount() {
-    if (
-      !window.confirm(
-        "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
-      )
-    )
-      return;
+    if (!window.confirm(
+      "⚠️ تحذير: هذا الإجراء لا يمكن التراجع عنه!\n\nسيتم حذف:\n- حسابك بالكامل\n- جميع محادثاتك\n\nهل أنت متأكد؟"
+    )) return;
 
     try {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
 
       const res = await fetch(
         "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/delete-account",
         {
-          method: "POST",
+          method:  "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${session?.access_token}`,
+            Authorization:  `Bearer ${session?.access_token}`,
           },
         }
       );
@@ -821,30 +735,22 @@ export default function Chat({ user, onLogout, isAdmin }) {
     }
   }
 
+
   // ═══════════════════════════════════════════
   // 13. Render
   // ═══════════════════════════════════════════
-  const isDark = theme === "dark";
 
+  // ✅ LoadingScreen بدل inline loading
   if (!isLoaded) {
-    return (
-      <div
-        style={{
-          height: "100dvh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#f4f6fb",
-          color: "#1e1b4b",
-        }}
-      >
-        🖤 جاري التحميل...
-      </div>
-    );
+    return <LoadingScreen message="جاري التحميل..." />;
   }
+
+  const isDark = theme === "dark";
 
   return (
     <div className={`container ${isDark ? "dark" : "light"}`}>
+
+      {/* ── Header + Menu ── */}
       <div style={{ position: "relative" }}>
         <ChatHeader
           user={currentUser}
@@ -861,30 +767,25 @@ export default function Chat({ user, onLogout, isAdmin }) {
             user={currentUser}
             isDark={isDark}
             onClose={() => setShowMenu(false)}
-            onOpenSettings={() => {
-              setShowSettings(true);
-              setShowMenu(false);
-            }}
-            onOpenHistory={() => {
-              setShowHistory(!showHistory);
-              setShowMenu(false);
-            }}
-            onToggleTheme={() =>
-              setTheme((t) => (t === "dark" ? "light" : "dark"))
-            }
+            onOpenSettings={() => { setShowSettings(true); setShowMenu(false); }}
+            onOpenHistory={() => { setShowHistory(!showHistory); setShowMenu(false); }}
+            onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
             onLogout={onLogout}
           />
         )}
       </div>
 
+      {/* ── Token Bar ── */}
       <ChatTokenBar user={currentUser} />
 
+      {/* ── Active Tasks ── */}
       <ActiveTasksNotification
         tasks={tasksHook.allActiveTasks}
         currentChatId={currentChatId}
         onOpenTask={tasksHook.openTaskInChat}
       />
 
+      {/* ── History Panel ── */}
       {showHistory && (
         <ChatHistory
           chats={chatsHook.allChats}
@@ -895,6 +796,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         />
       )}
 
+      {/* ── Messages ── */}
       <ChatMessages
         messages={messages}
         streamingText={streamingText}
@@ -909,6 +811,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onScroll={handleMessagesScroll}
       />
 
+      {/* ── Input ── */}
       <ChatInput
         input={input}
         setInput={setInput}
@@ -920,12 +823,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onStop={handleStop}
         onFileUpload={fileUploadHook.handleFileUpload}
         onRemoveFile={fileUploadHook.removeFile}
-        onToggleMode={() =>
-          setSendMode((m) => (m === "fast" ? "task" : "fast"))
-        }
+        onToggleMode={() => setSendMode((m) => (m === "fast" ? "task" : "fast"))}
         uploadProgress={fileUploadHook.uploadProgress}
+        inputRef={inputRef}
       />
 
+      {/* ── Settings Modal ── */}
       {showSettings && (
         <ChatSettings
           user={currentUser}
@@ -934,6 +837,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           onDeleteAccount={handleDeleteAccount}
         />
       )}
+
     </div>
   );
 }
