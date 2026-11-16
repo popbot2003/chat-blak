@@ -1,50 +1,35 @@
-/* ============================================================
-   theme.css — نظام الألوان الاحترافي لمشروع بلاك 🖤
-   ============================================================ */
-
+/* BLAK — refined dark product system */
 :root {
-  /* Brand & Accent Colors - Sleek Tech Indigo/Violet */
-  --brand-primary:        #6366f1;   /* Indigo متطور */
-  --brand-primary-hover:  #4f46e5;   
-  --brand-primary-light:  #818cf8;   
-  --brand-primary-soft:   rgba(99, 102, 241, 0.12);  
-  --brand-primary-border: rgba(99, 102, 241, 0.25);  
-
-  --brand-accent:         #38bdf8;   /* Cyan ناعم للتفاصيل */
-  --brand-accent-soft:    rgba(56, 189, 248, 0.1);
-
-  --brand-gradient:       linear-gradient(135deg, #6366f1, #4f46e5);
-  --brand-gradient-soft:  linear-gradient(135deg, rgba(99,102,241,0.1), rgba(79,70,229,0.04));
-
-  /* Backgrounds - Deep Slate & Carbon */
-  --bg-main:        #090a0f;   /* خلفية عميقة وداكنة جداً */
-  --bg-surface:     #0f1117;   /* سطح فوق الخلفية */
-  --bg-card:        #13161f;   /* الكروت والهيدر والـ Sidebar */
-  --bg-elevated:    #1a1e29;   /* النوافذ العائمة modals, dropdowns */
-  --bg-input:       rgba(255, 255, 255, 0.04);  /* حقول الإدخال */
-  --bg-hover:       rgba(255, 255, 255, 0.06);  
-  --bg-active:      rgba(99, 102, 241, 0.15);   
-
-  /* Text Colors */
-  --text-primary:   #f8fafc;   
-  --text-secondary: #94a3b8;  
-  --text-muted:     #64748b;   
-  --text-inverse:   #090a0f;
-
-  /* Borders & Shadows */
-  --border:         rgba(255, 255, 255, 0.08);
-  --border-focus:   rgba(99, 102, 241, 0.5);
-  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.5);
-  --shadow-lg:      0 12px 32px rgba(0, 0, 0, 0.6);
-
-  /* Status Colors */
-  --success:        #10b981;
-  --warning:        #f59e0b;
-  --danger:         #ef4444;
-  --info:           #3b82f6;
-
-  /* Fonts */
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  color-scheme: dark;
+  --brand-primary: #8b7cff;
+  --brand-primary-hover: #a095ff;
+  --brand-primary-light: #b9b0ff;
+  --brand-primary-soft: rgba(139,124,255,.13);
+  --brand-primary-border: rgba(139,124,255,.28);
+  --brand-accent: #72d6cb;
+  --brand-accent-soft: rgba(114,214,203,.12);
+  --brand-gradient: linear-gradient(135deg,#a69aff 0%,#7666ed 100%);
+  --brand-gradient-soft: linear-gradient(135deg,rgba(139,124,255,.14),rgba(114,214,203,.04));
+  --bg-main: #0b0c10;
+  --bg-surface: #101218;
+  --bg-card: #151720;
+  --bg-elevated: #1b1e29;
+  --bg-input: rgba(255,255,255,.045);
+  --bg-hover: rgba(255,255,255,.055);
+  --bg-active: rgba(139,124,255,.15);
+  --text-primary: #f3f3f7;
+  --text-secondary: #a1a3b2;
+  --text-muted: #707383;
+  --text-inverse: #0b0c10;
+  --border: rgba(255,255,255,.075);
+  --border-focus: rgba(139,124,255,.58);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,.18);
+  --shadow-md: 0 12px 32px rgba(0,0,0,.28);
+  --shadow-lg: 0 24px 70px rgba(0,0,0,.42);
+  --success: #65c7a5;
+  --warning: #e8b76b;
+  --danger: #ef777f;
+  --info: #7da9ed;
+  --font-sans: 'IBM Plex Sans Arabic','Cairo',Inter,system-ui,sans-serif;
+  --font-mono: 'JetBrains Mono',monospace;
 }
