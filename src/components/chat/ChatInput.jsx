@@ -206,7 +206,7 @@ export default function ChatInput({
           title={isTaskMode ? "التبديل إلى رد سريع" : "التبديل إلى مهمة"}
           disabled={loading}
         >
-          {isTaskMode ? "📋 مهمة" : "💬 رد"}
+          {isTaskMode ? "مهمة" : "محادثة"}
         </button>
 
         <textarea

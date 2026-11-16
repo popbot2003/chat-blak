@@ -15,7 +15,7 @@ export default function ChatHeader({
   return (
     <div className="header">
       <div className="header-left">
-        <div className="avatar">🖤</div>
+        <div className="avatar" aria-label="BLAK">B.</div>
         <div>
           <div className="header-name">بلاك</div>
           <div className="header-status">
@@ -50,7 +50,7 @@ export default function ChatHeader({
           className="header-btn"
           style={{ fontSize: "22px" }}
         >
-          {showMenu ? "✕" : "☰"}
+          {showMenu ? "×" : "☰"}
         </button>
       </div>
     </div>
