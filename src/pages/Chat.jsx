@@ -196,6 +196,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
     restoreChatFiles:    fileUploadHook.restoreChatFiles,
   });
 
+  // ✅ ref للـ triggerAutoSave — نستخدمه داخل executeRequest
+  const triggerAutoSaveRef = useRef(null);
+  useEffect(() => {
+    triggerAutoSaveRef.current = chatsHook.triggerAutoSave;
+  }, [chatsHook.triggerAutoSave]);
+
   const longFormHook = useLongForm({
     user,
     currentUser,
@@ -362,6 +368,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
         );
         setLoading(false);
         abortControllerRef.current = null;
+
+        // ✅ حفظ المحادثة تلقائياً بعد كل رد ناجح
+        triggerAutoSaveRef.current?.();
 
         // ✅ استخراج وحفظ الذاكرة — كل 3 رسائل فقط
         const newCount = messageCount + 1;
