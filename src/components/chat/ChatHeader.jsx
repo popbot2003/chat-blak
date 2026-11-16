@@ -9,19 +9,18 @@ export default function ChatHeader({
   isAdmin,
   showMenu,
   onToggleMenu,
+  onToggleHistory,
   onNewChat,
   onGoToAdmin,
 }) {
   return (
     <div className="header">
       <div className="header-left">
+        <button className="header-btn sidebar-toggle" onClick={onToggleHistory} title="سجل المحادثات" aria-label="سجل المحادثات">☰</button>
         <div className="avatar" aria-label="BLAK">B.</div>
-        <div>
-          <div className="header-name">بلاك</div>
-          <div className="header-status">
-            <span className="status-dot" />
-            {loading ? "بيكتب..." : "متصل"}
-          </div>
+        <div className="brand-lockup">
+          <div className="header-name">BLAK <span className="brand-ar">بلاك</span></div>
+          <div className="header-status"><span className="status-dot" />{loading ? "يكتب الآن" : "مساعدك الذكي"}</div>
         </div>
       </div>
 
@@ -39,16 +38,17 @@ export default function ChatHeader({
         <button
           onClick={onNewChat}
           className="header-btn"
-          style={{ fontSize: "20px" }}
           title="محادثة جديدة"
+          aria-label="محادثة جديدة"
         >
-          ➕
+          ＋
         </button>
 
         <button
           onClick={onToggleMenu}
           className="header-btn"
           style={{ fontSize: "22px" }}
+          aria-label="القائمة"
         >
           {showMenu ? "×" : "☰"}
         </button>

@@ -86,7 +86,7 @@ export default function ChatInput({
   };
 
   return (
-    <>
+    <div className="composer-wrap">
       {/* ✅ عرض الملفات دائماً (إذا كانت موجودة) */}
       {attachedFiles.length > 0 && (
         <div
@@ -245,6 +245,7 @@ export default function ChatInput({
           {loading ? "⏹️" : "↑"}
         </button>
       </div>
-    </>
+      <div className="composer-footnote" dir="rtl"><span>✦</span> قد يخطئ BLAK أحياناً؛ راجع المعلومات المهمة. <span className="composer-shortcut">Enter للإرسال · Shift + Enter لسطر جديد</span></div>
+    </div>
   );
 }

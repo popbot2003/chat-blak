@@ -10,6 +10,8 @@ import TaskMessage from "./TaskMessage";
 
 export default function ChatMessages({
   messages,
+  isWelcome = false,
+  onPrompt,
   tasks = [],
   streamingText,
   loading,
@@ -24,7 +26,20 @@ export default function ChatMessages({
   onScroll,
 }) {
   return (
-    <div className="messages" onScroll={onScroll}>
+    <div className={`messages ${isWelcome ? "messages-welcome" : ""}`} onScroll={onScroll}>
+      {isWelcome && <section className="welcome-screen" dir="rtl">
+        <div className="welcome-mark"><span>B.</span><i /></div>
+        <div className="welcome-eyebrow">مساحة تفكيرك تبدأ من هنا</div>
+        <h1>أهلاً بك في <em>BLAK</em></h1>
+        <p>اسأل، استكشف، أنشئ، وحوّل أفكارك إلى واقع.<br/>أنا هنا لمساعدتك في كل خطوة.</p>
+        <div className="prompt-grid">
+          <button onClick={() => onPrompt?.("ساعدني في ابتكار فكرة مشروع جديدة") }><span>✦</span><strong>ابتكر فكرة جديدة</strong><small>حوّل فكرة بسيطة إلى خطة واضحة</small></button>
+          <button onClick={() => onPrompt?.("اشرح لي موضوعاً معقداً بطريقة مبسطة") }><span>⌘</span><strong>افهم موضوعاً معقداً</strong><small>شرح مبسط مع أمثلة عملية</small></button>
+          <button onClick={() => onPrompt?.("اكتب لي مسودة احترافية أستطيع تطويرها") }><span>✎</span><strong>اكتب شيئاً مميزاً</strong><small>رسائل ومقالات وأفكار إبداعية</small></button>
+          <button onClick={() => onPrompt?.("حلل هذا الكود واقترح تحسينات عليه") }><span>⌁</span><strong>طوّر مشروعك</strong><small>برمجة وتحليل وحلول تقنية</small></button>
+        </div>
+      </section>}
+      {!isWelcome && <>
       {/* الرسائل العادية + المهام + النتائج */}
       {messages.map((msg) => {
         // رسالة مهمة نشطة → كارت
@@ -141,6 +156,7 @@ export default function ChatMessages({
           ⬇️
         </button>
       )}
+      </>}
     </div>
   );
 }
