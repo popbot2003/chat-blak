@@ -124,7 +124,8 @@ body{overflow:hidden}button,textarea,input{font:inherit}button{color:inherit}but
 @keyframes welcome-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @media(max-width:900px){.app-sidebar{flex-basis:245px;width:245px!important;}}
 @media(max-width:700px){
-  .chat-shell{display:block;}
+  .chat-shell{display:flex;flex-direction:column;min-height:0;}
+  .chat-workspace{flex:1 1 auto;width:100%;min-height:0;height:100%;}
   .app-sidebar{position:fixed!important;top:0!important;right:0!important;bottom:0!important;width:min(310px,86vw)!important;max-width:86vw!important;z-index:402!important;transform:translateX(105%);transition:transform .25s ease;box-shadow:-20px 0 55px rgba(0,0,0,.3)!important;}
   .app-sidebar.sidebar-open{transform:translateX(0);}
   .sidebar-close{display:grid;place-items:center;margin-right:auto;width:29px;height:29px;border:1px solid rgba(255,255,255,.1);border-radius:8px;background:transparent;color:#aaa;font-size:19px;}
