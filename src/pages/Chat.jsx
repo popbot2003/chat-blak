@@ -760,13 +760,25 @@ export default function Chat({ user, onLogout, isAdmin }) {
     <div className={`container ${isDark ? "dark" : "light"}`}>
 
       {/* ── Header + Menu ── */}
-      <div style={{ position: "relative" }}>
+      <div className="chat-shell">
+        <ChatHistory
+          chats={chatsHook.allChats}
+          currentChatId={currentChatId}
+          onClose={() => setShowHistory(false)}
+          onOpenChat={(id) => { chatsHook.openChat(id); setShowHistory(false); }}
+          onDeleteChat={chatsHook.deleteChat}
+          onNewChat={() => { chatsHook.newChat(); setShowHistory(false); }}
+          isOpen={showHistory}
+        />
+        <main className="chat-workspace">
+        <div className="chat-topbar-wrap">
         <ChatHeader
           user={currentUser}
           loading={loading}
           isAdmin={isAdmin}
           showMenu={showMenu}
           onToggleMenu={() => setShowMenu(!showMenu)}
+          onToggleHistory={() => setShowHistory((v) => !v)}
           onNewChat={chatsHook.newChat}
           onGoToAdmin={() => (window.location.href = "/admin")}
         />
@@ -794,20 +806,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
         onOpenTask={tasksHook.openTaskInChat}
       />
 
-      {/* ── History Panel ── */}
-      {showHistory && (
-        <ChatHistory
-          chats={chatsHook.allChats}
-          currentChatId={currentChatId}
-          onClose={() => setShowHistory(false)}
-          onOpenChat={chatsHook.openChat}
-          onDeleteChat={chatsHook.deleteChat}
-        />
-      )}
-
       {/* ── Messages ── */}
       <ChatMessages
         messages={messages}
+        isWelcome={messages.length === 1 && messages[0]?.role === "assistant" && /أهلاً|محادثة جديدة/.test(messages[0]?.content || "")}
+        onPrompt={(prompt) => setInput(prompt)}
         streamingText={streamingText}
         loading={loading}
         isDark={isDark}
@@ -846,7 +849,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
           onDeleteAccount={handleDeleteAccount}
         />
       )}
-
+        </main>
+      </div>
     </div>
   );
 }
