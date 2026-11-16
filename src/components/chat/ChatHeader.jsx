@@ -7,8 +7,6 @@ export default function ChatHeader({
   user,
   loading,
   isAdmin,
-  showMenu,
-  onToggleMenu,
   onToggleHistory,
   onNewChat,
   onGoToAdmin,
@@ -44,14 +42,6 @@ export default function ChatHeader({
           ＋
         </button>
 
-        <button
-          onClick={onToggleMenu}
-          className="header-btn"
-          style={{ fontSize: "22px" }}
-          aria-label="القائمة"
-        >
-          {showMenu ? "×" : "☰"}
-        </button>
       </div>
     </div>
   );
