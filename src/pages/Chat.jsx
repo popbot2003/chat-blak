@@ -769,6 +769,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
           isOpen={showHistory}
           user={currentUser}
           isDark={isDark}
+          isAdmin={isAdmin}
+          onGoToAdmin={() => { window.location.href = "/admin"; }}
           onOpenSettings={() => { setShowSettings(true); setShowHistory(false); }}
           onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
           onLogout={onLogout}
@@ -778,10 +780,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
         <ChatHeader
           user={currentUser}
           loading={loading}
-          isAdmin={isAdmin}
           onToggleHistory={() => setShowHistory((v) => !v)}
           onNewChat={chatsHook.newChat}
-          onGoToAdmin={() => (window.location.href = "/admin")}
         />
 
       </div>

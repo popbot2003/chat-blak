@@ -691,7 +691,13 @@ export default function Admin({ user, onLogout }) {
       style={{
         background: theme.bg,
         color: theme.text,
+        height: "100dvh",
         minHeight: "100vh",
+        overflowY: "auto",
+        overflowX: "hidden",
+        WebkitOverflowScrolling: "touch",
+        overscrollBehaviorY: "contain",
+        boxSizing: "border-box",
         transition: "background 0.3s, color 0.3s",
         fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif",
         direction: "rtl",
