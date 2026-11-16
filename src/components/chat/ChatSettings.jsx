@@ -1,6 +1,5 @@
 // ============================================
-// ChatSettings.jsx
-// مودال الإعدادات (اسم + كلمة مرور + حذف حساب)
+// ChatSettings.jsx — صفحة إعدادات مستقلة 🖤
 // ============================================
 
 import { useState } from "react";
@@ -10,19 +9,24 @@ export default function ChatSettings({
   onClose,
   onSave,
   onDeleteAccount,
+  theme,
+  onToggleTheme,
 }) {
   const [editName, setEditName] = useState(user?.name || "");
+  const [editPersonality, setEditPersonality] = useState(user?.personality || "blak");
+  const [editGender, setEditGender] = useState(user?.gender || "ولد");
   const [editNewPassword, setEditNewPassword] = useState("");
   const [editConfirmPassword, setEditConfirmPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [activeTab, setActiveTab] = useState("general"); // general, security, appearance
 
   async function handleSave() {
     setError("");
 
-    if (editNewPassword !== editConfirmPassword) {
+    if (editNewPassword && editNewPassword !== editConfirmPassword) {
       setError("❌ كلمة المرور الجديدة غير متطابقة");
       return;
     }
@@ -33,6 +37,8 @@ export default function ChatSettings({
 
     const updates = {};
     if (editName && editName !== user?.name) updates.name = editName;
+    if (editPersonality !== user?.personality) updates.personality = editPersonality;
+    if (editGender !== user?.gender) updates.gender = editGender;
 
     if (!Object.keys(updates).length && !editNewPassword) {
       setError("❌ لا توجد تغييرات للحفظ");
@@ -45,7 +51,7 @@ export default function ChatSettings({
         profileUpdates: updates,
         newPassword: editNewPassword || null,
       });
-      onClose();
+      showToast("✅ تم حفظ الإعدادات بنجاح");
     } catch (err) {
       setError("❌ " + err.message);
     } finally {
@@ -54,235 +60,203 @@ export default function ChatSettings({
   }
 
   return (
-    <div className="admin-modal">
-      <div className="admin-modal-content" style={{ maxWidth: "400px" }}>
-        <div className="admin-modal-head">
-          <h3>⚙️ إعدادات المستخدم</h3>
-          <button onClick={onClose} className="close-btn">
-            ✕
-          </button>
-        </div>
-
-        {error && (
-          <div
+    <div className="chat-settings-page animate-fade-in" style={{
+      position: "fixed",
+      inset: 0,
+      zIndex: 1000,
+      background: theme === "dark" ? "#0f0f13" : "#f8f9fa",
+      color: theme === "dark" ? "#f1f1f1" : "#1a1a1a",
+      display: "flex",
+      flexDirection: "column",
+      overflowY: "auto",
+      padding: "24px",
+    }}>
+      {/* رأس الصفحة مع زر العودة */}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        borderBottom: "1px solid rgba(255,255,255,0.1)",
+        paddingBottom: "16px",
+        marginBottom: "24px",
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <button
+            onClick={onClose}
             style={{
-              background: "rgba(248,113,113,0.1)",
-              color: "#f87171",
-              padding: "10px",
+              background: "rgba(255,255,255,0.08)",
+              border: "none",
+              color: "inherit",
+              padding: "8px 16px",
               borderRadius: "8px",
-              marginBottom: "15px",
-              fontSize: "13px",
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* البريد الإلكتروني (للقراءة فقط) */}
-        <div style={{ marginBottom: "15px" }}>
-          <label
-            style={{
-              fontSize: "12px",
-              opacity: 0.7,
-              display: "block",
-              marginBottom: "5px",
-            }}
-          >
-            📧 البريد الإلكتروني
-          </label>
-          <div
-            style={{
-              padding: "12px",
-              background: "rgba(255,255,255,0.05)",
-              borderRadius: "10px",
-              fontSize: "14px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              color: "#a29bfe",
-            }}
-          >
-            {user?.email}
-          </div>
-          <div
-            style={{
-              fontSize: "10px",
-              opacity: 0.5,
-              marginTop: "4px",
-            }}
-          >
-            لا يمكن تغيير البريد الإلكتروني
-          </div>
-        </div>
-
-        {/* الاسم */}
-        <div style={{ marginBottom: "15px" }}>
-          <label
-            style={{
-              fontSize: "12px",
-              opacity: 0.7,
-              display: "block",
-              marginBottom: "5px",
-            }}
-          >
-            👤 الاسم
-          </label>
-          <input
-            type="text"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            placeholder="الاسم"
-            style={{
-              width: "100%",
-              padding: "12px",
-              borderRadius: "10px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
-              color: "#e0e0e0",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          />
-        </div>
-
-        {/* كلمة المرور الجديدة */}
-        <div
-          style={{
-            position: "relative",
-            marginBottom: "15px",
-          }}
-        >
-          <label
-            style={{
-              fontSize: "12px",
-              opacity: 0.7,
-              display: "block",
-              marginBottom: "5px",
-            }}
-          >
-            🔑 كلمة المرور الجديدة (اختياري)
-          </label>
-          <input
-            type={showNewPassword ? "text" : "password"}
-            value={editNewPassword}
-            onChange={(e) => setEditNewPassword(e.target.value)}
-            placeholder="********"
-            style={{
-              width: "100%",
-              padding: "12px",
-              paddingLeft: "45px",
-              borderRadius: "10px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
-              color: "#e0e0e0",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setShowNewPassword(!showNewPassword)}
-            style={{
-              position: "absolute",
-              left: "10px",
-              bottom: "8px",
-              background: "transparent",
-              border: "none",
               cursor: "pointer",
-              fontSize: "18px",
-              color: "#a29bfe",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
             }}
           >
-            {showNewPassword ? "🙈" : "👁️"}
+            ← العودة للشات
           </button>
+          <h2 style={{ fontSize: "20px", fontWeight: "bold" }}>⚙️ إعدادات المنصة</h2>
         </div>
-
-        {/* تأكيد كلمة المرور */}
-        <div
-          style={{
-            position: "relative",
-            marginBottom: "20px",
-          }}
-        >
-          <label
-            style={{
-              fontSize: "12px",
-              opacity: 0.7,
-              display: "block",
-              marginBottom: "5px",
-            }}
-          >
-            ✓ تأكيد كلمة المرور الجديدة
-          </label>
-          <input
-            type={showConfirmPassword ? "text" : "password"}
-            value={editConfirmPassword}
-            onChange={(e) => setEditConfirmPassword(e.target.value)}
-            placeholder="********"
-            style={{
-              width: "100%",
-              padding: "12px",
-              paddingLeft: "45px",
-              borderRadius: "10px",
-              border: "1px solid rgba(255,255,255,0.1)",
-              background: "rgba(255,255,255,0.05)",
-              color: "#e0e0e0",
-              fontSize: "14px",
-              outline: "none",
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            style={{
-              position: "absolute",
-              left: "10px",
-              bottom: "8px",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              fontSize: "18px",
-              color: "#a29bfe",
-            }}
-          >
-            {showConfirmPassword ? "🙈" : "👁️"}
-          </button>
-        </div>
-
-        {/* الأزرار */}
-        <div
-          className="admin-modal-actions"
-          style={{ gap: "10px", marginBottom: "15px" }}
-        >
-          <button
-            onClick={handleSave}
-            className="admin-modal-save-btn"
-            disabled={loading}
-          >
-            {loading ? "جاري الحفظ..." : "💾 حفظ التغييرات"}
-          </button>
-          <button onClick={onClose} className="admin-modal-cancel-btn">
-            إلغاء
-          </button>
-        </div>
-
-        {/* حذف الحساب */}
         <button
-          onClick={onDeleteAccount}
+          onClick={handleSave}
           disabled={loading}
           style={{
-            width: "100%",
-            padding: "12px",
-            background: "rgba(248,113,113,0.15)",
-            color: "#f87171",
-            border: "1px solid rgba(248,113,113,0.3)",
-            borderRadius: "10px",
+            background: "#6366f1",
+            color: "#fff",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: "8px",
             cursor: "pointer",
-            fontSize: "14px",
             fontWeight: "bold",
-            marginTop: "10px",
           }}
         >
-          🗑️ حذف الحساب (نهائياً)
+          {loading ? "جاري الحفظ..." : "💾 حفظ التغييرات"}
         </button>
+      </div>
+
+      {error && (
+        <div style={{
+          background: "rgba(248,113,113,0.15)",
+          color: "#f87171",
+          padding: "12px 16px",
+          borderRadius: "10px",
+          marginBottom: "20px",
+          border: "1px solid rgba(248,113,113,0.3)",
+        }}>
+          {error}
+        </div>
+      )}
+
+      {/* تخطيط الإعدادات (قائمة جانبية ومحتوى) */}
+      <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: "24px", maxWidth: "1000px", margin: "0 auto", width: "100%" }}>
+        
+        {/* القائمة الجانبية */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <button
+            onClick={() => setActiveTab("general")}
+            style={{
+              padding: "12px 16px",
+              textAlign: "right",
+              background: activeTab === "general" ? "rgba(99, 102, 241, 0.15)" : "transparent",
+              color: activeTab === "general" ? "#818cf8" : "inherit",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            👤 الملف الشخصي والشخصية
+          </button>
+          <button
+            onClick={() => setActiveTab("security")}
+            style={{
+              padding: "12px 16px",
+              textAlign: "right",
+              background: activeTab === "security" ? "rgba(99, 102, 241, 0.15)" : "transparent",
+              color: activeTab === "security" ? "#818cf8" : "inherit",
+              border: "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontWeight: "bold",
+            }}
+          >
+            🔒 الحساب والأمان
+          </button>
+        </div>
+
+        {/* محتوى الإعدادات */}
+        <div style={{ background: theme === "dark" ? "rgba(255,255,255,0.03)" : "#fff", padding: "24px", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.1)" }}>
+          
+          {activeTab === "general" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <h3>المعلومات العامة والشخصية</h3>
+              
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>البريد الإلكتروني (للقراءة فقط)</label>
+                <input
+                  type="text"
+                  value={user?.email || ""}
+                  disabled
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#888" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>الاسم</label>
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>شخصية المساعد</label>
+                <select
+                  value={editPersonality}
+                  onChange={(e) => setEditPersonality(e.target.value)}
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
+                >
+                  <option value="blak">بلاك الأساسية 🖤</option>
+                  <option value="friendly">ودود ومساعد</option>
+                  <option value="professional">رسمي ومحترف</option>
+                </select>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "security" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              <h3>الأمان وكلمة المرور</h3>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>كلمة المرور الجديدة</label>
+                <input
+                  type={showNewPassword ? "text" : "password"}
+                  value={editNewPassword}
+                  onChange={(e) => setEditNewPassword(e.target.value)}
+                  placeholder="********"
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>تأكيد كلمة المرور الجديدة</label>
+                <input
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={editConfirmPassword}
+                  onChange={(e) => setEditConfirmPassword(e.target.value)}
+                  placeholder="********"
+                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
+                />
+              </div>
+
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "20px", marginTop: "20px" }}>
+                <h4 style={{ color: "#f87171", marginBottom: "10px" }}>منطقة الخطر</h4>
+                <button
+                  onClick={onDeleteAccount}
+                  style={{
+                    background: "rgba(248,113,113,0.15)",
+                    color: "#f87171",
+                    border: "1px solid rgba(248,113,113,0.3)",
+                    padding: "12px 20px",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  🗑️ حذف الحساب نهائياً
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+
       </div>
     </div>
   );
