@@ -169,11 +169,16 @@ body{overflow:hidden}button,textarea,input{font:inherit}button{color:inherit}but
 .sidebar-action>span{width:17px;text-align:center;color:#aaa0ff;font-size:14px}
 .sidebar-action.sidebar-logout{color:#e58c93}
 .sidebar-action.sidebar-logout>span{color:#e58c93}
+.sidebar-action.sidebar-admin-action{min-height:38px;margin:3px 0;padding-inline:11px;background:rgba(139,124,255,.09);border:1px solid rgba(139,124,255,.18);color:#d9d4ff;font-weight:650}
+.sidebar-action.sidebar-admin-action>span{color:#b7adff}
+.sidebar-action.sidebar-admin-action:hover{background:rgba(139,124,255,.17);border-color:rgba(139,124,255,.32);color:#fff}
 .container.light .sidebar-usage{background:rgba(108,92,231,.045);border-color:rgba(108,92,231,.12)}
 .container.light .sidebar-usage-top{color:#39364d}
 .container.light .sidebar-usage small{color:#77798a}
 .container.light .sidebar-action{color:#55586a}
 .container.light .sidebar-action:hover{background:rgba(30,30,50,.05);color:#292b3b}
+.container.light .sidebar-action.sidebar-admin-action{background:rgba(108,92,231,.08);border-color:rgba(108,92,231,.2);color:#453a91}
+.container.light .sidebar-action.sidebar-admin-action>span{color:#5c50b7}
 @media(max-width:900px){.sidebar-account-section{margin-top:8px}}
 
 
