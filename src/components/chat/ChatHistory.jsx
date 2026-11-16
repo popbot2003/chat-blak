@@ -3,7 +3,7 @@ import { getEffectiveUsedToday } from "../../utils/validators";
 
 export default function ChatHistory({
   chats = [], currentChatId, onClose, onOpenChat, onDeleteChat, onNewChat,
-  isOpen = false, user, isDark = true, onOpenSettings, onToggleTheme, onLogout,
+  isOpen = false, user, isDark = true, isAdmin = false, onGoToAdmin, onOpenSettings, onToggleTheme, onLogout,
 }) {
   const usedToday = getEffectiveUsedToday(user);
   const dailyLimit = user?.daily_limit || 5000;
@@ -24,6 +24,16 @@ export default function ChatHistory({
         <button className="sidebar-new-chat" onClick={onNewChat}><span>＋</span> محادثة جديدة <kbd>⌘ K</kbd></button>
         <div className="sidebar-section-label">مساحة العمل</div>
         <div className="sidebar-nav-item active"><span>✧</span> المحادثة</div>
+        {isAdmin && (
+          <button
+            type="button"
+            className="sidebar-action sidebar-admin-action"
+            onClick={onGoToAdmin}
+            title="الانتقال إلى لوحة التحكم"
+          >
+            <span>▦</span> لوحة التحكم
+          </button>
+        )}
         <div className="sidebar-history-head"><span>سجل المحادثات</span><span>{chats.length}</span></div>
 
         <div className="sidebar-chat-list">

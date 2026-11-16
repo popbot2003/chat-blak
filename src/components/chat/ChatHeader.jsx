@@ -6,10 +6,8 @@
 export default function ChatHeader({
   user,
   loading,
-  isAdmin,
   onToggleHistory,
   onNewChat,
-  onGoToAdmin,
 }) {
   return (
     <div className="header">
@@ -23,16 +21,6 @@ export default function ChatHeader({
       </div>
 
       <div className="header-right">
-        {isAdmin && (
-          <button
-            onClick={onGoToAdmin}
-            className="header-btn"
-            style={{ fontSize: "14px" }}
-          >
-            ← لوحة التحكم
-          </button>
-        )}
-
         <button
           onClick={onNewChat}
           className="header-btn"
