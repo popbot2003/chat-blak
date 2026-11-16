@@ -31,7 +31,7 @@ export default function ChatMessages({
         if (msg.type === "task" && msg.task) {
           return (
             <div key={msg.id} className="msg-row msg-row-ai">
-              <div className="avatar-small">🖤</div>
+              <div className="avatar-small">B.</div>
               <div
                 className="msg-content-wrapper"
                 style={{ maxWidth: "95%", width: "100%" }}
@@ -51,7 +51,7 @@ export default function ChatMessages({
             }`}
           >
             {msg.role === "assistant" && (
-              <div className="avatar-small">🖤</div>
+              <div className="avatar-small">B.</div>
             )}
 
             <div className="msg-content-wrapper">
@@ -79,7 +79,7 @@ export default function ChatMessages({
             </div>
 
             {msg.role === "user" && (
-              <div className="avatar-small avatar-user">👤</div>
+              <div className="avatar-small avatar-user">أنت</div>
             )}
           </div>
         );
@@ -88,7 +88,7 @@ export default function ChatMessages({
       {/* النص المتدفق (streaming) */}
       {streamingText && (
         <div className="msg-row msg-row-ai">
-          <div className="avatar-small">🖤</div>
+          <div className="avatar-small">B.</div>
           <div
             className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
           >
@@ -100,7 +100,7 @@ export default function ChatMessages({
       {/* مؤشر الكتابة */}
       {loading && !streamingText && (
         <div className="msg-row msg-row-ai">
-          <div className="avatar-small">🖤</div>
+          <div className="avatar-small">B.</div>
           <div
             className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
           >
