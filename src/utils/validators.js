@@ -1,6 +1,6 @@
 // ============================================
 // validators.js
-// دوال التحقق من صحة البيانات
+// دوال التحقق من صحة البيانات (محدث)
 // ============================================
 
 /**
@@ -44,30 +44,24 @@ export function validateKeyValue(key) {
 
 /**
  * الاستهلاك اليومي الفعلي لأي عنصر (مستخدم أو مفتاح).
- * إذا كان آخر تصفير قبل اليوم، فالاستهلاك الحالي صفر، ويطابق ذلك منطق قاعدة البيانات.
- * التاريخ بتوقيت UTC لأن CURRENT_DATE في قاعدة البيانات بتوقيت UTC.
  */
 export function getEffectiveUsedToday(item) {
   if (!item) return 0;
-
   const used = Number(item.used_today) || 0;
-
-  // إذا لم يُعرف تاريخ التصفير نعرض القيمة كما هي
   if (!item.last_reset_date) return used;
-
   const todayUtc = new Date().toISOString().slice(0, 10);
-
   return item.last_reset_date < todayUtc ? 0 : used;
 }
 
 /**
  * التحقق من أن المستخدم لم يصل للحد اليومي
+ * ✅ معالجة استهلاك الأدمن ليكون غير محدود تماماً من الجذور
  */
 export function checkUserDailyLimit(user) {
   if (!user) return { canChat: false, reason: "مستخدم غير موجود" };
   if (user.is_blocked) return { canChat: false, reason: "تم حظر هذا الحساب" };
 
-  // المدير ليس له حد — يشات بلا قيود
+  // حساب الأدمن: استهلاك غير محدود تماماً ودون قيود
   if (user.role === "admin") {
     const used = getEffectiveUsedToday(user);
     return { canChat: true, used, limit: Infinity, percent: 0, isAdmin: true };
