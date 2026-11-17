@@ -805,6 +805,42 @@ export function useChats({
     };
   }, []);
 
+
+  // ==========================================
+  // إعادة تسمية محادثة
+  // ==========================================
+
+  const renameChat = useCallback(
+    async (chatId, nextTitle) => {
+      const title = String(nextTitle || "").trim().slice(0, 80);
+      if (!chatId || !title || !user?.id) return false;
+
+      try {
+        const { data, error } = await supabase
+          .from("chats")
+          .update({ title, updated_at: new Date().toISOString() })
+          .eq("id", chatId)
+          .eq("user_id", user.id)
+          .select("id")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error("لم يتم العثور على المحادثة");
+
+        setAllChats((previous) =>
+          previous.map((chat) => chat.id === chatId ? { ...chat, title } : chat)
+        );
+        showToast("تم تحديث اسم المحادثة");
+        return true;
+      } catch (error) {
+        console.error("[Chat] rename failed:", error.message);
+        showToast("تعذر إعادة تسمية المحادثة", "error");
+        return false;
+      }
+    },
+    [user?.id]
+  );
+
   // ==========================================
   // API
   // ==========================================
@@ -820,6 +856,7 @@ export function useChats({
     deleteChat,
     archiveChat,
     restoreChat,
+    renameChat,
     triggerAutoSave,
   };
 }
