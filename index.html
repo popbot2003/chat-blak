@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
   <head>
@@ -7,7 +8,7 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
 
-    <!-- ✅ Theme color — يتطابق مع --bg-main في theme.css -->
+    <!-- Theme color -->
     <meta name="theme-color" content="#0b0c10" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -19,7 +20,7 @@
       href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='24' fill='%23171923'/><text x='50' y='.69em' text-anchor='middle' font-family='Arial' font-weight='700' font-size='62' fill='%23b9b0ff'>B.</text></svg>"
     />
 
-    <!-- ✅ Fonts — preconnect أولاً لتسريع التحميل -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,13 +30,13 @@
 
     <title>BLAK — مساحة ذكاء اصطناعي</title>
 
-    <!--
-      ✅ Critical CSS — يمنع الـ flash تماماً قبل تحميل theme.css
-      الألوان هنا تطابق بالظبط --bg-main و --font-body في theme.css
-      لو غيرت الألوان في theme.css — غيّرها هنا برضو
-    -->
+    <!-- Critical CSS -->
     <style>
-      *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+      *, *::before, *::after {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
       html, body {
         width: 100%;
@@ -48,38 +49,38 @@
         -moz-osx-font-smoothing: grayscale;
       }
 
+      /* Root layout */
       #root {
+        display: block;
         width: 100%;
         height: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
+        min-width: 0;
+        min-height: 0;
+        overflow: hidden;
       }
 
-      /* ── Font variables مبكرة ── */
+      /* Font variables */
       :root {
         --font-heading: 'Cairo', 'IBM Plex Sans Arabic', system-ui, sans-serif;
-        --font-body:    'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif;
-        --font-mono:    'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+        --font-body: 'IBM Plex Sans Arabic', 'Cairo', system-ui, sans-serif;
+        --font-mono: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
       }
     </style>
 
-    <!--
-      ✅ Tesseract.js و pdf.js — تُحمَّل بـ defer
-      بدل تحميلها بشكل blocking — بيسرع الـ initial load بشكل كبير
-    -->
+    <!-- Tesseract.js -->
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"
     ></script>
 
+    <!-- PDF.js -->
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"
     ></script>
 
     <script>
-      // ✅ ننتظر تحميل pdf.js قبل ما نضبط الـ worker
+      // Initialize PDF.js worker after page load
       window.addEventListener("load", function () {
         try {
           if (window["pdfjs-dist/build/pdf"]) {
@@ -92,10 +93,11 @@
         }
       });
     </script>
-
   </head>
+
   <body>
     <div id="root"></div>
+
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
