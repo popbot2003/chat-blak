@@ -1,15 +1,15 @@
 /* BLAK — refined dark product system */
 :root {
   color-scheme: dark;
-  --brand-primary: #8b7cff;
-  --brand-primary-hover: #a095ff;
-  --brand-primary-light: #b9b0ff;
-  --brand-primary-soft: rgba(139,124,255,.13);
-  --brand-primary-border: rgba(139,124,255,.28);
+  --brand-primary: #5b8def;
+  --brand-primary-hover: #78a5f5;
+  --brand-primary-light: #a9c8ff;
+  --brand-primary-soft: rgba(91,141,239,.14);
+  --brand-primary-border: rgba(91,141,239,.30);
   --brand-accent: #72d6cb;
   --brand-accent-soft: rgba(114,214,203,.12);
-  --brand-gradient: linear-gradient(135deg,#a69aff 0%,#7666ed 100%);
-  --brand-gradient-soft: linear-gradient(135deg,rgba(139,124,255,.14),rgba(114,214,203,.04));
+  --brand-gradient: linear-gradient(135deg,#79a9f6 0%,#477fe0 100%);
+  --brand-gradient-soft: linear-gradient(135deg,rgba(91,141,239,.15),rgba(114,214,203,.04));
   --bg-main: #0b0c10;
   --bg-surface: #101218;
   --bg-card: #151720;
