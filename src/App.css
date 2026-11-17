@@ -29,8 +29,9 @@ body {
 /* ✅ قفل تمرير الخلفية عند فتح السايدبار */
 body.sidebar-is-open {
   overflow: hidden !important;
-  overscroll-behavior: none;
+  touch-action: none;
 }
+
 button,textarea,input {
   font: inherit;
 }
