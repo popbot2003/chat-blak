@@ -1,6 +1,6 @@
 /* =========================================================
    BLAK — Refined Dark Product System
-   ✅ نسخة مُصلحة لمشاكل التجوّب على الهاتف
+   ✅ النسخة النهائية المُصلحة لمشاكل التجوّب على الهاتف
    ========================================================= */
 
 *,*::before,*::after {
@@ -13,7 +13,8 @@ html,body,#root {
   width: 100%;
   height: 100%;
   min-height: 100%;
-  max-width: 100vw;              /* ✅ منع التسريب الأفقي */
+  max-width: 100%;               /* ✅ تم التعديل من 100vw لمنع التسريب */
+  overflow-x: hidden;            /* ✅ منع التمرير الأفقي نهائياً */
   background: var(--bg-main);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -82,7 +83,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 100vw;              /* ✅ */
+  max-width: 100%;               /* ✅ */
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
@@ -110,7 +111,7 @@ textarea:focus-visible {
     );
   background-size: 24px 24px;
   mask-image: linear-gradient(to bottom,black,transparent 72%);
-  -webkit-mask-image: linear-gradient(to bottom,black,transparent 72%); /* ✅ دعم Safari */
+  -webkit-mask-image: linear-gradient(to bottom,black,transparent 72%);
 }
 
 .container.light {
@@ -165,14 +166,14 @@ textarea:focus-visible {
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
-  flex-shrink: 0;                /* ✅ يمنع تصغير الهيدر */
+  flex-shrink: 0;
 }
 
 .header-left {
   display: flex;
   align-items: center;
   gap: 13px;
-  min-width: 0;                  /* ✅ */
+  min-width: 0;
 }
 
 .avatar {
@@ -219,7 +220,7 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;                /* ✅ */
+  flex-shrink: 0;
 }
 
 .header-btn {
@@ -256,7 +257,7 @@ textarea:focus-visible {
   border: 1px solid var(--border);
   border-radius: 12px;
   background: rgba(255,255,255,.025);
-  box-sizing: border-box;        /* ✅ */
+  box-sizing: border-box;
   flex-shrink: 0;
 }
 
@@ -291,16 +292,17 @@ textarea:focus-visible {
   flex: 1;
   min-height: 0;
   width: min(100%,980px);
-  max-width: 100vw;              /* ✅ */
+  max-width: 100%;
   margin: 0 auto;
   padding: 34px clamp(18px,5vw,60px) 30px;
   display: flex;
   flex-direction: column;
   gap: 24px;
   overflow-y: auto;
-  overflow-x: hidden;            /* ✅ منع التجوّب الأفقي */
+  overflow-x: hidden;
   overscroll-behavior: contain;
   scroll-behavior: smooth;
+  box-sizing: border-box;
 }
 
 .msg-row {
@@ -308,7 +310,7 @@ textarea:focus-visible {
   align-items: flex-start;
   gap: 12px;
   width: 100%;
-  min-width: 0;                  /* ✅ */
+  min-width: 0;
   animation: message-in .28s ease both;
 }
 
@@ -346,7 +348,7 @@ textarea:focus-visible {
   position: relative;
   max-width: min(78%,760px);
   min-width: 0;
-  overflow-wrap: anywhere;       /* ✅ يكسر النصوص الطويلة */
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -357,11 +359,10 @@ textarea:focus-visible {
   font-size: 14px;
   line-height: 1.9;
   overflow-wrap: anywhere;
-  word-break: break-word;        /* ✅ */
+  word-break: break-word;
   box-shadow: 0 5px 18px rgba(0,0,0,.07);
 }
 
-/* ✅ منع الأكواد الطويلة من توسيع الفقاعة */
 .bubble pre,
 .bubble code {
   max-width: 100%;
@@ -412,9 +413,10 @@ textarea:focus-visible {
   z-index: 10;
   display: flex;
   align-items: flex-end;
+  flex-wrap: nowrap; /* ✅ منع الأزرار من النزول لسطر جديد */
   gap: 9px;
   width: min(calc(100% - 36px),850px);
-  max-width: 100%;               /* ✅ */
+  max-width: 100%;
   margin: 0 auto 22px;
   padding: 11px 12px;
   border: 1px solid rgba(255,255,255,.12);
@@ -426,7 +428,7 @@ textarea:focus-visible {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   transition: border-color .2s,box-shadow .2s;
-  box-sizing: border-box;        /* ✅ */
+  box-sizing: border-box;
 }
 
 .input-area:focus-within {
@@ -458,7 +460,7 @@ textarea:focus-visible {
   color: #f3f3f7;
   font-size: 14px;
   line-height: 1.65;
-  overflow-wrap: anywhere;       /* ✅ */
+  overflow-wrap: anywhere;
 }
 
 .textarea::placeholder {
@@ -476,7 +478,7 @@ textarea:focus-visible {
   font-weight: 600;
   cursor: pointer;
   transition: .2s;
-  flex-shrink: 0;                /* ✅ */
+  flex-shrink: 0;
 }
 
 .mode-toggle-chat {
@@ -593,11 +595,11 @@ textarea:focus-visible {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 100vw;              /* ✅ */
+  max-width: 100%;
   direction: rtl;
   position: relative;
-  overflow: hidden;              /* ✅ */
-  gap: 0;                        /* ✅ */
+  overflow: hidden;
+  gap: 0;
 }
 
 .chat-workspace {
@@ -607,7 +609,7 @@ textarea:focus-visible {
   min-height: 0;
   flex-direction: column;
   position: relative;
-  overflow: hidden;              /* ✅ */
+  overflow: hidden;
 }
 
 .chat-topbar-wrap {
@@ -840,12 +842,12 @@ textarea:focus-visible {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  overflow-x: hidden;            /* ✅ */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
   padding: 0 1px;
-  overscroll-behavior: contain;  /* ✅ */
+  overscroll-behavior: contain;
 }
 
 .sidebar-empty {
@@ -993,7 +995,7 @@ textarea:focus-visible {
 
 .welcome-screen {
   width: min(100%,700px);
-  max-width: 100%;               /* ✅ */
+  max-width: 100%;
   margin: auto;
   display: flex;
   flex-direction: column;
@@ -1001,6 +1003,7 @@ textarea:focus-visible {
   text-align: center;
   padding: 24px 0 34px;
   animation: welcome-in .55s ease both;
+  box-sizing: border-box;
 }
 
 .welcome-mark {
@@ -1074,18 +1077,18 @@ textarea:focus-visible {
 
 .prompt-grid {
   width: min(100%,610px);
-  max-width: 100%;               /* ✅ */
+  max-width: 100%;
   display: grid;
   grid-template-columns: repeat(2,minmax(0,1fr));
   gap: 10px;
   margin-top: 30px;
-  box-sizing: border-box;        /* ✅ */
+  box-sizing: border-box;
 }
 
 .prompt-grid button {
   position: relative;
   min-height: 83px;
-  min-width: 0;                  /* ✅ */
+  min-width: 0;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -1102,7 +1105,7 @@ textarea:focus-visible {
   text-align: right;
   cursor: pointer;
   transition: transform .2s,border-color .2s,background .2s;
-  box-sizing: border-box;        /* ✅ */
+  box-sizing: border-box;
 }
 
 .prompt-grid button:hover {
@@ -1127,7 +1130,7 @@ textarea:focus-visible {
 .prompt-grid button small {
   font-size: 10px;
   color: #838696;
-  overflow-wrap: anywhere;       /* ✅ */
+  overflow-wrap: anywhere;
 }
 
 /* =========================================================
@@ -1192,16 +1195,16 @@ textarea:focus-visible {
   position: relative;
   z-index: 10;
   width: min(calc(100% - 40px),850px);
-  max-width: 100%;               /* ✅ */
+  max-width: 100%;
   margin: 0 auto 13px;
   padding-top: 8px;
   flex-shrink: 0;
-  box-sizing: border-box;        /* ✅ */
+  box-sizing: border-box;
 }
 
 .composer-wrap>.input-area {
   width: 100%;
-  max-width: 100%;               /* ✅ */
+  max-width: 100%;
   margin: 0;
   padding: 12px 13px;
   border: 1px solid rgba(255,255,255,.105);
@@ -1210,7 +1213,7 @@ textarea:focus-visible {
   box-shadow:
     0 16px 50px rgba(0,0,0,.25),
     inset 0 1px rgba(255,255,255,.035);
-  box-sizing: border-box;        /* ✅ */
+  box-sizing: border-box;
 }
 
 .composer-wrap>.input-area:focus-within {
@@ -1259,7 +1262,7 @@ textarea:focus-visible {
   padding-top: 9px;
   color: #6e7180;
   font-size: 9px;
-  flex-wrap: wrap;               /* ✅ */
+  flex-wrap: wrap;
 }
 
 .composer-footnote>span:first-child {
@@ -1537,7 +1540,7 @@ textarea:focus-visible {
   border-radius: 10px;
   padding: 12px;
   overflow-x: auto;
-  max-width: 100%;               /* ✅ */
+  max-width: 100%;
 }
 
 .container.light .bubble-ai pre *,
@@ -1752,7 +1755,7 @@ textarea:focus-visible {
     flex-direction: column;
     min-height: 0;
     width: 100%;
-    max-width: 100vw;            /* ✅ */
+    max-width: 100%;
     overflow: hidden;
     gap: 0;
   }
@@ -1760,11 +1763,11 @@ textarea:focus-visible {
   .chat-workspace {
     flex: 1 1 auto;
     width: 100%;
-    max-width: 100vw;            /* ✅ */
+    max-width: 100%;
     min-width: 0;
     min-height: 0;
     height: 100%;
-    overflow: hidden;            /* ✅ */
+    overflow: hidden;
   }
 
   /* ✅ إصلاح تموضع القائمة الجانبية على الموبايل */
@@ -1772,27 +1775,20 @@ textarea:focus-visible {
     position: fixed !important;
     top: 0 !important;
     bottom: 0 !important;
-
-    right: 0 !important;         /* ✅ بدل inset-inline-end لتفادي مشاكل RTL */
+    right: 0 !important;
     left: auto !important;
     inset-inline-end: auto !important;
-
     width: min(310px, 86vw) !important;
     max-width: min(310px, 86vw) !important;
     min-width: 0 !important;
-
     height: 100dvh !important;
     flex: 0 0 auto !important;
-
     z-index: 402 !important;
-
-    transform: translateX(100%);  /* ✅ 100% بدل 105% */
+    transform: translateX(100%);
     transition: transform .25s ease;
-
     overflow-x: hidden !important;
     overflow-y: auto !important;
     overscroll-behavior: contain;
-
     box-shadow: -20px 0 55px rgba(0,0,0,.3) !important;
   }
 
@@ -1822,8 +1818,8 @@ textarea:focus-visible {
     background: rgba(0,0,0,.52);
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
-    width: 100vw;                /* ✅ */
-    height: 100dvh;              /* ✅ */
+    width: 100vw;
+    height: 100dvh;
   }
 
   .sidebar-toggle {
@@ -1859,8 +1855,9 @@ textarea:focus-visible {
     padding: 23px 15px 18px;
     gap: 18px;
     width: 100%;
-    max-width: 100vw;            /* ✅ */
-    overflow-x: hidden;          /* ✅ */
+    max-width: 100%;
+    overflow-x: hidden;
+    box-sizing: border-box;
   }
 
   .messages-welcome {
@@ -1869,8 +1866,9 @@ textarea:focus-visible {
 
   .welcome-screen {
     padding: 12px 0 22px;
-    width: 100%;                 /* ✅ */
+    width: 100%;
     max-width: 100%;
+    box-sizing: border-box;
   }
 
   .welcome-mark {
@@ -1891,29 +1889,42 @@ textarea:focus-visible {
   .prompt-grid {
     gap: 8px;
     margin-top: 23px;
-    width: 100%;                 /* ✅ */
+    width: 100%;
     max-width: 100%;
+    grid-template-columns: 1fr; /* ✅ جعلها عمود واحد لتظهر بشكل أفضل */
+    box-sizing: border-box;
   }
 
   .prompt-grid button {
-    min-height: 88px;
-    padding: 12px 11px;
+    min-height: 75px;
+    padding: 12px;
     min-width: 0;
+    width: 100%;
+    flex-direction: row; /* ✅ الأيقونة بجانب النص */
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    text-align: right;
+  }
+
+  .prompt-grid button > span {
+    position: static; /* ✅ إزالة التموضع المطلق */
+    font-size: 20px;
   }
 
   .prompt-grid button strong {
-    font-size: 10px;
+    font-size: 11px;
   }
 
   .prompt-grid button small {
-    font-size: 9px;
+    font-size: 10px;
     line-height: 1.6;
   }
 
   .composer-wrap {
-    width: 100%;                 /* ✅ بدل calc */
-    max-width: 100vw;
-    padding: 8px 9px 0;          /* ✅ padding بدل margin */
+    width: 100%;
+    max-width: 100%;
+    padding: 8px 9px 0;
     margin: 0;
     margin-bottom: max(8px,env(safe-area-inset-bottom));
     box-sizing: border-box;
@@ -1943,7 +1954,7 @@ textarea:focus-visible {
   }
 
   .msg-content-wrapper {
-    max-width: calc(100% - 40px);  /* ✅ بدل 90% */
+    max-width: calc(100% - 40px);
     min-width: 0;
     overflow-wrap: anywhere;
     word-break: break-word;
@@ -1964,7 +1975,6 @@ textarea:focus-visible {
     min-height: 39px;
   }
 
-  /* ✅ منع أي عنصر من تجاوز العرض */
   .chat-shell *,
   .chat-workspace * {
     box-sizing: border-box;
@@ -1997,7 +2007,7 @@ textarea:focus-visible {
   }
 
   .msg-content-wrapper {
-    max-width: calc(100% - 38px);  /* ✅ */
+    max-width: calc(100% - 38px);
   }
 
   .bubble {
@@ -2006,7 +2016,7 @@ textarea:focus-visible {
   }
 
   .input-area {
-    width: 100%;                   /* ✅ */
+    width: 100%;
     max-width: 100%;
     margin-bottom: max(10px,env(safe-area-inset-bottom));
     padding: 8px;
@@ -2046,7 +2056,7 @@ textarea:focus-visible {
 @media(max-width:390px) {
   .prompt-grid {
     grid-template-columns: 1fr;
-    width: 100%;                 /* ✅ */
+    width: 100%;
     max-width: 100%;
   }
 
@@ -2084,9 +2094,7 @@ textarea:focus-visible {
     animation: none !important;
     transition: none !important;
   }
-       }
-
-
+}
 
 /* =========================================================
    BLAK — Authentication & Loading Screens
@@ -2477,7 +2485,6 @@ textarea:focus-visible {
   }
 }
 
-
 /* =========================================================
    BLAK — Unified Responsive Layout (authoritative)
    Mobile/tablet: <= 1023px
@@ -2513,8 +2520,6 @@ textarea:focus-visible {
     overflow: hidden;
   }
 
-  /* The workspace is the only in-flow mobile column.
-     Sidebar and scrim are fixed overlays, never layout columns. */
   .chat-shell {
     position: relative;
     display: block;
@@ -2661,109 +2666,4 @@ textarea:focus-visible {
     margin-inline-end: 2px;
   }
 
-  .composer-mode-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 5px;
-    min-height: 32px;
-    padding: 5px 10px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--bg-input);
-    color: var(--text-secondary);
-    font: inherit;
-    font-size: 11px;
-    line-height: 1.3;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-
-  .composer-mode-btn.active {
-    border-color: var(--brand-primary-border);
-    background: var(--brand-primary-soft);
-    color: var(--brand-primary-light);
-  }
-
-  .composer-mode-btn:disabled {
-    opacity: .55;
-    cursor: not-allowed;
-  }
-
-  .composer-mode-icon {
-    font-size: 13px;
-    line-height: 1;
-  }
-
-  .composer-footnote {
-    width: 100%;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-  }
-
-  .chat-workspace *,
-  .chat-workspace *::before,
-  .chat-workspace *::after {
-    box-sizing: border-box;
-  }
-}
-
-@media (max-width: 390px) {
-  .prompt-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .composer-wrap {
-    padding-inline: 8px;
-  }
-
-  .composer-modes {
-    gap: 5px;
-  }
-
-  .composer-mode-btn {
-    padding-inline: 8px;
-    font-size: 10px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .chat-shell {
-    display: flex;
-    flex-direction: row;
-    width: 100%;
-    max-width: 100%;
-    min-width: 0;
-  }
-
-  .chat-workspace {
-    position: relative;
-    inset: auto;
-    flex: 1 1 0;
-    width: auto;
-    max-width: none;
-    min-width: 0;
-    height: auto;
-  }
-
-  .app-sidebar {
-    position: relative !important;
-    flex: 0 0 276px;
-    width: 276px !important;
-    max-width: 276px !important;
-    height: auto !important;
-    transform: none;
-  }
-
-  .sidebar-scrim,
-  .sidebar-toggle {
-    display: none !important;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .app-sidebar,
-  .composer-mode-btn {
-    transition: none !important;
-  }
-}
+  .co
