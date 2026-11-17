@@ -1,3 +1,4 @@
+
 /* =========================================================
    BLAK — Refined Dark Product System
    ========================================================= */
@@ -1706,25 +1707,44 @@ textarea:focus-visible {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .chat-workspace {
     flex: 1 1 auto;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     min-height: 0;
     height: 100%;
   }
 
+  /* إصلاح تموضع القائمة الجانبية على الموبايل */
   .app-sidebar {
     position: fixed !important;
     top: 0 !important;
-    right: 0 !important;
+    right: auto !important;
+    left: auto !important;
+    inset-inline-end: 0 !important;
     bottom: 0 !important;
-    width: min(310px,86vw) !important;
-    max-width: 86vw !important;
+
+    width: min(310px, 86vw) !important;
+    max-width: min(310px, 86vw) !important;
+    min-width: 0 !important;
+
+    height: 100dvh !important;
+    flex: 0 0 auto !important;
+
     z-index: 402 !important;
+
     transform: translateX(105%);
     transition: transform .25s ease;
+
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+
     box-shadow: -20px 0 55px rgba(0,0,0,.3) !important;
   }
 
@@ -1979,4 +1999,4 @@ textarea:focus-visible {
     animation: none !important;
     transition: none !important;
   }
-   }
+}
