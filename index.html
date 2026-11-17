@@ -83,10 +83,18 @@
       // Initialize PDF.js worker after page load
       window.addEventListener("load", function () {
         try {
-          if (window["pdfjs-dist/build/pdf"]) {
-            window.pdfjsLib = window["pdfjs-dist/build/pdf"];
-            window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          // PDF.js v3 browser bundle exposes pdfjsLib globally.
+          // Keep the legacy namespace fallback for CDN variants.
+          const pdfjsLib =
+            window.pdfjsLib ||
+            window["pdfjs-dist/build/pdf"];
+
+          if (pdfjsLib) {
+            window.pdfjsLib = pdfjsLib;
+            pdfjsLib.GlobalWorkerOptions.workerSrc =
               "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+          } else {
+            console.error("PDF.js لم يتم تحميله من CDN.");
           }
         } catch (e) {
           console.warn("pdf.js init:", e);
