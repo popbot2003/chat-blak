@@ -130,6 +130,22 @@ export default function Chat({ user, onLogout, isAdmin }) {
     localStorage.setItem("black-theme", theme);
   }, [theme]);
 
+  // قفل تمرير الصفحة عند فتح القائمة الجانبية على الهاتف
+  useEffect(() => {
+    document.body.classList.toggle("sidebar-is-open", showHistory);
+    return () => document.body.classList.remove("sidebar-is-open");
+  }, [showHistory]);
+
+  // إغلاق القائمة الجانبية بزر Escape
+  useEffect(() => {
+    if (!showHistory) return;
+    const handleEscape = (event) => {
+      if (event.key === "Escape") setShowHistory(false);
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [showHistory]);
+
 
   // ═══════════════════════════════════════════
   // 2. Realtime
