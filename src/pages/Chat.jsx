@@ -8,7 +8,6 @@
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import "../App.css";
 
 import ChatHeader from "../components/chat/ChatHeader";
 import ChatTokenBar from "../components/chat/ChatTokenBar";
