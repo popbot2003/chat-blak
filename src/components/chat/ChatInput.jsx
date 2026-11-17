@@ -245,6 +245,9 @@ export default function ChatInput({
           ref={fileInputRef}
           onChange={onFileUpload}
           multiple
+          hidden
+          tabIndex={-1}
+          aria-hidden="true"
           className="composer-file-input"
           accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*"
         />

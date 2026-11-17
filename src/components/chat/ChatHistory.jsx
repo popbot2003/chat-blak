@@ -49,6 +49,7 @@ export default function ChatHistory({
   const percent = getUsagePercent(usedToday, dailyLimit);
   const remaining = Math.max(0, dailyLimit - usedToday);
   const usageColor = getUsageColor(percent);
+  const isUnlimited = user?.role === "admin";
 
   // ==========================================
   // البحث وتصنيف المحادثات
@@ -333,25 +334,35 @@ export default function ChatHistory({
         {/* الحساب والاستهلاك */}
 
         <div className="sidebar-account-section">
-          <div className="sidebar-usage">
+          <div
+            className={`sidebar-usage ${
+              isUnlimited ? "sidebar-usage-unlimited" : ""
+            }`}
+          >
             <div className="sidebar-usage-top">
               <strong>استهلاك اليوم</strong>
-              <span>{Math.floor(percent)}%</span>
+              <span>{isUnlimited ? "∞" : `${Math.floor(percent)}%`}</span>
             </div>
 
-            <div className="sidebar-usage-track">
-              <span
-                style={{
-                  width: `${Math.min(100, percent)}%`,
-                  background: usageColor,
-                }}
-              />
-            </div>
+            {isUnlimited ? (
+              <small>غير محدود (Admin Unlimited)</small>
+            ) : (
+              <>
+                <div className="sidebar-usage-track">
+                  <span
+                    style={{
+                      width: `${Math.min(100, percent)}%`,
+                      background: usageColor,
+                    }}
+                  />
+                </div>
 
-            <small>
-              متبقي {remaining.toLocaleString()} من{" "}
-              {dailyLimit.toLocaleString()} توكن
-            </small>
+                <small>
+                  متبقي {remaining.toLocaleString()} من{" "}
+                  {dailyLimit.toLocaleString()} توكن
+                </small>
+              </>
+            )}
           </div>
 
           <button
