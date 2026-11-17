@@ -81,6 +81,13 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
 
+  // أوضاع الذكاء: Auto = الكل مطفي، Thinking / Search يمكن تفعيلهما معاً
+  const [aiMode, setAiMode] = useState({ thinking: false, search: false });
+  const aiModeRef = useRef(aiMode);
+  useEffect(() => {
+    aiModeRef.current = aiMode;
+  }, [aiMode]);
+
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("black-theme") || "dark";
   });
@@ -325,7 +332,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
       try {
         let enhancedText = text;
 
-        if (needsWebSearch(text)) {
+        const searchRequested = aiModeRef.current.search;
+
+        if (searchRequested || needsWebSearch(text)) {
           const searchResult = await searchDuckDuckGo(text);
 
           if (searchResult) {
@@ -333,7 +342,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
               text +
               "\n\n[نتائج البحث]:\n" +
               searchResult +
-              "\n\nاستخدم المعلومات دي كمرجع فقط، وردك يكون عربي بالكامل.";
+              "\n\nاستخدم المعلومات دي كمرجع فقط، وردك بنفس لغة المستخدم.";
+          } else if (searchRequested) {
+            showToast("🔍 لم أجد نتائج بحث مفيدة، سأجيب من معرفتي", "info");
           }
         }
 
@@ -354,11 +365,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
           enhancedText + fileCard
         );
 
-        const systemPrompt = getPersonalityPrompt(
+        let systemPrompt = getPersonalityPrompt(
           currentUserRef.current?.personality || "blak",
           currentUserRef.current?.gender || "ولد",
           memories
         );
+
+        if (aiModeRef.current.thinking) {
+          systemPrompt +=
+            "\n\n[وضع التفكير العميق]: حلّل السؤال خطوة بخطوة قبل الإجابة، " +
+            "تحقق من استنتاجاتك، ثم قدّم إجابة نهائية واضحة ومنظمة.";
+        }
 
         abortControllerRef.current = new AbortController();
 
@@ -1028,6 +1045,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
             streamingText={streamingText}
             attachedFiles={fileUploadHook.attachedFiles}
             sendMode={sendMode}
+            aiMode={aiMode}
+            onAiModeChange={setAiMode}
             onSend={sendMessage}
             onStop={handleStop}
             onFileUpload={fileUploadHook.handleFileUpload}
