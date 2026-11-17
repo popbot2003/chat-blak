@@ -1,12 +1,13 @@
-// ============================================
-// src/components/chat/ChatHistory.jsx
-// BLAK — Sidebar v3.0
-// ✅ البحث في المحادثات
-// ✅ تبويب المحادثات والأرشيف
-// ✅ أرشفة واستعادة
-// ✅ تأكيد الحذف
-// ✅ تمييز المحادثة الحالية
-// ============================================
+
+ // ============================================
+ // src/components/chat/ChatHistory.jsx
+ // BLAK — Sidebar v3.1
+ // ✅ البحث في المحادثات
+ // ✅ تبويب المحادثات والأرشيف
+ // ✅ أرشفة واستعادة
+ // ✅ تأكيد حذف واحد من useChats
+ // ✅ تمييز المحادثة الحالية
+ // ============================================
 
 import { useMemo, useState } from "react";
 
@@ -63,50 +64,58 @@ export default function ChatHistory({
 
       if (archived !== showArchived) return false;
 
-      const title = (chat.title || "محادثة جديدة").toLowerCase();
+      const title = (
+        chat.title || "محادثة جديدة"
+      ).toLowerCase();
 
       return !query || title.includes(query);
     });
   }, [chats, search, showArchived]);
 
   // ==========================================
+  // فتح محادثة
+  // ==========================================
+
+  const handleOpenChat = (chatId) => {
+    if (!chatId || showArchived) return;
+
+    onOpenChat?.(chatId);
+    onClose?.();
+  };
+
+  // ==========================================
   // حذف المحادثة
   // ==========================================
 
+  // التأكيد موجود داخل useChats.js فقط.
   const handleDelete = (chat) => {
-    const confirmed = window.confirm(
-      `هل أنت متأكد من حذف المحادثة "${chat.title || "محادثة جديدة"}" نهائيًا؟`
-    );
-
-    if (confirmed) {
-      onDeleteChat?.(chat.id);
-    }
+    if (!chat?.id) return;
+    onDeleteChat?.(chat.id);
   };
 
   // ==========================================
   // الأرشفة
   // ==========================================
 
-  const handleArchive = (chat) => {
-    if (!onArchiveChat) return;
-
-    onArchiveChat(chat.id);
+  const handleArchive = async (chat) => {
+    if (!chat?.id || !onArchiveChat) return;
+    await onArchiveChat(chat.id);
   };
 
   // ==========================================
   // الاستعادة
   // ==========================================
 
-  const handleRestore = (chat) => {
-    if (!onRestoreChat) return;
-
-    onRestoreChat(chat.id);
+  const handleRestore = async (chat) => {
+    if (!chat?.id || !onRestoreChat) return;
+    await onRestoreChat(chat.id);
   };
 
   return (
     <>
       {isOpen && (
         <button
+          type="button"
           className="sidebar-scrim"
           onClick={onClose}
           aria-label="إغلاق القائمة"
@@ -130,6 +139,7 @@ export default function ChatHistory({
           </div>
 
           <button
+            type="button"
             className="sidebar-close"
             onClick={onClose}
             aria-label="إغلاق"
@@ -141,8 +151,12 @@ export default function ChatHistory({
         {/* محادثة جديدة */}
 
         <button
+          type="button"
           className="sidebar-new-chat"
-          onClick={onNewChat}
+          onClick={() => {
+            onNewChat?.();
+            onClose?.();
+          }}
         >
           <span>＋</span>
           محادثة جديدة
@@ -252,12 +266,9 @@ export default function ChatHistory({
                 }`}
               >
                 <button
+                  type="button"
                   className="sidebar-chat-open"
-                  onClick={() => {
-                    if (showArchived) return;
-
-                    onOpenChat?.(chat.id);
-                  }}
+                  onClick={() => handleOpenChat(chat.id)}
                   disabled={showArchived}
                   title={
                     showArchived
@@ -287,6 +298,7 @@ export default function ChatHistory({
                       onClick={() => handleRestore(chat)}
                       title="استعادة المحادثة"
                       aria-label="استعادة المحادثة"
+                      disabled={!onRestoreChat}
                     >
                       ↩
                     </button>
@@ -296,6 +308,7 @@ export default function ChatHistory({
                       onClick={() => handleArchive(chat)}
                       title="أرشفة المحادثة"
                       aria-label="أرشفة المحادثة"
+                      disabled={!onArchiveChat}
                     >
                       ▣
                     </button>
@@ -307,6 +320,7 @@ export default function ChatHistory({
                     onClick={() => handleDelete(chat)}
                     title="حذف المحادثة"
                     aria-label="حذف المحادثة"
+                    disabled={!onDeleteChat}
                   >
                     🗑
                   </button>
@@ -341,6 +355,7 @@ export default function ChatHistory({
           </div>
 
           <button
+            type="button"
             className="sidebar-action"
             onClick={onOpenSettings}
           >
@@ -349,6 +364,7 @@ export default function ChatHistory({
           </button>
 
           <button
+            type="button"
             className="sidebar-action"
             onClick={onToggleTheme}
           >
@@ -357,6 +373,7 @@ export default function ChatHistory({
           </button>
 
           <button
+            type="button"
             className="sidebar-action sidebar-logout"
             onClick={onLogout}
           >
@@ -380,4 +397,4 @@ export default function ChatHistory({
       </aside>
     </>
   );
-  }
+}
