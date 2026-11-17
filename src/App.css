@@ -2667,3 +2667,193 @@ textarea:focus-visible {
   }
 
   .co
+ {}
+
+
+/* =========================================================
+   BLAK — Mobile layout hotfix
+   Keeps the chat workspace full-width on phones.
+   ========================================================= */
+@media (max-width: 1023px) {
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  .container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .chat-shell {
+    position: relative;
+    display: flex !important;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    overflow: hidden;
+  }
+
+  .chat-workspace {
+    position: relative !important;
+    inset: auto !important;
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  .app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    width: min(310px, 86vw) !important;
+    max-width: min(310px, 86vw) !important;
+    min-width: 0 !important;
+    height: 100dvh !important;
+    flex: none !important;
+    z-index: 402 !important;
+    transform: translate3d(110%, 0, 0);
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  .app-sidebar.sidebar-open {
+    transform: translate3d(0, 0, 0);
+  }
+
+  .chat-topbar-wrap,
+  .header,
+  .token-bar,
+  .active-tasks-notification,
+  .messages,
+  .composer-wrap {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .messages {
+    flex: 1 1 0;
+    margin: 0;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+  }
+
+  .welcome-screen {
+    width: 100%;
+    max-width: 700px;
+    min-width: 0;
+    margin-inline: auto;
+    padding-inline: 12px;
+    box-sizing: border-box;
+  }
+
+  .prompt-grid {
+    width: 100%;
+    max-width: 610px;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    box-sizing: border-box;
+  }
+
+  .prompt-grid button {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .composer-wrap {
+    flex: 0 0 auto;
+    margin: 0;
+    padding: 8px 10px max(8px, env(safe-area-inset-bottom));
+  }
+
+  .composer-wrap > .input-area {
+    display: flex;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    box-sizing: border-box;
+  }
+
+  .composer-wrap .textarea {
+    flex: 1 1 0;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding-inline: 12px;
+  }
+
+  .messages {
+    padding: 18px 12px;
+  }
+
+  .welcome-screen {
+    padding: 8px 4px 18px;
+  }
+
+  .welcome-screen h1 {
+    font-size: clamp(23px, 6vw, 28px);
+    overflow-wrap: anywhere;
+  }
+
+  .prompt-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+    margin-top: 20px;
+  }
+
+  .prompt-grid button {
+    min-height: 64px;
+    width: 100%;
+  }
+
+  .input-area {
+    gap: 5px;
+    padding: 7px;
+  }
+
+  .mode-toggle {
+    padding-inline: 7px;
+    font-size: 10px;
+  }
+
+  .composer-modes {
+    flex-wrap: wrap;
+    max-width: 100%;
+  }
+
+  .composer-footnote {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}
