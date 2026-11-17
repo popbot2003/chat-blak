@@ -317,9 +317,9 @@ export default function ChatInput({
         >
           {loading ? "⏹" : "↑"}
         </button>
-      </div>
 
-      {/* أوضاع الذكاء الاصطناعي */}
+
+      {/* أوضاع الذكاء الاصطناعي — داخل منطقة الإدخال */}
       {!isTaskMode && (
         <div
           className="composer-modes"
@@ -339,7 +339,7 @@ export default function ChatInput({
             aria-pressed={isAutoMode}
           >
             <span className="composer-mode-icon">✦</span>
-            Auto
+            ذكي
           </button>
 
           <button
@@ -352,7 +352,7 @@ export default function ChatInput({
             aria-pressed={thinkingEnabled}
           >
             <span className="composer-mode-icon">◈</span>
-            Thinking
+            تفكير
           </button>
 
           <button
@@ -365,10 +365,11 @@ export default function ChatInput({
             aria-pressed={searchEnabled}
           >
             <span className="composer-mode-icon">⌕</span>
-            Search
+            بحث
           </button>
         </div>
       )}
+      </div>
 
       {/* تنبيه الاستخدام */}
       <div
