@@ -209,7 +209,7 @@ export function useLongForm({
       );
 
       const res = await fetch(
-        "https://yfglgxuhtidfkskgabk.supabase.co/functions/v1/hyper-responder",
+        "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
         {
           method: "POST",
           headers: {
