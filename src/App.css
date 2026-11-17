@@ -1266,6 +1266,98 @@ textarea:focus-visible {
   color: #9d92ff;
 }
 
+.composer-modes {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 8px 2px 0;
+}
+
+.composer-modes-label {
+  color: var(--text-muted);
+  font-size: 10px;
+  margin-inline-end: 2px;
+}
+
+.composer-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 29px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255,255,255,.035);
+  color: var(--text-secondary);
+  font-size: 10px;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.composer-mode-btn:hover:not(:disabled) {
+  border-color: var(--brand-primary-border);
+  background: var(--brand-primary-soft);
+  color: var(--text-primary);
+}
+
+.composer-mode-btn.active {
+  border-color: var(--brand-primary-border);
+  background: var(--brand-primary-soft);
+  color: var(--brand-primary-light);
+}
+
+.composer-mode-btn:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.composer-mode-icon {
+  color: var(--brand-accent);
+  font-size: 12px;
+}
+
+.composer-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 2px 9px;
+}
+
+.composer-file {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+.composer-file-name {
+  min-width: 0;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-file-input {
+  display: none;
+}
+
 .composer-shortcut {
   margin-right: 8px;
   color: #606372;
@@ -1747,9 +1839,66 @@ textarea:focus-visible {
    ========================================================= */
 
 @media(max-width:900px) {
+  /*
+   * Use the drawer layout before the workspace becomes cramped.
+   * This also covers devices whose CSS viewport is wider than
+   * their screenshot's physical pixel width.
+   */
+  .chat-shell {
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .chat-workspace {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+  }
+
   .app-sidebar {
-    flex-basis: 245px;
-    width: 245px !important;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: 0 !important;
+    width: min(310px, 86vw) !important;
+    max-width: min(310px, 86vw) !important;
+    min-width: 0 !important;
+    height: 100dvh !important;
+    flex: 0 0 auto !important;
+    z-index: 402 !important;
+    transform: translateX(100%);
+    transition: transform .25s ease;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    box-shadow: -20px 0 55px rgba(0,0,0,.3) !important;
+  }
+
+  .app-sidebar.sidebar-open {
+    transform: translateX(0);
+  }
+
+  .sidebar-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 401;
+    width: 100%;
+    height: 100dvh;
+    border: 0;
+    background: rgba(0,0,0,.52);
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  .sidebar-toggle {
+    display: grid;
   }
 
   .sidebar-account-section {
