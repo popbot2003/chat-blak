@@ -1,11 +1,12 @@
 // ============================================
 // src/hooks/useChats.js
-// BLAK — Chat Engine v3.0
+// BLAK — Chat Engine v4.0
 // ✅ حفظ آمن ومتسلسل
 // ✅ حماية سجل الرسائل الكامل
 // ✅ منع تداخل عمليات التحميل
 // ✅ منع إعادة إنشاء المحادثات المحذوفة
-// ✅ حماية من نتائج الطلبات القديمة
+// ✅ حماية نتائج الطلبات القديمة
+// ✅ أرشفة واستعادة دائمة عبر Supabase
 // ============================================
 
 import {
@@ -42,25 +43,11 @@ export function useChats({
 }) {
   const [allChats, setAllChats] = useState([]);
 
-  // ==========================================
-  // Refs
-  // ==========================================
-
   const currentChatIdRef = useRef(currentChatId);
-
-  // طابور عمليات الحفظ
   const saveQueueRef = useRef(Promise.resolve());
-
-  // مؤقت الحفظ التلقائي
   const saveTimerRef = useRef(null);
-
-  // رقم آخر عملية تحميل
   const loadSequenceRef = useRef(0);
-
-  // المحادثات التي بدأ حذفها
   const deletedChatsRef = useRef(new Set());
-
-  // منع تحديثات تحميل المستخدم السابق
   const chatsLoadSequenceRef = useRef(0);
 
   // ==========================================
@@ -98,8 +85,7 @@ export function useChats({
           type: "task",
           task_id: message.task.id,
           task_status: message.task.status,
-          content:
-            `📋 مهمة: ${message.task.input?.slice(0, 100) || ""}`,
+          content: `📋 مهمة: ${message.task.input?.slice(0, 100) || ""}`,
         };
       }
 
@@ -113,17 +99,10 @@ export function useChats({
 
   const performSave = useCallback(
     async (snapshot) => {
-      const {
-        chatId,
-        messages,
-      } = snapshot;
+      const { chatId, messages } = snapshot;
 
       if (!user?.id || !chatId) return false;
-
-      if (deletedChatsRef.current.has(chatId)) {
-        return false;
-      }
-
+      if (deletedChatsRef.current.has(chatId)) return false;
       if (!messages.length) return false;
 
       const hasRealMessages = messages.some(
@@ -134,8 +113,7 @@ export function useChats({
 
       if (!hasRealMessages) return false;
 
-      const normalMessages =
-        prepareMessagesForSave(messages);
+      const normalMessages = prepareMessagesForSave(messages);
 
       const firstUserMessage = normalMessages.find(
         (message) => message.role === "user"
@@ -149,9 +127,6 @@ export function useChats({
       const now = new Date().toISOString();
 
       try {
-        // لا نستخدم slice هنا.
-        // يجب الحفاظ على سجل المحادثة كاملًا.
-
         const { error } = await supabase
           .from("chats")
           .upsert(
@@ -162,21 +137,19 @@ export function useChats({
               messages: normalMessages,
               updated_at: now,
             },
-            {
-              onConflict: "id",
-            }
+            { onConflict: "id" }
           );
 
         if (error) throw error;
-
-        // قد تكون المحادثة حُذفت أثناء انتظار الطلب.
-        // لا نحدّث الواجهة إذا أصبحت محذوفة.
-        if (deletedChatsRef.current.has(chatId)) {
-          return false;
-        }
+        if (deletedChatsRef.current.has(chatId)) return false;
 
         setAllChats((previous) => {
+          const existing = previous.find(
+            (chat) => chat.id === chatId
+          );
+
           const updatedChat = {
+            ...existing,
             id: chatId,
             title,
             date: now,
@@ -185,19 +158,13 @@ export function useChats({
 
           return [
             updatedChat,
-            ...previous.filter(
-              (chat) => chat.id !== chatId
-            ),
+            ...previous.filter((chat) => chat.id !== chatId),
           ];
         });
 
         return true;
       } catch (error) {
-        console.error(
-          "[Chat] خطأ في حفظ المحادثة:",
-          error.message
-        );
-
+        console.error("[Chat] خطأ في حفظ المحادثة:", error.message);
         return false;
       }
     },
@@ -205,7 +172,7 @@ export function useChats({
   );
 
   // ==========================================
-  // إضافة عملية الحفظ إلى الطابور
+  // طابور الحفظ
   // ==========================================
 
   const enqueueSave = useCallback(
@@ -214,17 +181,10 @@ export function useChats({
         .catch(() => false)
         .then(() => performSave(snapshot));
 
-      // العمليات التالية تنتظر انتهاء العملية الحالية.
-      saveQueueRef.current = operation.catch(
-        (error) => {
-          console.error(
-            "[Chat] خطأ في طابور الحفظ:",
-            error
-          );
-
-          return false;
-        }
-      );
+      saveQueueRef.current = operation.catch((error) => {
+        console.error("[Chat] خطأ في طابور الحفظ:", error);
+        return false;
+      });
 
       return operation;
     },
@@ -232,7 +192,7 @@ export function useChats({
   );
 
   // ==========================================
-  // 1. Realtime: حذف المحادثات
+  // Realtime: حذف المحادثات
   // ==========================================
 
   useEffect(() => {
@@ -249,29 +209,19 @@ export function useChats({
         },
         (payload) => {
           const deletedId = payload.old?.id;
-
           if (!deletedId) return;
 
           deletedChatsRef.current.add(deletedId);
 
           setAllChats((previous) =>
-            previous.filter(
-              (chat) => chat.id !== deletedId
-            )
+            previous.filter((chat) => chat.id !== deletedId)
           );
 
-          if (
-            currentChatIdRef.current === deletedId
-          ) {
-            // إبطال أي تحميل قديم.
+          if (currentChatIdRef.current === deletedId) {
             loadSequenceRef.current += 1;
-
             updateCurrentChatId(null);
-
             setMessages([createWelcomeMessage()]);
-
             setInput("");
-
             setAttachedFiles([]);
 
             if (setLongFormContext) {
@@ -295,58 +245,48 @@ export function useChats({
   ]);
 
   // ==========================================
-  // 2. تحميل قائمة المحادثات
+  // تحميل المحادثات
   // ==========================================
 
   const loadChatsFromSupabase = useCallback(
     async () => {
       if (!user?.id) return [];
 
-      const sequence =
-        ++chatsLoadSequenceRef.current;
+      const sequence = ++chatsLoadSequenceRef.current;
 
       try {
         const { data, error } = await supabase
           .from("chats")
           .select("*")
           .eq("user_id", user.id)
-          .order("updated_at", {
-            ascending: false,
-          })
-          .limit(50);
+          .order("updated_at", { ascending: false })
+          .limit(100);
 
         if (error) throw error;
 
-        // تجاهل نتيجة تحميل قديمة.
-        if (
-          sequence !== chatsLoadSequenceRef.current
-        ) {
+        if (sequence !== chatsLoadSequenceRef.current) {
           return [];
         }
 
-        const mapped = (data ?? []).map((chat) => ({
+        const mapped = (data || []).map((chat) => ({
           id: chat.id,
           title: chat.title || "محادثة",
           date: chat.updated_at,
           messageCount: Array.isArray(chat.messages)
             ? chat.messages.length
             : 0,
+          archived_at: chat.archived_at || null,
+          is_archived: Boolean(chat.archived_at),
         }));
 
-        setAllChats(
-          mapped.filter(
-            (chat) =>
-              !deletedChatsRef.current.has(chat.id)
-          )
+        const visible = mapped.filter(
+          (chat) => !deletedChatsRef.current.has(chat.id)
         );
 
-        return mapped;
+        setAllChats(visible);
+        return visible;
       } catch (error) {
-        console.error(
-          "[Chat] خطأ في تحميل المحادثات:",
-          error.message
-        );
-
+        console.error("[Chat] خطأ في تحميل المحادثات:", error.message);
         return [];
       }
     },
@@ -354,18 +294,15 @@ export function useChats({
   );
 
   // ==========================================
-  // 3. حفظ المحادثة الحالية
+  // حفظ المحادثة الحالية
   // ==========================================
 
   const saveChatToSupabase = useCallback(
     async () => {
       const chatId = currentChatIdRef.current;
 
-      if (!chatId || !messagesRef?.current) {
-        return false;
-      }
+      if (!chatId || !messagesRef?.current) return false;
 
-      // أخذ نسخة ثابتة وقت استدعاء الحفظ.
       const snapshot = {
         chatId,
         messages: [...messagesRef.current],
@@ -377,33 +314,30 @@ export function useChats({
   );
 
   // ==========================================
-  // 4. استعادة آخر محادثة
+  // استعادة آخر محادثة
   // ==========================================
 
   const restoreLastChat = useCallback(
     async (chats) => {
-      const sequence =
-        ++loadSequenceRef.current;
+      if (!user?.id) return;
+
+      const sequence = ++loadSequenceRef.current;
 
       try {
-        const lastChatId = localStorage.getItem(
-          "black-last-chat-id"
-        );
-
+        const lastChatId = localStorage.getItem("black-last-chat-id");
         if (!lastChatId) return;
 
         const exists = (chats || []).some(
-          (chat) => chat.id === lastChatId
+          (chat) =>
+            chat.id === lastChatId &&
+            !chat.is_archived
         );
 
         if (
           !exists ||
           deletedChatsRef.current.has(lastChatId)
         ) {
-          localStorage.removeItem(
-            "black-last-chat-id"
-          );
-
+          localStorage.removeItem("black-last-chat-id");
           return;
         }
 
@@ -412,6 +346,7 @@ export function useChats({
           .select("*")
           .eq("id", lastChatId)
           .eq("user_id", user.id)
+          .is("archived_at", null)
           .single();
 
         if (error) throw error;
@@ -423,33 +358,18 @@ export function useChats({
           return;
         }
 
-        if (
-          !data?.messages ||
-          !Array.isArray(data.messages)
-        ) {
-          return;
-        }
+        if (!Array.isArray(data?.messages)) return;
 
         updateCurrentChatId(lastChatId);
-
-        setMessages(
-          sortMessagesByTime(data.messages)
-        );
+        setMessages(sortMessagesByTime(data.messages));
 
         await loadChatTasksForChat(lastChatId);
 
-        if (
-          sequence !== loadSequenceRef.current
-        ) {
-          return;
-        }
+        if (sequence !== loadSequenceRef.current) return;
 
         await restoreChatFiles(lastChatId);
       } catch (error) {
-        console.warn(
-          "[Chat] تعذر استعادة آخر محادثة:",
-          error.message
-        );
+        console.warn("[Chat] تعذر استعادة آخر محادثة:", error.message);
       }
     },
     [
@@ -462,12 +382,11 @@ export function useChats({
   );
 
   // ==========================================
-  // 5. إنشاء محادثة جديدة
+  // إنشاء محادثة جديدة
   // ==========================================
 
   const newChat = useCallback(
     async () => {
-      // إبطال أي تحميل سابق فورًا.
       loadSequenceRef.current += 1;
 
       if (currentChatIdRef.current) {
@@ -475,11 +394,8 @@ export function useChats({
       }
 
       updateCurrentChatId(null);
-
       setMessages([createWelcomeMessage()]);
-
       setInput("");
-
       setAttachedFiles([]);
 
       if (setLongFormContext) {
@@ -497,35 +413,35 @@ export function useChats({
   );
 
   // ==========================================
-  // 6. فتح محادثة
+  // فتح محادثة
   // ==========================================
 
   const openChat = useCallback(
     async (chatId) => {
-      if (!chatId) return;
+      if (!chatId || !user?.id) return;
 
-      if (deletedChatsRef.current.has(chatId)) {
+      const targetChat = allChats.find(
+        (chat) => chat.id === chatId
+      );
+
+      if (targetChat?.is_archived) {
+        showToast("استعد المحادثة من الأرشيف أولاً", "error");
         return;
       }
 
-      // كل طلب فتح يحصل على رقم مستقل.
-      const sequence =
-        ++loadSequenceRef.current;
+      if (deletedChatsRef.current.has(chatId)) return;
+
+      const sequence = ++loadSequenceRef.current;
 
       try {
-        // حفظ المحادثة الحالية قبل الانتقال.
         if (currentChatIdRef.current) {
           await saveChatToSupabase();
         }
 
-        // إذا اختار المستخدم محادثة أخرى أثناء الحفظ.
         if (
-          sequence !== loadSequenceRef.current
+          sequence !== loadSequenceRef.current ||
+          deletedChatsRef.current.has(chatId)
         ) {
-          return;
-        }
-
-        if (deletedChatsRef.current.has(chatId)) {
           return;
         }
 
@@ -534,6 +450,7 @@ export function useChats({
           .select("*")
           .eq("id", chatId)
           .eq("user_id", user.id)
+          .is("archived_at", null)
           .single();
 
         if (error) throw error;
@@ -546,19 +463,12 @@ export function useChats({
         }
 
         if (!Array.isArray(data?.messages)) {
-          throw new Error(
-            "بيانات المحادثة غير صالحة"
-          );
+          throw new Error("بيانات المحادثة غير صالحة");
         }
 
         updateCurrentChatId(chatId);
-
-        setMessages(
-          sortMessagesByTime(data.messages)
-        );
-
+        setMessages(sortMessagesByTime(data.messages));
         setInput("");
-
         setAttachedFiles([]);
 
         if (setLongFormContext) {
@@ -567,27 +477,17 @@ export function useChats({
 
         await loadChatTasksForChat(chatId);
 
-        if (
-          sequence !== loadSequenceRef.current
-        ) {
-          return;
-        }
+        if (sequence !== loadSequenceRef.current) return;
 
         await restoreChatFiles(chatId);
       } catch (error) {
-        console.error(
-          "[Chat] خطأ في فتح المحادثة:",
-          error.message
-        );
-
-        showToast(
-          "❌ تعذر فتح المحادثة",
-          "error"
-        );
+        console.error("[Chat] خطأ في فتح المحادثة:", error.message);
+        showToast("❌ تعذر فتح المحادثة", "error");
       }
     },
     [
       user?.id,
+      allChats,
       saveChatToSupabase,
       updateCurrentChatId,
       setMessages,
@@ -600,80 +500,181 @@ export function useChats({
   );
 
   // ==========================================
-  // 7. حذف محادثة
+  // أرشفة محادثة
+  // ==========================================
+
+  const archiveChat = useCallback(
+    async (chatId) => {
+      if (!chatId || !user?.id) return false;
+
+      const chat = allChats.find((item) => item.id === chatId);
+
+      if (!chat || chat.is_archived) return false;
+
+      try {
+        // حفظ المحادثة الحالية قبل أرشفتها.
+        if (currentChatIdRef.current === chatId) {
+          await saveChatToSupabase();
+        }
+
+        const archivedAt = new Date().toISOString();
+
+        const { data, error } = await supabase
+          .from("chats")
+          .update({ archived_at: archivedAt })
+          .eq("id", chatId)
+          .eq("user_id", user.id)
+          .is("archived_at", null)
+          .select("id")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error("لم يتم العثور على المحادثة");
+
+        setAllChats((previous) =>
+          previous.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  archived_at: archivedAt,
+                  is_archived: true,
+                }
+              : item
+          )
+        );
+
+        if (currentChatIdRef.current === chatId) {
+          loadSequenceRef.current += 1;
+          updateCurrentChatId(null);
+          setMessages([createWelcomeMessage()]);
+          setInput("");
+          setAttachedFiles([]);
+
+          if (setLongFormContext) {
+            setLongFormContext(null);
+          }
+        }
+
+        showToast("📦 تمت أرشفة المحادثة", "success");
+        return true;
+      } catch (error) {
+        console.error("[Chat] خطأ في أرشفة المحادثة:", error);
+        showToast("❌ تعذرت أرشفة المحادثة", "error");
+        return false;
+      }
+    },
+    [
+      user?.id,
+      allChats,
+      saveChatToSupabase,
+      updateCurrentChatId,
+      setMessages,
+      setInput,
+      setAttachedFiles,
+      setLongFormContext,
+    ]
+  );
+
+  // ==========================================
+  // استعادة محادثة من الأرشيف
+  // ==========================================
+
+  const restoreChat = useCallback(
+    async (chatId) => {
+      if (!chatId || !user?.id) return false;
+
+      try {
+        const { data, error } = await supabase
+          .from("chats")
+          .update({ archived_at: null })
+          .eq("id", chatId)
+          .eq("user_id", user.id)
+          .not("archived_at", "is", null)
+          .select("id")
+          .maybeSingle();
+
+        if (error) throw error;
+        if (!data) throw new Error("لم يتم العثور على المحادثة المؤرشفة");
+
+        setAllChats((previous) =>
+          previous.map((item) =>
+            item.id === chatId
+              ? {
+                  ...item,
+                  archived_at: null,
+                  is_archived: false,
+                }
+              : item
+          )
+        );
+
+        showToast("↩ تم استعادة المحادثة", "success");
+        return true;
+      } catch (error) {
+        console.error("[Chat] خطأ في استعادة المحادثة:", error);
+        showToast("❌ تعذرت استعادة المحادثة", "error");
+        return false;
+      }
+    },
+    [user?.id]
+  );
+
+  // ==========================================
+  // حذف محادثة
   // ==========================================
 
   const deleteChat = useCallback(
     async (chatId) => {
       if (!chatId) return;
 
-      if (
-        !window.confirm("حذف هذه المحادثة؟")
-      ) {
-        return;
-      }
+      if (!window.confirm("حذف هذه المحادثة نهائيًا؟")) return;
 
-      // منع أي حفظ جديد لهذه المحادثة.
       deletedChatsRef.current.add(chatId);
 
-      // إبطال تحميل المحادثة إذا كانت مفتوحة.
-      const isCurrent =
-        chatId === currentChatIdRef.current;
+      const isCurrent = chatId === currentChatIdRef.current;
 
       if (isCurrent) {
         loadSequenceRef.current += 1;
       }
 
       try {
-        // انتظار جميع عمليات الحفظ السابقة.
         await saveQueueRef.current;
 
-        // الحصول على مسارات الملفات قبل الحذف.
         let filePaths = [];
 
-        const { data: files, error: filesError } =
-          await supabase
-            .from("user_files")
-            .select("file_path")
-            .eq("chat_id", chatId);
+        const { data: files, error: filesError } = await supabase
+          .from("user_files")
+          .select("file_path")
+          .eq("chat_id", chatId);
 
         if (filesError) {
-          console.warn(
-            "[Chat] تعذر تحميل مسارات الملفات:",
-            filesError.message
-          );
+          console.warn("[Chat] تعذر تحميل مسارات الملفات:", filesError.message);
         } else {
           filePaths = (files || [])
             .map((file) => file.file_path)
             .filter(Boolean);
         }
 
-        // إلغاء المهام النشطة.
-        const { error: taskError } =
-          await supabase
-            .from("tasks")
-            .update({
-              status: "cancelled",
-              error: "تم إلغاء المهمة بحذف المحادثة",
-              completed_at: new Date().toISOString(),
-            })
-            .eq("chat_id", chatId)
-            .in("status", [
-              "pending",
-              "planning",
-              "running",
-              "waiting",
-              "merging",
-            ]);
+        const { error: taskError } = await supabase
+          .from("tasks")
+          .update({
+            status: "cancelled",
+            error: "تم إلغاء المهمة بحذف المحادثة",
+            completed_at: new Date().toISOString(),
+          })
+          .eq("chat_id", chatId)
+          .in("status", [
+            "pending",
+            "planning",
+            "running",
+            "waiting",
+            "merging",
+          ]);
 
         if (taskError) {
-          console.warn(
-            "[Chat] خطأ في إلغاء المهام:",
-            taskError.message
-          );
+          console.warn("[Chat] خطأ في إلغاء المهام:", taskError.message);
         }
 
-        // حذف المحادثة من قاعدة البيانات.
         const { error: chatError } = await supabase
           .from("chats")
           .delete()
@@ -682,34 +683,24 @@ export function useChats({
 
         if (chatError) throw chatError;
 
-        // إزالة الملفات من Storage بعد نجاح حذف المحادثة.
         if (filePaths.length > 0) {
-          const { error: storageError } =
-            await supabase.storage
-              .from("user-files")
-              .remove(filePaths);
+          const { error: storageError } = await supabase.storage
+            .from("user-files")
+            .remove(filePaths);
 
           if (storageError) {
-            console.warn(
-              "[Chat] تعذر حذف بعض الملفات:",
-              storageError.message
-            );
+            console.warn("[Chat] تعذر حذف بعض الملفات:", storageError.message);
           }
         }
 
         setAllChats((previous) =>
-          previous.filter(
-            (chat) => chat.id !== chatId
-          )
+          previous.filter((chat) => chat.id !== chatId)
         );
 
         if (isCurrent) {
           updateCurrentChatId(null);
-
           setMessages([createWelcomeMessage()]);
-
           setInput("");
-
           setAttachedFiles([]);
 
           if (setLongFormContext) {
@@ -717,23 +708,12 @@ export function useChats({
           }
         }
 
-        showToast(
-          "✅ تم حذف المحادثة وطلب إلغاء مهامها",
-          "success"
-        );
+        showToast("✅ تم حذف المحادثة وطلب إلغاء مهامها", "success");
       } catch (error) {
-        // لو الحذف فشل نسمح بالحفظ مرة أخرى.
         deletedChatsRef.current.delete(chatId);
 
-        console.error(
-          "[Chat] خطأ في حذف المحادثة:",
-          error
-        );
-
-        showToast(
-          "❌ فشل حذف المحادثة",
-          "error"
-        );
+        console.error("[Chat] خطأ في حذف المحادثة:", error);
+        showToast("❌ فشل حذف المحادثة", "error");
       }
     },
     [
@@ -747,7 +727,7 @@ export function useChats({
   );
 
   // ==========================================
-  // 8. الحفظ التلقائي
+  // الحفظ التلقائي
   // ==========================================
 
   const triggerAutoSave = useCallback(
@@ -758,7 +738,6 @@ export function useChats({
 
       saveTimerRef.current = setTimeout(() => {
         saveTimerRef.current = null;
-
         saveChatToSupabase();
       }, 3000);
     },
@@ -766,7 +745,7 @@ export function useChats({
   );
 
   // ==========================================
-  // 9. تنظيف الموارد
+  // تنظيف الموارد
   // ==========================================
 
   useEffect(() => {
@@ -790,6 +769,8 @@ export function useChats({
     newChat,
     openChat,
     deleteChat,
+    archiveChat,
+    restoreChat,
     triggerAutoSave,
   };
-}
+      }
