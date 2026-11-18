@@ -4,19 +4,14 @@
 // ✅ إزالة auto-summarize
 // ✅ Sliding Window للـ context
 // ✅ Cache لفحص is_blocked
-// ✅ نظام الذاكرة الجديد
+// ✅ نظام الذاكرة انتقل إلى memoryHelpers.js
 // ============================================
 
 import { supabase } from "../lib/supabase";
 import {
-  GROQ_FAST_MODEL,
   CONTEXT_WINDOW_SIZE,
   BLOCKED_CHECK_CACHE_MS,
   SEARCH_TRIGGER_KEYWORDS,
-  MEMORY_LOAD_LIMIT,
-  MEMORY_MIN_IMPORTANCE,
-  MEMORY_EXTRACT_INTERVAL,
-  MEMORY_CATEGORIES,
 } from "../config/constants";
 
 
@@ -24,18 +19,12 @@ import {
 // 1. 🔍 DuckDuckGo — بس لما يُطلب صراحة
 // ══════════════════════════════════════════════
 
-/**
- * يفحص إذا كانت الرسالة تطلب بحث خارجي
- */
 export function needsWebSearch(text) {
   if (!text) return false;
   const lower = text.toLowerCase();
   return SEARCH_TRIGGER_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-/**
- * بحث DuckDuckGo — يُستدعى بس لو needsWebSearch() = true
- */
 export async function searchDuckDuckGo(query) {
   try {
     const res = await fetch(
@@ -176,16 +165,9 @@ export function mergeMessages(existing, newMsgs) {
 
 
 // ══════════════════════════════════════════════
-// 8. 🪟 Sliding Window — آخر N رسالة كـ context
-// ✅ بدل إرسال كل التاريخ مع كل رسالة
+// 8. 🪟 Sliding Window
 // ══════════════════════════════════════════════
 
-/**
- * يُرجع آخر CONTEXT_WINDOW_SIZE رسالة بشكل مناسب للـ API
- * @param {Array}  messages - كل الرسائل
- * @param {string} newUserMessage - الرسالة الجديدة
- * @returns {Array} - الرسائل بصيغة {role, content}
- */
 export function buildContextWindow(messages, newUserMessage) {
   const window = messages
     .filter((m) => m.role === "user" || m.role === "assistant")
@@ -203,7 +185,6 @@ export function buildContextWindow(messages, newUserMessage) {
 
 // ══════════════════════════════════════════════
 // 9. 🛡️ فحص is_blocked مع Cache
-// ✅ بدل الفحص في كل رسالة
 // ══════════════════════════════════════════════
 
 const _blockedCache = {
@@ -212,9 +193,6 @@ const _blockedCache = {
   checkedAt: 0,
 };
 
-/**
- * يتحقق إذا كان المستخدم محظور — مع cache لمدة 5 دقائق
- */
 export async function checkIsBlocked(userId) {
   const now = Date.now();
 
@@ -342,187 +320,12 @@ export function detectSectionRequest(text) {
   return null;
 }
 
-
 // ══════════════════════════════════════════════
-// 12. 🧠 نظام الذاكرة — Memory System
+// 🧠 نظام الذاكرة انتقل إلى memoryHelpers.js
+// - loadMemoriesForPrompt
+// - listMemories / saveMemory / deleteMemory
+// - searchChatSummaries
+// - detectExplicitMemoryRequest
+// - extractMemoriesAndSummary
+// - buildMemoryPromptBlock
 // ══════════════════════════════════════════════
-
-/**
- * يجلب ذكريات المستخدم من Supabase
- */
-export async function loadMemories(userId, category = null) {
-  if (!userId) return [];
-
-  try {
-    let query = supabase
-      .from("memories")
-      .select("id, content, category, importance, created_at")
-      .eq("user_id", userId)
-      .gte("importance", MEMORY_MIN_IMPORTANCE)
-      .order("importance",   { ascending: false })
-      .order("last_used_at", { ascending: false })
-      .limit(MEMORY_LOAD_LIMIT);
-
-    if (category) query = query.eq("category", category);
-
-    const { data, error } = await query;
-    if (error) return [];
-    return data || [];
-  } catch {
-    return [];
-  }
-}
-
-
-/**
- * يستخرج الذكريات من رسالة المستخدم — كل MEMORY_EXTRACT_INTERVAL رسائل
- */
-export async function extractAndSaveMemory(
-  userId,
-  userMessage,
-  aiResponse,
-  messageCount,
-  session,
-  chatId
-) {
-  if (messageCount % MEMORY_EXTRACT_INTERVAL !== 0) return;
-  if (!userId || !session?.access_token || !chatId) return;
-
-  const extractPrompt = `
-أنت مساعد لاستخراج المعلومات المهمة من المحادثات.
-
-التبادل:
----
-المستخدم: ${userMessage.slice(0, 500)}
-المساعد: ${aiResponse.slice(0, 300)}
----
-
-هل يحتوي على معلومة مهمة تستحق الحفظ عن المستخدم؟
-(اسمه، مجاله، مشروعه، تفضيلاته، مستواه التقني، ما يدرسه، ما يعمل عليه...)
-
-إذا نعم:
-{"should_save":true,"content":"جملة واحدة بالعربية","category":"${Object.values(MEMORY_CATEGORIES).join("|")}","importance":1-5}
-
-إذا لا:
-{"should_save":false}
-
-أجب بـ JSON فقط.
-`.trim();
-
-  try {
-    const res = await fetch(
-      "https://yfglgxuhtidfksekgabk.supabase.co/functions/v1/hyper-responder",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization:  `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          model:        GROQ_FAST_MODEL,
-          max_tokens:   200,
-          temperature:  0.1,
-          systemPrompt: "أنت مساعد لاستخراج الذكريات. أجب بـ JSON فقط.",
-          messages:     [{ role: "user", content: extractPrompt }],
-        }),
-      }
-    );
-
-    if (!res.ok) {
-      const errorText = await res.text().catch(() => "");
-      console.error("[Memory] فشل طلب استخراج الذكريات:", res.status, errorText);
-      return;
-    }
-
-    const data      = await res.json();
-    const content   = data.choices?.[0]?.message?.content?.trim() || "";
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.warn("[Memory] رد استخراج الذكريات ليس JSON صالحاً:", content);
-      return;
-    }
-
-    const result = JSON.parse(jsonMatch[0]);
-    if (!result.should_save || !result.content) {
-      console.info("[Memory] لم يتم العثور على معلومة تستحق الحفظ في هذا التبادل.");
-      return;
-    }
-
-    await saveMemory(userId, {
-      content:    result.content.slice(0, 500),
-      category:   result.category  || MEMORY_CATEGORIES.GENERAL,
-      importance: Math.min(5, Math.max(1, parseInt(result.importance) || 2)),
-      chat_id:    chatId || null,
-    });
-
-  } catch (err) {
-    console.warn("[Memory] فشل الاستخراج:", err.message);
-  }
-}
-
-
-/**
- * يحفظ ذاكرة جديدة في Supabase مع تجنب التكرار
- */
-export async function saveMemory(userId, memory) {
-  if (!userId || !memory?.content) return;
-
-  try {
-    let existingQuery = supabase
-      .from("memories")
-      .select("id")
-      .eq("user_id", userId)
-      .ilike("content", `%${memory.content.slice(0, 30)}%`);
-
-    // منع دمج ذاكرة محادثة في محادثة أخرى؛ حتى يحذف CASCADE
-    // الذكريات التابعة للمحادثة الصحيحة فقط.
-    existingQuery = memory.chat_id
-      ? existingQuery.eq("chat_id", memory.chat_id)
-      : existingQuery.is("chat_id", null);
-
-    const { data: existing } = await existingQuery.limit(1);
-
-    if (existing && existing.length > 0) {
-      const { error: updateError } = await supabase
-        .from("memories")
-        .update({ last_used_at: new Date().toISOString() })
-        .eq("id", existing[0].id);
-      if (updateError) throw updateError;
-      console.info("[Memory] تم تحديث استخدام ذاكرة موجودة.");
-      return;
-    }
-
-    const { data, error: insertError } = await supabase
-      .from("memories")
-      .insert({
-        user_id:      userId,
-        content:      memory.content,
-        category:     memory.category   || MEMORY_CATEGORIES.GENERAL,
-        importance:   memory.importance || 2,
-        chat_id:      memory.chat_id || null,
-        created_at:   new Date().toISOString(),
-        last_used_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-
-    if (insertError) throw insertError;
-    console.info("[Memory] تم حفظ ذاكرة جديدة:", data?.id);
-
-  } catch (err) {
-    console.warn("[Memory] فشل الحفظ:", err.message);
-  }
-}
-
-
-/**
- * يحذف ذاكرة معينة
- */
-export async function deleteMemory(memoryId) {
-  if (!memoryId) return;
-  try {
-    await supabase.from("memories").delete().eq("id", memoryId);
-  } catch (err) {
-    console.warn("[Memory] فشل الحذف:", err.message);
-  }
-}
