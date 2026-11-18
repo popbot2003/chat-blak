@@ -342,9 +342,13 @@ ${wantSummary ? '' : 'ما تولّدش summary، خليه null.'}
 // ─── 13) تحديث summary في chats ─────────────────────────────
 export async function updateChatSummary(chatId, summary) {
   if (!chatId || !summary) return;
+
   const { error } = await supabase
     .from('chats')
     .update({ summary })
     .eq('id', chatId);
-  if (error) console.error('[memory] update summary failed:', error);
+
+  if (error) {
+    console.error('[memory] update summary failed:', error);
+  }
 }
