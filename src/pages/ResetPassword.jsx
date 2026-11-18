@@ -1,6 +1,6 @@
 // ============================================
 // ResetPassword.jsx — بلاك 🖤
-// ✅ CSS classes من theme.css — صفر inline styles
+// ✅ CSS classes من tokens.css — صفر inline styles
 // تدعم: ?code= و ?token_hash= و #access_token
 // ============================================
 

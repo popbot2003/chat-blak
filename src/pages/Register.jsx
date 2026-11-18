@@ -1,6 +1,6 @@
 // ============================================
 // Register.jsx — بلاك 🖤
-// ✅ CSS classes من theme.css — صفر inline styles
+// ✅ CSS classes من tokens.css — صفر inline styles
 // ============================================
 
 import { useState } from "react";

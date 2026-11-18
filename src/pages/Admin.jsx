@@ -20,8 +20,8 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { DEFAULT_KEY_DAILY_LIMIT } from "../config/constants";
 
 import {
-  AdminHeader,
-  AdminTabs,
+  AdminShell,
+  OverviewTab,
   UsersTab,
   KeysTab,
   ChatsTab,
@@ -53,20 +53,21 @@ import {
 // ============================================================
 //  Helper: بناء theme حسب الوضع الحالي
 // ============================================================
-const buildTheme = (darkMode) => ({
-  bg: darkMode ? "#0f172a" : "#f8fafc",
-  surface: darkMode ? "#1e293b" : "#ffffff",
-  surface2: darkMode ? "#334155" : "#f1f5f9",
-  border: darkMode ? "#334155" : "#e2e8f0",
-  borderStrong: darkMode ? "#475569" : "#cbd5e1",
-  text: darkMode ? "#f1f5f9" : "#0f172a",
-  textMuted: darkMode ? "#94a3b8" : "#64748b",
-  inputBg: darkMode ? "#0f172a" : "#f9fafb",
-  rowHover: darkMode ? "rgba(59,130,246,0.05)" : "rgba(59,130,246,0.03)",
-  barBg: darkMode ? "#334155" : "#e2e8f0",
-  tabActiveBg: darkMode ? "rgba(16,185,129,0.15)" : "rgba(16,185,129,0.1)",
-  tabActiveColor: darkMode ? "#6ee7b7" : "#059669",
-  tabInactiveColor: darkMode ? "#94a3b8" : "#64748b",
+// القيم تأتي من src/styles/tokens.css — الوضع الفاتح/الداكن عبر data-theme على .adm
+const buildTheme = () => ({
+  bg: "var(--bg-main)",
+  surface: "var(--bg-card)",
+  surface2: "var(--bg-elevated)",
+  border: "var(--border)",
+  borderStrong: "var(--border-strong)",
+  text: "var(--text-primary)",
+  textMuted: "var(--text-secondary)",
+  inputBg: "var(--bg-input)",
+  rowHover: "var(--bg-hover)",
+  barBg: "var(--border-strong)",
+  tabActiveBg: "var(--bg-active)",
+  tabActiveColor: "var(--brand-primary-light)",
+  tabInactiveColor: "var(--text-secondary)",
 });
 
 // ============================================================
@@ -110,7 +111,7 @@ export default function Admin({ user, onLogout }) {
   const [users, setUsers] = useState([]);
   const [apiKeys, setApiKeys] = useState([]);
   const [allChats, setAllChats] = useState([]);
-  const [activeTab, setActiveTab] = useState("users");
+  const [activeTab, setActiveTab] = useState("overview");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -157,7 +158,7 @@ export default function Admin({ user, onLogout }) {
   const [onlineUsers, setOnlineUsers] = useState({});
 
   // ===== ✅ Theme =====
-  const theme = useMemo(() => buildTheme(darkMode), [darkMode]);
+  const theme = useMemo(() => buildTheme(), []);
 
   // ===== ✅ أنماط مشتقة =====
   const inputStyle = useMemo(
@@ -265,10 +266,6 @@ export default function Admin({ user, onLogout }) {
       document.documentElement.classList.remove("admin-page");
     };
   }, []);
-
-  useEffect(() => {
-    document.body.style.backgroundColor = theme.bg;
-  }, [theme.bg, darkMode]);
 
   // ✅ تحديث تلقائي كل 10 ثواني
   useEffect(() => {
@@ -679,93 +676,46 @@ export default function Admin({ user, onLogout }) {
   // (ChatsTab يفلتر داخليًا)
   const filteredChats = allChats;
 
-  // ===== ✅ Padding متجاوب =====
-  const contentPadding = isMobile ? "12px" : isTablet ? "14px" : "16px";
-  const toastPadding = isMobile ? "10px 16px" : "12px 22px";
-  const toastFontSize = isMobile ? "13px" : "14px";
-  const toastMaxWidth = isMobile ? "calc(100vw - 24px)" : "auto";
-
   // ===== JSX =====
   return (
-    <div
-      style={{
-        background: theme.bg,
-        color: theme.text,
-        height: "100dvh",
-        minHeight: "100vh",
-        overflowY: "auto",
-        overflowX: "hidden",
-        WebkitOverflowScrolling: "touch",
-        overscrollBehaviorY: "contain",
-        boxSizing: "border-box",
-        transition: "background 0.3s, color 0.3s",
-        fontFamily: "'Cairo', 'Segoe UI', Tahoma, sans-serif",
-        direction: "rtl",
-      }}
-    >
-      {/* Toast */}
+    <div className="adm" data-theme={darkMode ? "dark" : "light"} dir="rtl">
       {toast && (
-        <div
-          style={{
-            position: "fixed",
-            top: isMobile ? "12px" : "20px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            background:
-              toast.type === "error"
-                ? "#ef4444"
-                : toast.type === "info"
-                ? "#3b82f6"
-                : "#10b981",
-            color: "#fff",
-            padding: toastPadding,
-            borderRadius: "12px",
-            zIndex: 9999,
-            boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            fontSize: toastFontSize,
-            fontWeight: "600",
-            whiteSpace: isMobile ? "normal" : "nowrap",
-            maxWidth: toastMaxWidth,
-            textAlign: "center",
-            wordBreak: "break-word",
-          }}
-        >
-          {toast.type === "error" ? "❌ " : toast.type === "info" ? "ℹ️ " : "✅ "}
+        <div className={`ui-toast ${toast.type === "error" ? "ui-toast--error" : toast.type === "info" ? "ui-toast--info" : ""}`} role="status">
           {toast.message}
         </div>
       )}
 
-      {/* Header */}
-      <AdminHeader
+      <AdminShell
         user={user}
-        theme={theme}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        onLogout={onLogout}
-        exportKeysToCSV={exportKeysToCSV}
-        isMobile={isMobile}
-        isTablet={isTablet}
+        onToggleTheme={() => {
+          const next = !darkMode;
+          setDarkMode(next);
+          localStorage.setItem("adminDarkMode", String(next));
+        }}
         onShowExport={() => {
           setExportType("users");
           setShowExportModal(true);
         }}
-      />
-
-      {/* Tabs */}
-      <AdminTabs
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        theme={theme}
-        isMobile={isMobile}
+        exportKeysToCSV={exportKeysToCSV}
+        onLogout={onLogout}
         counts={{
           users: users.length,
           keys: `${apiKeys.filter((k) => k.is_active).length}/${apiKeys.length}`,
           chats: allChats.length,
         }}
-      />
-
-      {/* Content */}
-      <div style={{ padding: contentPadding }}>
+      >
+        {activeTab === "overview" && (
+          <OverviewTab
+            users={users}
+            apiKeys={apiKeys}
+            allChats={allChats}
+            isUserOnline={isUserOnline}
+            onGo={setActiveTab}
+          />
+        )}
         {activeTab === "users" && (
           <UsersTab
             user={user}
@@ -832,7 +782,7 @@ export default function Admin({ user, onLogout }) {
             onDeleteAll={deleteAllChatsConfirm}
           />
         )}
-      </div>
+      </AdminShell>
 
       {/* Modals */}
       <AddKeyModal

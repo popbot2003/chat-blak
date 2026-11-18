@@ -1067,6 +1067,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
               onClose={() => setShowSettings(false)}
               onSave={handleSaveSettings}
               onDeleteAccount={handleDeleteAccount}
+              theme={theme}
+              onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
             />
           )}
 
