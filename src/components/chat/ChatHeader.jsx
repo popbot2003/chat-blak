@@ -8,11 +8,12 @@ export default function ChatHeader({
   loading,
   onToggleHistory,
   onNewChat,
+  sidebarCollapsed = false,
 }) {
   return (
     <div className="header">
       <div className="header-left">
-        <button className="header-btn sidebar-toggle" onClick={onToggleHistory} title="سجل المحادثات" aria-label="سجل المحادثات">☰</button>
+        <button className={`header-btn sidebar-toggle ${sidebarCollapsed ? "sidebar-toggle--collapsed" : ""}`} onClick={onToggleHistory} title="القائمة" aria-label="فتح القائمة">☰</button>
         <div className="avatar" aria-label="BLAK">B.</div>
         <div className="brand-lockup">
           <div className="header-name">BLAK <span className="brand-ar">بلاك</span></div>
