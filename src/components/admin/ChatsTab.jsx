@@ -205,7 +205,7 @@ export default function ChatsTab({
   const refreshBtnStyle = useMemo(
     () => ({
       background: "rgba(16,185,129,0.15)",
-      color: "#10b981",
+      color: "var(--success)",
       border: "none",
       padding: isMobile ? "10px 14px" : "8px 14px",
       borderRadius: "10px",
@@ -294,7 +294,7 @@ export default function ChatsTab({
             style={{
               ...statBadgeStyle,
               background: "rgba(16,185,129,0.15)",
-              color: "#10b981",
+              color: "var(--success)",
             }}
           >
             🔍 معروض: <strong>{filteredFolders.length}</strong>
@@ -356,7 +356,7 @@ export default function ChatsTab({
                 style={{
                   marginTop: "12px",
                   background: "rgba(16,185,129,0.15)",
-                  color: "#10b981",
+                  color: "var(--success)",
                   border: "1px solid rgba(16,185,129,0.3)",
                   padding: "8px 16px",
                   borderRadius: "10px",

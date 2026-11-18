@@ -37,7 +37,7 @@ export default function ChatsMobileCard({
       width: "40px",
       height: "40px",
       borderRadius: "50%",
-      background: "linear-gradient(135deg, #10b981, #059669)",
+      background: "var(--brand-gradient)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -99,7 +99,7 @@ export default function ChatsMobileCard({
   const messagesBadgeStyle = useMemo(
     () => ({
       background: "rgba(16,185,129,0.15)",
-      color: "#10b981",
+      color: "var(--success)",
       padding: "3px 10px",
       borderRadius: "20px",
       fontSize: "12px",
@@ -173,14 +173,14 @@ export default function ChatsMobileCard({
         <ActionBtn
           icon="👁️"
           label="عرض"
-          color="#3b82f6"
+          color="var(--brand-primary)"
           bg="rgba(59,130,246,0.15)"
           onClick={handleOpen}
         />
         <ActionBtn
           icon="🗑️"
           label="حذف"
-          color="#ef4444"
+          color="var(--danger)"
           bg="rgba(239,68,68,0.15)"
           onClick={handleDelete}
         />

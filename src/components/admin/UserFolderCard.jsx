@@ -51,15 +51,15 @@ function formatRelativeShort(timestamp) {
 // ============================================================
 function getUserStatus(lastActivity) {
   if (!lastActivity) {
-    return { label: "غير معروف", color: "#94a3b8", dot: "⚪" };
+    return { label: "غير معروف", color: "var(--text-muted)", dot: "⚪" };
   }
   const diff = Date.now() - new Date(lastActivity).getTime();
   const hours = diff / 3600000;
 
-  if (hours < 1) return { label: "نشط الآن", color: "#10b981", dot: "🟢" };
-  if (hours < 24) return { label: "نشط اليوم", color: "#3b82f6", dot: "🔵" };
-  if (hours < 168) return { label: "آخر أسبوع", color: "#f59e0b", dot: "🟡" };
-  return { label: "غير نشط", color: "#94a3b8", dot: "⚪" };
+  if (hours < 1) return { label: "نشط الآن", color: "var(--success)", dot: "🟢" };
+  if (hours < 24) return { label: "نشط اليوم", color: "var(--brand-primary)", dot: "🔵" };
+  if (hours < 168) return { label: "آخر أسبوع", color: "var(--warning)", dot: "🟡" };
+  return { label: "غير نشط", color: "var(--text-muted)", dot: "⚪" };
 }
 
 // ============================================================
@@ -120,7 +120,7 @@ export default function UserFolderCard({
   const cardStyle = useMemo(
     () => ({
       background: theme.surface,
-      border: `1px solid ${hover ? "#10b981" : theme.border}`,
+      border: `1px solid ${hover ? "var(--success)" : theme.border}`,
       borderRadius: "14px",
       padding: isMobile ? "12px" : "16px",
       marginBottom: isMobile ? "10px" : "12px",
@@ -153,7 +153,7 @@ export default function UserFolderCard({
       width: isMobile ? "42px" : "48px",
       height: isMobile ? "42px" : "48px",
       borderRadius: "50%",
-      background: "linear-gradient(135deg, #10b981, #059669)",
+      background: "var(--brand-gradient)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -172,9 +172,9 @@ export default function UserFolderCard({
       width: "12px",
       height: "12px",
       borderRadius: "50%",
-      background: online ? "#10b981" : "#6b7280",
+      background: online ? "var(--success)" : "var(--text-muted)",
       border: `2px solid ${theme.surface}`,
-      boxShadow: online ? "0 0 6px #10b981" : "none",
+      boxShadow: online ? "0 0 6px var(--success)" : "none",
     }),
     [online, theme.surface]
   );
@@ -239,7 +239,7 @@ export default function UserFolderCard({
     () => ({
       fontSize: isMobile ? "16px" : "18px",
       fontWeight: "700",
-      color: "#10b981",
+      color: "var(--success)",
       lineHeight: 1.2,
     }),
     [isMobile]
@@ -397,7 +397,7 @@ export default function UserFolderCard({
           }}
           style={{
             background: "rgba(16,185,129,0.15)",
-            color: "#10b981",
+            color: "var(--success)",
             border: "1px solid rgba(16,185,129,0.3)",
             padding: isMobile ? "8px 14px" : "8px 16px",
             borderRadius: "10px",

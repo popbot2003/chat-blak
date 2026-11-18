@@ -90,7 +90,7 @@ export default function KeysTab({
   // ✅ زر "إضافة مفتاح" يأخذ عرض كامل على الموبايل
   const addBtnStyle = useMemo(
     () => ({
-      background: "linear-gradient(135deg, #10b981, #059669)",
+      background: "var(--brand-gradient)",
       color: "#fff",
       border: "none",
       padding: isMobile ? "11px 16px" : "10px 18px",
@@ -169,7 +169,7 @@ export default function KeysTab({
       textAlign: "right",
       fontSize: isMobile ? "12px" : "14px",
       fontWeight: "600",
-      color: darkMode ? "#93c5fd" : "#3b82f6",
+      color: darkMode ? "var(--brand-primary-light)" : "var(--brand-primary)",
       whiteSpace: "nowrap",
       borderBottom: `1px solid ${theme.border}`,
     }),
@@ -223,8 +223,8 @@ export default function KeysTab({
         <ActionButton
           onClick={handleValidateAll}
           disabled={validating}
-          color="#f59e0b"
-          bg="linear-gradient(135deg, #f59e0b, #d97706)"
+          color="var(--warning)"
+          bg="linear-gradient(135deg, var(--warning), var(--warning))"
           icon={validating ? "⏳" : "🔍"}
           label={validating ? "جاري الفحص..." : "فحص جميع المفاتيح"}
           theme={theme}
@@ -232,11 +232,11 @@ export default function KeysTab({
         />
         <ActionButton
           onClick={handleToggleAuto}
-          color={autoValidate ? "#10b981" : theme.text}
+          color={autoValidate ? "var(--success)" : theme.text}
           bg={autoValidate ? "rgba(16,185,129,0.15)" : theme.inputBg}
           border={
             autoValidate
-              ? "1px solid #10b981"
+              ? "1px solid var(--success)"
               : `1px solid ${theme.border}`
           }
           icon={autoValidate ? "🟢" : "⚫"}
@@ -246,7 +246,7 @@ export default function KeysTab({
         />
         <ActionButton
           onClick={handleShowLogs}
-          color="#a29bfe"
+          color="var(--brand-primary-light)"
           bg="rgba(108,92,231,0.15)"
           icon="📋"
           label="سجل الفحوصات"
@@ -255,7 +255,7 @@ export default function KeysTab({
         />
         <ActionButton
           onClick={handleExportCSV}
-          color="#10b981"
+          color="var(--success)"
           bg="rgba(16,185,129,0.15)"
           icon="📥"
           label="تصدير CSV"
@@ -287,7 +287,7 @@ export default function KeysTab({
               style={{
                 width: `${progressPercent}%`,
                 height: "100%",
-                background: "linear-gradient(135deg, #f59e0b, #d97706)",
+                background: "linear-gradient(135deg, var(--warning), var(--warning))",
                 transition: "width 0.3s",
               }}
             />

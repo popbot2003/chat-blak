@@ -43,7 +43,7 @@ export default function KeyCard({
     const activeNow = isKeyActiveNow(keyItem, currentTime);
     const lastUsed = getLastUsedTime(keyItem.last_request_at, currentTime);
     const limitColor =
-      percent > 90 ? "#ef4444" : percent > 50 ? "#f59e0b" : theme.text;
+      percent > 90 ? "var(--danger)" : percent > 50 ? "var(--warning)" : theme.text;
 
     // ✅ عدّاد تجديد الحصة — يظهر بس عند 95%+
     const countdown =
@@ -166,7 +166,7 @@ export default function KeyCard({
       padding: activeNow ? "4px 10px" : "0",
       borderRadius: "12px",
       background: activeNow ? "rgba(16,185,129,0.15)" : "transparent",
-      color: activeNow ? "#10b981" : theme.textMuted,
+      color: activeNow ? "var(--success)" : theme.textMuted,
       fontSize: isTablet ? "11px" : "12px",
       fontWeight: activeNow ? "700" : "500",
       whiteSpace: "nowrap",
@@ -185,7 +185,7 @@ export default function KeyCard({
       background: countdown?.ready
         ? "rgba(16,185,129,0.15)"
         : "rgba(59,130,246,0.12)",
-      color: countdown?.ready ? "#10b981" : "#3b82f6",
+      color: countdown?.ready ? "var(--success)" : "var(--brand-primary)",
       fontSize: isTablet ? "11px" : "12px",
       fontWeight: "600",
       fontFamily: "monospace",
@@ -231,8 +231,8 @@ export default function KeyCard({
                 width: "10px",
                 height: "10px",
                 borderRadius: "50%",
-                background: "#10b981",
-                boxShadow: "0 0 8px #10b981",
+                background: "var(--success)",
+                boxShadow: "0 0 8px var(--success)",
                 animation: "pulse 1.5s infinite",
                 flexShrink: 0,
               }}
@@ -353,7 +353,7 @@ export default function KeyCard({
               padding: "4px 10px",
               borderRadius: "12px",
               background: "rgba(245,158,11,0.12)",
-              color: "#f59e0b",
+              color: "var(--warning)",
               fontSize: isTablet ? "11px" : "12px",
               fontWeight: "600",
               whiteSpace: "nowrap",
@@ -373,21 +373,21 @@ export default function KeyCard({
           <IconBtn
             icon="🔍"
             title="فحص المفتاح"
-            color="#a29bfe"
+            color="var(--brand-primary-light)"
             bg="rgba(108,92,231,0.15)"
             onClick={handleTest}
           />
           <IconBtn
             icon="🔄"
             title="تصفير الاستهلاك"
-            color="#fbbf24"
+            color="var(--warning)"
             bg="rgba(251,191,36,0.15)"
             onClick={handleReset}
           />
           <IconBtn
             icon={keyItem.is_active ? "⏸️" : "▶️"}
             title={keyItem.is_active ? "تعطيل" : "تفعيل"}
-            color={keyItem.is_active ? "#f87171" : "#4ade80"}
+            color={keyItem.is_active ? "var(--danger)" : "var(--success)"}
             bg={
               keyItem.is_active
                 ? "rgba(248,113,113,0.15)"
@@ -399,7 +399,7 @@ export default function KeyCard({
             <IconBtn
               icon="✨"
               title="إعادة تفعيل"
-              color="#22c55e"
+              color="var(--success)"
               bg="rgba(34,197,94,0.15)"
               onClick={handleReactivate}
             />
@@ -407,7 +407,7 @@ export default function KeyCard({
           <IconBtn
             icon="🗑️"
             title="حذف"
-            color="#f87171"
+            color="var(--danger)"
             bg="rgba(248,113,113,0.15)"
             onClick={handleDelete}
           />

@@ -27,28 +27,28 @@ export default function AdminStats({
         label: "نشط",
         value: stats.active,
         icon: "✅",
-        color: "#10b981",
+        color: "var(--success)",
         bg: "rgba(16,185,129,0.12)",
       },
       {
         label: "مقيّد",
         value: stats.limited,
         icon: "⏸️",
-        color: "#f59e0b",
+        color: "var(--warning)",
         bg: "rgba(245,158,11,0.12)",
       },
       {
         label: "معطل",
         value: stats.disabled,
         icon: "❌",
-        color: "#ef4444",
+        color: "var(--danger)",
         bg: "rgba(239,68,68,0.12)",
       },
       {
         label: "الإجمالي",
         value: stats.total,
         icon: "📊",
-        color: "#3b82f6",
+        color: "var(--brand-primary)",
         bg: "rgba(59,130,246,0.12)",
       },
     ],
@@ -175,7 +175,7 @@ export default function AdminStats({
               style={{
                 fontSize: isMobile ? "14px" : "16px",
                 fontWeight: "bold",
-                color: "#f59e0b",
+                color: "var(--warning)",
               }}
             >
               {earliestFree}

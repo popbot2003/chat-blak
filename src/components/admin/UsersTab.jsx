@@ -71,7 +71,7 @@ export default function UsersTab({
       width: isMobile ? "42px" : "52px",
       height: isMobile ? "42px" : "52px",
       borderRadius: "50%",
-      background: "linear-gradient(135deg, #10b981, #059669)",
+      background: "var(--brand-gradient)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -156,7 +156,7 @@ export default function UsersTab({
   const refreshBtnStyle = useMemo(
     () => ({
       background: "rgba(16,185,129,0.15)",
-      color: "#10b981",
+      color: "var(--success)",
       border: "none",
       padding: isMobile ? "8px 12px" : "8px 14px",
       borderRadius: "10px",
@@ -198,7 +198,7 @@ export default function UsersTab({
       textAlign: "right",
       fontSize: isMobile ? "12px" : "14px",
       fontWeight: "600",
-      color: darkMode ? "#6ee7b7" : "#059669",
+      color: darkMode ? "var(--success)" : "var(--success)",
       whiteSpace: "nowrap",
     }),
     [darkMode, isMobile]
@@ -248,15 +248,15 @@ export default function UsersTab({
                     width: "8px",
                     height: "8px",
                     borderRadius: "50%",
-                    background: adminOnline ? "#10b981" : "#6b7280",
-                    boxShadow: adminOnline ? "0 0 5px #10b981" : "none",
+                    background: adminOnline ? "var(--success)" : "var(--text-muted)",
+                    boxShadow: adminOnline ? "0 0 5px var(--success)" : "none",
                     flexShrink: 0,
                   }}
                 />
                 <span
                   style={{
                     fontSize: "12px",
-                    color: adminOnline ? "#10b981" : theme.textMuted,
+                    color: adminOnline ? "var(--success)" : theme.textMuted,
                   }}
                 >
                   {adminOnline ? "متصل الآن" : "غير متصل"}
@@ -264,7 +264,7 @@ export default function UsersTab({
                 <span
                   style={{
                     fontSize: "12px",
-                    color: "#10b981",
+                    color: "var(--success)",
                     fontWeight: "bold",
                     marginRight: "6px",
                   }}
@@ -289,7 +289,7 @@ export default function UsersTab({
               <span
                 style={{
                   fontWeight: "bold",
-                  color: "#10b981",
+                  color: "var(--success)",
                   fontSize: isMobile ? "14px" : "15px",
                 }}
               >

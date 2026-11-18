@@ -89,7 +89,7 @@ export default function KeyMobileCard({
     () => ({
       background: theme.surface,
       border: activeNow
-        ? "2px solid #10b981"
+        ? "2px solid var(--success)"
         : `1px solid ${theme.border}`,
       borderRadius: "14px",
       padding: "14px",
@@ -196,8 +196,8 @@ export default function KeyMobileCard({
                   width: "10px",
                   height: "10px",
                   borderRadius: "50%",
-                  background: "#10b981",
-                  boxShadow: "0 0 8px #10b981",
+                  background: "var(--success)",
+                  boxShadow: "0 0 8px var(--success)",
                   animation: "pulse 1.5s infinite",
                   flexShrink: 0,
                 }}
@@ -320,7 +320,7 @@ export default function KeyMobileCard({
           padding: activeNow ? "8px 12px" : "6px 0",
           borderRadius: "10px",
           background: activeNow ? "rgba(16,185,129,0.12)" : "transparent",
-          color: activeNow ? "#10b981" : theme.textMuted,
+          color: activeNow ? "var(--success)" : theme.textMuted,
           fontSize: "13px",
           fontWeight: activeNow ? "700" : "500",
           justifyContent: "center",
@@ -341,7 +341,7 @@ export default function KeyMobileCard({
             background: countdown.ready
               ? "rgba(16,185,129,0.12)"
               : "rgba(59,130,246,0.12)",
-            color: countdown.ready ? "#10b981" : "#3b82f6",
+            color: countdown.ready ? "var(--success)" : "var(--brand-primary)",
             fontSize: "13px",
             fontWeight: "600",
             justifyContent: "center",
@@ -364,7 +364,7 @@ export default function KeyMobileCard({
             padding: "8px 12px",
             borderRadius: "10px",
             background: "rgba(245,158,11,0.12)",
-            color: "#f59e0b",
+            color: "var(--warning)",
             fontSize: "13px",
             fontWeight: "600",
             justifyContent: "center",
@@ -399,21 +399,21 @@ export default function KeyMobileCard({
         <ActionBtn
           icon="🔍"
           label="فحص"
-          color="#a29bfe"
+          color="var(--brand-primary-light)"
           bg="rgba(108,92,231,0.15)"
           onClick={handleTest}
         />
         <ActionBtn
           icon="🔄"
           label="تصفير"
-          color="#fbbf24"
+          color="var(--warning)"
           bg="rgba(251,191,36,0.15)"
           onClick={handleReset}
         />
         <ActionBtn
           icon={keyItem.is_active ? "⏸️" : "▶️"}
           label={keyItem.is_active ? "تعطيل" : "تفعيل"}
-          color={keyItem.is_active ? "#f87171" : "#4ade80"}
+          color={keyItem.is_active ? "var(--danger)" : "var(--success)"}
           bg={
             keyItem.is_active
               ? "rgba(248,113,113,0.15)"
@@ -425,7 +425,7 @@ export default function KeyMobileCard({
           <ActionBtn
             icon="✨"
             label="إعادة"
-            color="#22c55e"
+            color="var(--success)"
             bg="rgba(34,197,94,0.15)"
             onClick={handleReactivate}
           />
@@ -433,7 +433,7 @@ export default function KeyMobileCard({
         <ActionBtn
           icon="🗑️"
           label="حذف"
-          color="#f87171"
+          color="var(--danger)"
           bg="rgba(248,113,113,0.15)"
           onClick={handleDelete}
         />

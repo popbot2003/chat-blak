@@ -84,7 +84,7 @@ export default function UsersMobileCard({
       background: u.is_blocked
         ? "rgba(239,68,68,0.15)"
         : "rgba(16,185,129,0.15)",
-      color: u.is_blocked ? "#ef4444" : "#10b981",
+      color: u.is_blocked ? "var(--danger)" : "var(--success)",
       whiteSpace: "nowrap",
       flexShrink: 0,
     }),
@@ -245,14 +245,14 @@ export default function UsersMobileCard({
               width: "8px",
               height: "8px",
               borderRadius: "50%",
-              background: online ? "#10b981" : "#6b7280",
+              background: online ? "var(--success)" : "var(--text-muted)",
               flexShrink: 0,
             }}
           />
           <span
             style={{
               fontSize: "12px",
-              color: online ? "#10b981" : theme.textMuted,
+              color: online ? "var(--success)" : theme.textMuted,
               fontWeight: "600",
               whiteSpace: "nowrap",
             }}
@@ -267,14 +267,14 @@ export default function UsersMobileCard({
         <ActionBtn
           icon="⚙️"
           label="تعديل"
-          color="#f59e0b"
+          color="var(--warning)"
           bg="rgba(245,158,11,0.15)"
           onClick={handleEdit}
         />
         <ActionBtn
           icon={u.is_blocked ? "🔓" : "🔒"}
           label={u.is_blocked ? "فك الحظر" : "حظر"}
-          color={u.is_blocked ? "#10b981" : "#ef4444"}
+          color={u.is_blocked ? "var(--success)" : "var(--danger)"}
           bg={
             u.is_blocked
               ? "rgba(16,185,129,0.15)"
@@ -285,7 +285,7 @@ export default function UsersMobileCard({
         <ActionBtn
           icon="🗑️"
           label="حذف"
-          color="#ef4444"
+          color="var(--danger)"
           bg="rgba(239,68,68,0.15)"
           onClick={handleDelete}
         />

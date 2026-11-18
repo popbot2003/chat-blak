@@ -82,7 +82,7 @@ export default function UserCard({
       background: u.is_blocked
         ? "rgba(239,68,68,0.15)"
         : "rgba(16,185,129,0.15)",
-      color: u.is_blocked ? "#ef4444" : "#10b981",
+      color: u.is_blocked ? "var(--danger)" : "var(--success)",
       whiteSpace: "nowrap",
     }),
     [u.is_blocked, isTablet]
@@ -129,7 +129,7 @@ export default function UserCard({
       background: u.is_blocked
         ? "rgba(16,185,129,0.15)"
         : "rgba(239,68,68,0.15)",
-      color: u.is_blocked ? "#10b981" : "#ef4444",
+      color: u.is_blocked ? "var(--success)" : "var(--danger)",
       minHeight: isTablet ? "32px" : "auto",
       whiteSpace: "nowrap",
     }),
@@ -245,8 +245,8 @@ export default function UserCard({
               width: "10px",
               height: "10px",
               borderRadius: "50%",
-              background: online ? "#10b981" : "#6b7280",
-              boxShadow: online ? "0 0 5px #10b981" : "none",
+              background: online ? "var(--success)" : "var(--text-muted)",
+              boxShadow: online ? "0 0 5px var(--success)" : "none",
               flexShrink: 0,
             }}
           />
@@ -264,7 +264,7 @@ export default function UserCard({
             style={{
               ...iconBtnStyle,
               background: "rgba(245,158,11,0.15)",
-              color: "#f59e0b",
+              color: "var(--warning)",
             }}
             title="تعديل الحد اليومي"
             aria-label={`تعديل ${u.name || u.email}`}
@@ -284,7 +284,7 @@ export default function UserCard({
             style={{
               ...iconBtnStyle,
               background: "rgba(239,68,68,0.15)",
-              color: "#ef4444",
+              color: "var(--danger)",
             }}
             title="حذف المستخدم نهائيًا"
             aria-label={`حذف ${u.name || u.email}`}

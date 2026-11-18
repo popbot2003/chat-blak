@@ -2,8 +2,8 @@
 // src/components/admin/index.js
 // ============================================
 
-export { default as AdminHeader } from "./AdminHeader";
-export { default as AdminTabs } from "./AdminTabs";
+export { default as AdminShell } from "./AdminShell";
+export { default as OverviewTab } from "./OverviewTab";
 export { default as AdminStats } from "./AdminStats";
 
 export { default as UsersTab } from "./UsersTab";
