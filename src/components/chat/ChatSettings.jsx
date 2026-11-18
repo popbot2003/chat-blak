@@ -1,262 +1,220 @@
 // ============================================
-// ChatSettings.jsx — صفحة إعدادات مستقلة 🖤
+// ChatSettings.jsx — نافذة الإعدادات
+// نافذة مركزية على الديسكتوب، وصفحة كاملة على الهاتف.
+// الأنماط: src/styles/settings/settings.css (لا توجد inline styles)
 // ============================================
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { PERSONALITY_LABELS } from "../../config/personalities";
+
+const TABS = [
+  { id: "profile", icon: "👤", label: "الملف الشخصي" },
+  { id: "personality", icon: "🎭", label: "الشخصية" },
+  { id: "appearance", icon: "🎨", label: "المظهر" },
+  { id: "security", icon: "🔒", label: "الأمان" },
+];
+
+const PERSONALITY_INFO = {
+  blak: "الشخصية الأساسية — مصرية، مباشرة، وتفهم أسلوبك.",
+  gair: "شخصية واثقة وصريحة وردودها قصيرة.",
+};
+
+const GENDERS = [
+  { value: "ولد", label: "ولد" },
+  { value: "بنت", label: "بنت" },
+];
 
 export default function ChatSettings({
   user,
   onClose,
   onSave,
   onDeleteAccount,
-  theme,
+  theme = "dark",
   onToggleTheme,
 }) {
-  const [editName, setEditName] = useState(user?.name || "");
-  const [editPersonality, setEditPersonality] = useState(user?.personality || "blak");
-  const [editGender, setEditGender] = useState(user?.gender || "ولد");
-  const [editNewPassword, setEditNewPassword] = useState("");
-  const [editConfirmPassword, setEditConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [tab, setTab] = useState("profile");
+  const [name, setName] = useState(user?.name || "");
+  const [personality, setPersonality] = useState(user?.personality || "blak");
+  const [gender, setGender] = useState(user?.gender || "ولد");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [activeTab, setActiveTab] = useState("general"); // general, security, appearance
+  const [status, setStatus] = useState(null); // { type: "error" | "success", text }
+
+  useEffect(() => {
+    const onKey = (e) => e.key === "Escape" && onClose?.();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const updates = useMemo(() => {
+    const u = {};
+    const trimmed = name.trim();
+    if (trimmed && trimmed !== user?.name) u.name = trimmed;
+    if (personality !== (user?.personality || "blak")) u.personality = personality;
+    if (gender !== (user?.gender || "ولد")) u.gender = gender;
+    return u;
+  }, [name, personality, gender, user]);
+
+  const dirty = Object.keys(updates).length > 0 || password.length > 0;
 
   async function handleSave() {
-    setError("");
-
-    if (editNewPassword && editNewPassword !== editConfirmPassword) {
-      setError("❌ كلمة المرور الجديدة غير متطابقة");
-      return;
+    setStatus(null);
+    if (password && password.length < 6) {
+      setTab("security");
+      return setStatus({ type: "error", text: "كلمة المرور قصيرة، استخدم 6 أحرف على الأقل." });
     }
-    if (editNewPassword && editNewPassword.length < 6) {
-      setError("❌ كلمة المرور الجديدة قصيرة (6 أحرف على الأقل)");
-      return;
+    if (password && password !== confirm) {
+      setTab("security");
+      return setStatus({ type: "error", text: "كلمتا المرور غير متطابقتين." });
     }
-
-    const updates = {};
-    if (editName && editName !== user?.name) updates.name = editName;
-    if (editPersonality !== user?.personality) updates.personality = editPersonality;
-    if (editGender !== user?.gender) updates.gender = editGender;
-
-    if (!Object.keys(updates).length && !editNewPassword) {
-      setError("❌ لا توجد تغييرات للحفظ");
-      return;
-    }
-
     setLoading(true);
     try {
-      await onSave({
-        profileUpdates: updates,
-        newPassword: editNewPassword || null,
-      });
-      showToast("✅ تم حفظ الإعدادات بنجاح");
+      await onSave({ profileUpdates: updates, newPassword: password || null });
+      setPassword("");
+      setConfirm("");
+      setStatus({ type: "success", text: "تم حفظ التغييرات." });
     } catch (err) {
-      setError("❌ " + err.message);
+      setStatus({ type: "error", text: err?.message || "تعذر حفظ التغييرات." });
     } finally {
       setLoading(false);
     }
   }
 
+  const isDark = theme === "dark";
+
   return (
-    <div className="chat-settings-page animate-fade-in" style={{
-      position: "fixed",
-      inset: 0,
-      zIndex: 1000,
-      background: theme === "dark" ? "#0f0f13" : "#f8f9fa",
-      color: theme === "dark" ? "#f1f1f1" : "#1a1a1a",
-      display: "flex",
-      flexDirection: "column",
-      overflowY: "auto",
-      padding: "24px",
-    }}>
-      {/* رأس الصفحة مع زر العودة */}
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        borderBottom: "1px solid rgba(255,255,255,0.1)",
-        paddingBottom: "16px",
-        marginBottom: "24px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <button
-            onClick={onClose}
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              border: "none",
-              color: "inherit",
-              padding: "8px 16px",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "bold",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px"
-            }}
-          >
-            ← العودة للشات
-          </button>
-          <h2 style={{ fontSize: "20px", fontWeight: "bold" }}>⚙️ إعدادات المنصة</h2>
-        </div>
-        <button
-          onClick={handleSave}
-          disabled={loading}
-          style={{
-            background: "#6366f1",
-            color: "#fff",
-            border: "none",
-            padding: "10px 20px",
-            borderRadius: "8px",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          {loading ? "جاري الحفظ..." : "💾 حفظ التغييرات"}
-        </button>
-      </div>
+    <div className="ui-overlay" data-theme={isDark ? "dark" : "light"} onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}>
+      <div className="settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" dir="rtl">
+        <header className="settings__head">
+          <h2 id="settings-title">الإعدادات</h2>
+          <button type="button" className="ui-btn ui-btn--ghost ui-btn--sm" onClick={onClose} aria-label="إغلاق">✕</button>
+        </header>
 
-      {error && (
-        <div style={{
-          background: "rgba(248,113,113,0.15)",
-          color: "#f87171",
-          padding: "12px 16px",
-          borderRadius: "10px",
-          marginBottom: "20px",
-          border: "1px solid rgba(248,113,113,0.3)",
-        }}>
-          {error}
-        </div>
-      )}
+        <div className="settings__body">
+          <nav className="settings__nav" role="tablist" aria-label="أقسام الإعدادات">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={`settings__tab ${tab === t.id ? "is-active" : ""}`}
+                onClick={() => setTab(t.id)}
+              >
+                <span aria-hidden="true">{t.icon}</span>
+                {t.label}
+              </button>
+            ))}
+          </nav>
 
-      {/* تخطيط الإعدادات (قائمة جانبية ومحتوى) */}
-      <div style={{ display: "grid", gridTemplateColumns: "250px 1fr", gap: "24px", maxWidth: "1000px", margin: "0 auto", width: "100%" }}>
-        
-        {/* القائمة الجانبية */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          <button
-            onClick={() => setActiveTab("general")}
-            style={{
-              padding: "12px 16px",
-              textAlign: "right",
-              background: activeTab === "general" ? "rgba(99, 102, 241, 0.15)" : "transparent",
-              color: activeTab === "general" ? "#818cf8" : "inherit",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "bold",
-            }}
-          >
-            👤 الملف الشخصي والشخصية
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            style={{
-              padding: "12px 16px",
-              textAlign: "right",
-              background: activeTab === "security" ? "rgba(99, 102, 241, 0.15)" : "transparent",
-              color: activeTab === "security" ? "#818cf8" : "inherit",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontWeight: "bold",
-            }}
-          >
-            🔒 الحساب والأمان
-          </button>
-        </div>
+          <section className="settings__panel" role="tabpanel">
+            {status && (
+              <div className={`settings__status settings__status--${status.type}`} role="status">{status.text}</div>
+            )}
 
-        {/* محتوى الإعدادات */}
-        <div style={{ background: theme === "dark" ? "rgba(255,255,255,0.03)" : "#fff", padding: "24px", borderRadius: "16px", border: "1px solid rgba(255,255,255,0.1)" }}>
-          
-          {activeTab === "general" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h3>المعلومات العامة والشخصية</h3>
-              
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>البريد الإلكتروني (للقراءة فقط)</label>
-                <input
-                  type="text"
-                  value={user?.email || ""}
-                  disabled
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#888" }}
-                />
+            {tab === "profile" && (
+              <>
+                <div className="ui-field">
+                  <label className="ui-label" htmlFor="st-email">البريد الإلكتروني</label>
+                  <input id="st-email" className="ui-input" value={user?.email || ""} disabled readOnly dir="ltr" />
+                  <span className="ui-hint">لا يمكن تغيير البريد من هنا.</span>
+                </div>
+                <div className="ui-field">
+                  <label className="ui-label" htmlFor="st-name">الاسم</label>
+                  <input id="st-name" className="ui-input" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
+                </div>
+                <div className="ui-field">
+                  <span className="ui-label">أنت</span>
+                  <div className="settings__segment" role="radiogroup" aria-label="النوع">
+                    {GENDERS.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={gender === g.value}
+                        className={gender === g.value ? "is-active" : ""}
+                        onClick={() => setGender(g.value)}
+                      >
+                        {g.label}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="ui-hint">يستخدمه المساعد ليخاطبك بالصيغة المناسبة.</span>
+                </div>
+              </>
+            )}
+
+            {tab === "personality" && (
+              <div className="settings__cards" role="radiogroup" aria-label="شخصية المساعد">
+                {Object.entries(PERSONALITY_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="radio"
+                    aria-checked={personality === key}
+                    className={`settings__card ${personality === key ? "is-active" : ""}`}
+                    onClick={() => setPersonality(key)}
+                  >
+                    <strong>{label}</strong>
+                    <span>{PERSONALITY_INFO[key] || ""}</span>
+                  </button>
+                ))}
               </div>
+            )}
 
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>الاسم</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>شخصية المساعد</label>
-                <select
-                  value={editPersonality}
-                  onChange={(e) => setEditPersonality(e.target.value)}
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
-                >
-                  <option value="blak">بلاك الأساسية 🖤</option>
-                  <option value="friendly">ودود ومساعد</option>
-                  <option value="professional">رسمي ومحترف</option>
-                </select>
-              </div>
-            </div>
-          )}
-
-          {activeTab === "security" && (
-            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-              <h3>الأمان وكلمة المرور</h3>
-
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>كلمة المرور الجديدة</label>
-                <input
-                  type={showNewPassword ? "text" : "password"}
-                  value={editNewPassword}
-                  onChange={(e) => setEditNewPassword(e.target.value)}
-                  placeholder="********"
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: "block", marginBottom: "8px", fontSize: "13px", opacity: 0.8 }}>تأكيد كلمة المرور الجديدة</label>
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={editConfirmPassword}
-                  onChange={(e) => setEditConfirmPassword(e.target.value)}
-                  placeholder="********"
-                  style={{ width: "100%", padding: "12px", borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "inherit" }}
-                />
-              </div>
-
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "20px", marginTop: "20px" }}>
-                <h4 style={{ color: "#f87171", marginBottom: "10px" }}>منطقة الخطر</h4>
+            {tab === "appearance" && (
+              <div className="settings__row">
+                <div>
+                  <strong>الوضع الليلي</strong>
+                  <span className="ui-hint">بدّل بين المظهر الداكن والفاتح للشات.</span>
+                </div>
                 <button
-                  onClick={onDeleteAccount}
-                  style={{
-                    background: "rgba(248,113,113,0.15)",
-                    color: "#f87171",
-                    border: "1px solid rgba(248,113,113,0.3)",
-                    padding: "12px 20px",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                  }}
-                >
-                  🗑️ حذف الحساب نهائياً
-                </button>
+                  type="button"
+                  className="ui-switch"
+                  role="switch"
+                  aria-checked={isDark}
+                  aria-label="الوضع الليلي"
+                  onClick={() => onToggleTheme?.()}
+                  disabled={!onToggleTheme}
+                />
               </div>
-            </div>
-          )}
+            )}
 
+            {tab === "security" && (
+              <>
+                <div className="ui-field">
+                  <label className="ui-label" htmlFor="st-pass">كلمة مرور جديدة</label>
+                  <input id="st-pass" className="ui-input" type={showPassword ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" dir="ltr" placeholder="اتركها فارغة بدون تغيير" />
+                </div>
+                <div className="ui-field">
+                  <label className="ui-label" htmlFor="st-confirm">تأكيد كلمة المرور</label>
+                  <input id="st-confirm" className="ui-input" type={showPassword ? "text" : "password"} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" dir="ltr" />
+                </div>
+                <label className="settings__check">
+                  <input type="checkbox" checked={showPassword} onChange={(e) => setShowPassword(e.target.checked)} />
+                  إظهار كلمة المرور
+                </label>
+
+                <div className="settings__danger">
+                  <div>
+                    <strong>حذف الحساب</strong>
+                    <span className="ui-hint">يحذف حسابك وكل محادثاتك نهائيًا ولا يمكن التراجع.</span>
+                  </div>
+                  <button type="button" className="ui-btn ui-btn--danger ui-btn--sm" onClick={onDeleteAccount}>حذف الحساب</button>
+                </div>
+              </>
+            )}
+          </section>
         </div>
 
+        <footer className="settings__foot">
+          <button type="button" className="ui-btn" onClick={onClose}>إغلاق</button>
+          <button type="button" className="ui-btn ui-btn--primary" onClick={handleSave} disabled={!dirty || loading}>
+            {loading ? "جارٍ الحفظ…" : "حفظ التغييرات"}
+          </button>
+        </footer>
       </div>
     </div>
   );
