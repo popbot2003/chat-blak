@@ -476,7 +476,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
           text,
           reply,
           newCount,
-          session
+          session,
+          currentChatIdRef.current
         ).then(() => {
           loadMemories(user.id).then((mems) => {
             setMemories(mems);
