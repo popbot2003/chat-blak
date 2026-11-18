@@ -1,6 +1,6 @@
 // ============================================
 // LoadingScreen.jsx — بلاك 🖤
-// ✅ CSS classes من theme.css — صفر inline styles
+// ✅ CSS classes من tokens.css — صفر inline styles
 // ✅ يُستخدم في App.jsx بدل الـ inline loading
 // ============================================
 
