@@ -388,16 +388,6 @@
   color: var(--text-primary);
 }
 
-.history-panel {
-  border-left: 1px solid var(--border);
-  background: #11131b !important;
-  box-shadow: var(--shadow-lg);
-}
-
-.history-panel>div:first-child {
-  color: var(--text-primary);
-}
-
 .close-btn {
   width: 30px;
   height: 30px;
@@ -535,4 +525,3 @@
 .sidebar-toggle {
   display: none;
 }
-

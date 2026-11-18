@@ -23,58 +23,6 @@
     overflow: hidden;
   }
 
-  /* ✅ إصلاح تموضع القائمة الجانبية على الموبايل */
-  .app-sidebar {
-    position: fixed !important;
-    top: 0 !important;
-    bottom: 0 !important;
-    right: 0 !important;
-    left: auto !important;
-    inset-inline-end: auto !important;
-    width: min(310px, 86vw) !important;
-    max-width: min(310px, 86vw) !important;
-    min-width: 0 !important;
-    height: 100dvh !important;
-    flex: 0 0 auto !important;
-    z-index: 402 !important;
-    transform: translateX(100%);
-    transition: transform .25s ease;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-    box-shadow: -20px 0 55px rgba(0,0,0,.3) !important;
-  }
-
-  .app-sidebar.sidebar-open {
-    transform: translateX(0);
-  }
-
-  .sidebar-close {
-    display: grid;
-    place-items: center;
-    margin-right: auto;
-    width: 29px;
-    height: 29px;
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 8px;
-    background: transparent;
-    color: #aaa;
-    font-size: 19px;
-  }
-
-  .sidebar-scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 401;
-    border: 0;
-    background: rgba(0,0,0,.52);
-    backdrop-filter: blur(2px);
-    -webkit-backdrop-filter: blur(2px);
-    width: 100vw;
-    height: 100dvh;
-  }
-
   .sidebar-toggle {
     display: grid;
   }
@@ -213,21 +161,6 @@
     word-break: break-word;
   }
 
-  .sidebar-chat-actions button {
-    width: 30px;
-    height: 30px;
-    flex-basis: 30px;
-    opacity: 1;
-  }
-
-  .sidebar-history-tabs button {
-    min-height: 33px;
-  }
-
-  .sidebar-search {
-    min-height: 39px;
-  }
-
   .chat-shell *,
   .chat-workspace * {
     box-sizing: border-box;
@@ -326,12 +259,6 @@
   }
 }
 
-@media(hover:none) {
-  .sidebar-chat-actions button {
-    opacity: 1;
-  }
-}
-
 @media(prefers-reduced-motion:reduce) {
   *,
   *::before,
@@ -342,10 +269,8 @@
   }
 
   .welcome-screen,
-  .prompt-grid button,
-  .app-sidebar {
+.prompt-grid button {
     animation: none !important;
     transition: none !important;
   }
 }
-

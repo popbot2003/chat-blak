@@ -74,38 +74,6 @@
     overflow: hidden;
   }
 
-  .app-sidebar {
-    position: fixed !important;
-    top: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    left: auto !important;
-    width: min(310px, 86vw) !important;
-    min-width: 0 !important;
-    max-width: 86vw !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    z-index: 402 !important;
-    transform: translate3d(110%, 0, 0);
-    transition: transform .25s ease;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
-    overscroll-behavior: contain;
-  }
-
-  .app-sidebar.sidebar-open {
-    transform: translate3d(0, 0, 0);
-  }
-
-  .sidebar-scrim {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100%;
-    height: 100vh;
-    height: 100dvh;
-    z-index: 401 !important;
-  }
-
   .chat-topbar-wrap,
   .header,
   .token-bar,
@@ -224,65 +192,3 @@
     white-space: nowrap;
   }
 }
-
-
-/* =========================================================
-   BLAK Sidebar v4 — navigation, projects and account
-   ========================================================= */
-.sidebar-quick-actions {
-  display: grid;
-  gap: 4px;
-  margin: 12px 0 2px;
-}
-.sidebar-quick-actions button {
-  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 37px;
-  padding: 0 11px; border: 1px solid transparent; border-radius: 9px;
-  background: transparent; color: #aeb0bf; text-align: right; font-size: 12px; cursor: pointer;
-}
-.sidebar-quick-actions button:hover, .sidebar-quick-actions button.active {
-  color: #f2f1fb; background: rgba(83,130,255,.11); border-color: rgba(83,130,255,.13);
-}
-.sidebar-quick-actions button>span { width: 17px; color: #8eafff; font-size: 17px; text-align: center; }
-.sidebar-quick-actions button small { margin-right: auto; color: #777d91; }
-.sidebar-projects-panel { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow-y: auto; }
-.sidebar-create-project { display: flex; align-items: center; gap: 9px; min-height: 38px; margin: 3px 2px 8px; padding: 0 10px; border: 1px dashed rgba(130,157,255,.32); border-radius: 9px; background: rgba(83,130,255,.055); color: #b9caff; text-align: right; font-size: 11px; cursor: pointer; }
-.sidebar-create-project:hover { background: rgba(83,130,255,.12); }
-.sidebar-project-item { display: flex; align-items: center; gap: 7px; min-height: 42px; padding: 4px 7px; border-radius: 8px; color: #c5c7d2; }
-.sidebar-project-item:hover { background: rgba(255,255,255,.045); }
-.sidebar-project-icon { color: #91adff; }
-.sidebar-project-name { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
-.sidebar-project-name strong { overflow: hidden; color: inherit; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-project-name small, .sidebar-project-note { color: #74798b; font-size: 9px; }
-.sidebar-project-item button { width: 25px; height: 25px; border: 0; border-radius: 6px; background: transparent; color: #8d92a5; cursor: pointer; }
-.sidebar-project-item button:hover { background: rgba(83,130,255,.13); color: #c4d4ff; }
-.sidebar-project-note { margin: auto 5px 10px; padding: 9px; border: 1px solid rgba(255,255,255,.07); border-radius: 8px; line-height: 1.7; }
-.sidebar-profile-row { display: flex; align-items: center; gap: 8px; padding: 9px 7px; margin: 2px 0 5px; border: 1px solid rgba(255,255,255,.065); border-radius: 10px; background: rgba(255,255,255,.025); }
-.sidebar-profile-avatar { display: grid; width: 31px; height: 31px; flex: 0 0 31px; place-items: center; border-radius: 50%; background: linear-gradient(145deg,#376be5,#243b83); color: #fff; font-size: 12px; font-weight: 800; }
-.sidebar-profile-meta { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
-.sidebar-profile-meta strong, .sidebar-profile-meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sidebar-profile-meta strong { color: #e5e7f0; font-size: 10px; }
-.sidebar-profile-meta small { color: #85899b; font-size: 9px; direction: ltr; text-align: right; }
-.sidebar-plan-label { padding: 3px 5px; border-radius: 5px; background: rgba(83,130,255,.12); color: #a9c2ff; font-size: 8px; font-weight: 800; }
-.container.light .sidebar-quick-actions button { color: #5d6072; }
-.container.light .sidebar-quick-actions button:hover, .container.light .sidebar-quick-actions button.active { color: #344f9b; background: rgba(65,111,225,.08); }
-.container.light .sidebar-create-project { color: #405fae; border-color: rgba(65,111,225,.28); }
-.container.light .sidebar-project-item { color: #4d5265; }
-.container.light .sidebar-project-note { color: #777b8b; border-color: rgba(20,24,40,.09); }
-.container.light .sidebar-profile-row { background: rgba(20,24,40,.025); border-color: rgba(20,24,40,.09); }
-.container.light .sidebar-profile-meta strong { color: #292d40; }
-.container.light .sidebar-profile-meta small { color: #777b8c; }
-@media (max-width: 1023px) {
-  .app-sidebar { width: min(310px, 88vw) !important; max-width: 88vw !important; }
-  .sidebar-close { display: grid !important; place-items: center; margin-right: auto; width: 32px; height: 32px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: transparent; color: inherit; font-size: 21px; cursor: pointer; }
-  .sidebar-chat-actions button { opacity: 1; }
-}
-
-/* BLAK blue identity refinement */
-.app-sidebar .sidebar-logo { background: linear-gradient(145deg,#244a9c,#17233f); border-color: rgba(94,145,255,.3); color: #c4d9ff; }
-.app-sidebar .sidebar-new-chat { border-color: rgba(83,130,255,.28); background: linear-gradient(110deg,rgba(62,112,235,.18),rgba(62,112,235,.06)); color: #e7efff; }
-.app-sidebar .sidebar-new-chat:hover { border-color: rgba(105,151,255,.52); background: rgba(62,112,235,.2); }
-.app-sidebar .sidebar-new-chat>span, .app-sidebar .sidebar-nav-item span { color: #8fb3ff; }
-.app-sidebar .sidebar-history-tabs button.active { background: rgba(62,112,235,.17); color: #c8dcff; }
-.container.light .app-sidebar .sidebar-new-chat { color: #3156a4; }
-.container.light .app-sidebar .sidebar-history-tabs button.active { background: rgba(62,112,235,.11); color: #3156a4; }
-

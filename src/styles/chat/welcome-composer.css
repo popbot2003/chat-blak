@@ -301,38 +301,6 @@
   color: #606372;
 }
 
-/* =========================================================
-   Light Theme
-   ========================================================= */
-
-.container.light .app-sidebar {
-  background: #f9f9fc !important;
-  border-left-color: rgba(20,24,40,.09) !important;
-}
-
-.container.light .sidebar-brand strong,
-.container.light .sidebar-footer strong {
-  color: #262735;
-}
-
-.container.light .sidebar-new-chat {
-  color: #51449e;
-}
-
-.container.light .sidebar-nav-item {
-  color: #626477;
-}
-
-.container.light .sidebar-nav-item.active,
-.container.light .sidebar-chat.selected {
-  background: rgba(108,92,231,.09);
-  color: #453a91;
-}
-
-.container.light .sidebar-chat-open {
-  color: #4b4e60;
-}
-
 .container.light .header {
   background: rgba(255,255,255,.88);
 }
@@ -382,4 +350,3 @@
     transform: translateY(0);
   }
 }
-
