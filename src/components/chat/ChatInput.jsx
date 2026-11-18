@@ -9,6 +9,7 @@
 // ============================================
 
 import { useId, useRef } from "react";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 
 function CircularProgress({
   percentage = 0,
@@ -97,6 +98,7 @@ export default function ChatInput({
   const fileInputRef = useRef(null);
 
   const textareaRef = externalInputRef || internalInputRef;
+  const isMobile = useMediaQuery("(max-width: 768px)");
 
   const isTaskMode = sendMode === "task";
   const showStop = Boolean(loading);
@@ -113,13 +115,12 @@ export default function ChatInput({
     !thinkingEnabled && !searchEnabled;
 
   function handleKeyDown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
+    // على الهاتف: Enter يضيف سطرًا جديدًا، والإرسال من زر السهم فقط.
+    // على الشاشات الأكبر: Enter للإرسال و Shift + Enter لسطر جديد.
+    if (e.key !== "Enter" || e.shiftKey || isMobile) return;
 
-      if (!loading && canSend) {
-        onSend?.();
-      }
-    }
+    e.preventDefault();
+    if (!loading && canSend) onSend?.();
   }
 
   function updateAiMode(mode) {
@@ -380,7 +381,9 @@ export default function ChatInput({
         قد يخطئ BLAK أحياناً؛ راجع المعلومات المهمة.
 
         <span className="composer-shortcut">
-          Enter للإرسال · Shift + Enter لسطر جديد
+          {isMobile
+            ? "استخدم زر السهم لإرسال الرسالة"
+            : "Enter للإرسال · Shift + Enter لسطر جديد"}
         </span>
       </div>
     </div>
