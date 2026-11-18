@@ -73,9 +73,27 @@ export const MAX_MESSAGE_LENGTH = 4000;
 // MEMORY SYSTEM
 // ============================================
 
-export const MEMORY_LOAD_LIMIT = 12;
+// ─── تحميل الذكريات في البرومبت ───────────────
+export const MEMORY_LOAD_LIMIT = 12; // قديم — بيتستخدم في كود موجود
+export const MEMORY_INJECT_TOP_K = 20; // أقصى ذكريات تتحقن في الـ prompt
 
-export const MEMORY_MIN_IMPORTANCE = 2;
+// ─── عتبة الأهمية ────────────────────────────
+// الحفظ التلقائي: 3 فأعلى
+// الحفظ الصريح ("تذكر إن..."): دايمًا 5
+export const MEMORY_MIN_IMPORTANCE = 3;
+export const MEMORY_EXPLICIT_IMPORTANCE = 5;
+
+// ─── حدود الطول (حماية من نص ضخم) ─────────────
+export const MEMORY_MAX_CONTENT_LEN = 500;
+export const CHAT_SUMMARY_MAX_LEN = 800;
+
+// ─── استخراج الذكريات ────────────────────────
+// 1 = بعد كل رد
+export const MEMORY_EXTRACT_INTERVAL = 1;
+
+// ─── الرجوع لسجل المحادثات ────────────────────
+// عدد ملخصات المحادثات السابقة اللي تتلقط لكل سؤال
+export const CHAT_REFERENCE_TOP_K = 3;
 
 export const MEMORY_CATEGORIES = {
   PROGRAMMING: "programming",
@@ -86,7 +104,18 @@ export const MEMORY_CATEGORIES = {
   GENERAL: "general",
 };
 
-export const MEMORY_EXTRACT_INTERVAL = 3;
+// ─── أنماط كشف الطلبات الصريحة ────────────────
+// تُستخدم لالتقاط "تذكر / احفظ / خليك فاكر" من نص المستخدم
+// بدون الاعتماد على النموذج
+export const EXPLICIT_SAVE_PATTERNS = [
+  /(?:^|\s)(?:تذكر|افتكر|اذكر|احفظ|خليك\s+فاكر|خليك\s+فاتكر|ما\s+تنساش)(?:\s+إن[ّ]?|\s+ان[ّ]?|\s+أن[ّ]?|\s*:)?\s+(.+)$/iu,
+  /(?:^|\s)remember\s+(?:that\s+)?(.+)$/iu,
+];
+
+export const EXPLICIT_FORGET_PATTERNS = [
+  /(?:^|\s)(?:انس[ىي]|امسح\s+من\s+ذاكرتك|امسح|شيل\s+من\s+ذاكرتك|ما\s+تفتكرش)(?:\s+إن[ّ]?|\s+ان[ّ]?|\s+أن[ّ]?|\s*:)?\s+(.+)$/iu,
+  /(?:^|\s)forget\s+(?:that\s+)?(.+)$/iu,
+];
 
 // ============================================
 // SECURITY
