@@ -1,14 +1,25 @@
 // ============================================
 // main.jsx — بلاك 🖤
-// ✅ theme.css يُستورد أول — يمنع الـ flash
+// ✅ tokens.css يُستورد أول — المتغيرات قبل كل شيء
 // ============================================
 
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import "./styles/theme.css";   // ← أول — المتغيرات والألوان
-import "./App.css";            // ← ثاني — الـ classes
-import "./styles/chat-layout.css"; // ← ثالث — إصلاحات العرض والمكونات الناقصة
+// ── نظام التصميم (الترتيب مهم) ──
+import "./styles/tokens.css";               // 1) المتغيرات: ألوان/مسافات/خطوط
+import "./styles/base.css";                 // 2) reset + الحاوية الأساسية
+import "./styles/shared.css";               // 3) أزرار/حقول/بطاقات مشتركة
+import "./styles/chat/core.css";            // 4) الشات: هيدر/رسائل/مدخل
+import "./styles/chat/sidebar.css";         //    القائمة الجانبية
+import "./styles/chat/welcome-composer.css";//    الترحيب + الوضع الفاتح
+import "./styles/chat/sidebar-account.css"; //    حساب القائمة الجانبية
+import "./styles/chat/responsive.css";      //    التجاوب
+import "./styles/auth.css";                 // 5) شاشات الدخول والتحميل
+import "./styles/chat/responsive-final.css";
+import "./styles/chat/layout.css";
+import "./styles/settings/settings.css";    // 6) نافذة الإعدادات
+import "./styles/admin/admin.css";          // 7) لوحة الأدمن
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
