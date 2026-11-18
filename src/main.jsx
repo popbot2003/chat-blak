@@ -11,9 +11,8 @@ import "./styles/tokens.css";               // 1) المتغيرات: ألوان
 import "./styles/base.css";                 // 2) reset + الحاوية الأساسية
 import "./styles/shared.css";               // 3) أزرار/حقول/بطاقات مشتركة
 import "./styles/chat/core.css";            // 4) الشات: هيدر/رسائل/مدخل
-import "./styles/chat/sidebar.css";         //    القائمة الجانبية
+import "./styles/chat/sidebar.css";         //    القائمة الجانبية (الملف الوحيد لها)
 import "./styles/chat/welcome-composer.css";//    الترحيب + الوضع الفاتح
-import "./styles/chat/sidebar-account.css"; //    حساب القائمة الجانبية
 import "./styles/chat/responsive.css";      //    التجاوب
 import "./styles/auth.css";                 // 5) شاشات الدخول والتحميل
 import "./styles/chat/responsive-final.css";
