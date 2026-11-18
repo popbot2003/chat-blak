@@ -1,0 +1,1092 @@
+/* ============================================================
+   chat-layout.css — BLAK
+   يُستورد بعد App.css في main.jsx.
+
+   يحل مشاكل مؤكدة (تم إعادة إنتاجها في Chromium بعرض 360px):
+   1) .composer-file-input بلا CSS → حقل "Choose Files" الأصلي يظهر
+      بعرض ~344px ويدفع زر الإرسال وحقل الكتابة خارج الشاشة.
+   2) .composer-mode-btn بلا CSS → أزرار Auto / Thinking / Search خام.
+   3) كلاسات الملفات المرفقة وشريط التقدم بلا CSS.
+   4) كلاسات المهام (task-card / active-task) بلا CSS.
+   5) ظل الـ sidebar المغلق كان يتسرب داخل الشاشة على الموبايل.
+
+   كل الألوان من tokens.css (متغيرات) + نسخة .container.light.
+   ============================================================ */
+
+
+/* ─────────────────────────────────────────────
+   0) حواجز عامة ضد تجاوز العرض
+   ───────────────────────────────────────────── */
+
+.container,
+.chat-shell,
+.chat-workspace,
+.chat-workspace > *,
+.composer-wrap,
+.composer-wrap > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+
+/* ─────────────────────────────────────────────
+   1) حقل رفع الملفات الأصلي — مخفي دائماً
+   ───────────────────────────────────────────── */
+
+.composer-file-input,
+.composer-file-input[type="file"] {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+
+/* ─────────────────────────────────────────────
+   2) صف الكتابة: لا شيء يتمدد خارج الشاشة
+   ───────────────────────────────────────────── */
+
+.composer-wrap .input-area {
+  display: flex;
+  min-width: 0;
+}
+
+.composer-wrap .input-area > button,
+.composer-wrap .input-area > .send-btn {
+  flex: 0 0 auto;
+}
+
+.composer-wrap .input-area > .textarea {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+
+.composer-attach-btn {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.composer-attach-btn:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+.send-btn:disabled {
+  opacity: .4;
+  cursor: not-allowed;
+}
+
+.send-btn-stop {
+  background: var(--danger, #ef777f) !important;
+}
+
+
+/* ─────────────────────────────────────────────
+   3) الملفات المرفقة + دائرة التقدم
+   ───────────────────────────────────────────── */
+
+.composer-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 2px 4px 10px;
+  max-width: 100%;
+}
+
+.composer-file {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 72px;
+}
+
+.composer-file-icon-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--bg-hover, rgba(255,255,255,.055));
+  border: 1px solid var(--border, rgba(255,255,255,.075));
+}
+
+.composer-file-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.composer-file-remove {
+  position: absolute;
+  top: -7px;
+  inset-inline-end: -7px;
+  z-index: 2;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--danger, #ef777f);
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.composer-file-name {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--text-muted, #707383);
+}
+
+.composer-file-name.is-uploading {
+  color: var(--brand-primary, #8b7cff);
+  font-weight: 700;
+}
+
+.upload-progress-svg {
+  position: absolute;
+  inset: -1px;
+  transform: rotate(-90deg);
+  pointer-events: none;
+}
+
+.upload-progress-circle {
+  transition: stroke-dashoffset .3s ease;
+}
+
+
+/* ─────────────────────────────────────────────
+   4) أوضاع الذكاء: Auto / Thinking / Search
+   ───────────────────────────────────────────── */
+
+.composer-modes {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 2px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.composer-modes::-webkit-scrollbar {
+  display: none;
+}
+
+.composer-modes-label {
+  flex: 0 0 auto;
+  margin-inline-end: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted, #707383);
+}
+
+.composer-mode-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--border, rgba(255,255,255,.075));
+  border-radius: 999px;
+  background: rgba(255,255,255,.035);
+  color: var(--text-secondary, #a1a3b2);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.composer-mode-btn:hover:not(:disabled) {
+  color: var(--text-primary, #f3f3f7);
+  background: var(--bg-hover, rgba(255,255,255,.055));
+}
+
+.composer-mode-btn.active {
+  color: var(--brand-primary-light, #b9b0ff);
+  background: var(--brand-primary-soft, rgba(139,124,255,.13));
+  border-color: var(--brand-primary-border, rgba(139,124,255,.28));
+}
+
+.composer-mode-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.composer-mode-icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+
+/* ─────────────────────────────────────────────
+   5) شريط الاستهلاك للأدمن (بدل inline styles)
+   ───────────────────────────────────────────── */
+
+.token-bar-unlimited {
+  border-color: var(--brand-primary-border, rgba(139,124,255,.28));
+  background: var(--brand-primary-soft, rgba(139,124,255,.13));
+}
+
+.token-bar-unlimited .token-info {
+  margin-bottom: 0;
+}
+
+.token-unlimited-badge {
+  color: var(--brand-primary-light, #b9b0ff);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sidebar-usage-unlimited small {
+  display: block;
+  margin-top: 6px;
+}
+
+
+/* ─────────────────────────────────────────────
+   6) المهام النشطة (ActiveTasksNotification)
+   ───────────────────────────────────────────── */
+
+.active-tasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--brand-primary-light, #b9b0ff);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: start;
+  cursor: pointer;
+}
+
+.active-tasks-header:hover {
+  background: var(--brand-primary-soft, rgba(139,124,255,.13));
+}
+
+.active-tasks-header-text { flex: 1; min-width: 0; }
+.active-tasks-header-toggle { opacity: .7; font-size: 13px; }
+
+.active-tasks-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  padding: 0 12px 12px;
+  overflow-y: auto;
+}
+
+.active-tasks-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 11px;
+  color: var(--text-muted, #707383);
+}
+
+.active-tasks-divider::before,
+.active-tasks-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border, rgba(255,255,255,.075));
+}
+
+.active-task-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border, rgba(255,255,255,.075));
+  border-radius: 12px;
+  background: var(--bg-hover, rgba(255,255,255,.055));
+}
+
+.active-task-item.is-current {
+  background: var(--bg-active, rgba(139,124,255,.15));
+  border-color: var(--brand-primary-border, rgba(139,124,255,.28));
+}
+
+.active-task-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.active-task-status-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+  animation: blk-pulse 1.5s ease-in-out infinite;
+}
+
+.active-task-status-label { font-weight: 700; }
+
+.active-task-badge {
+  margin-inline-start: auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(232,183,107,.14);
+  color: var(--warning, #e8b76b);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.active-task-title {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary, #f3f3f7);
+  overflow-wrap: anywhere;
+}
+
+.active-task-progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-muted, #707383);
+}
+
+.active-task-progress-bar,
+.task-card-progress-bar {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--border, rgba(255,255,255,.075));
+}
+
+.active-task-progress-bar { height: 5px; }
+.task-card-progress-bar   { height: 7px; }
+
+.active-task-progress-fill,
+.task-card-progress-fill {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--brand-gradient, linear-gradient(135deg,#a69aff,#7666ed));
+  transition: width .5s ease;
+}
+
+.active-task-progress-shimmer,
+.task-card-progress-shimmer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 2;
+  width: 40%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent);
+  animation: blk-shimmer 1.8s ease-in-out infinite;
+}
+
+.active-task-waiting,
+.task-card-waiting {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-style: italic;
+  color: var(--text-muted, #707383);
+}
+
+.active-task-open-btn {
+  align-self: flex-start;
+  padding: 6px 12px;
+  border: 1px solid var(--brand-primary-border, rgba(139,124,255,.28));
+  border-radius: 9px;
+  background: var(--brand-primary-soft, rgba(139,124,255,.13));
+  color: var(--brand-primary-light, #b9b0ff);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.active-task-spinner,
+.task-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--brand-primary-border, rgba(139,124,255,.28));
+  border-top-color: var(--brand-primary, #8b7cff);
+  border-radius: 50%;
+  animation: blk-spin .8s linear infinite;
+}
+
+.task-spinner-small { width: 12px; height: 12px; border-width: 1.5px; }
+
+
+/* ─────────────────────────────────────────────
+   7) كارت المهمة داخل المحادثة (TaskMessage)
+   ───────────────────────────────────────────── */
+
+.task-card {
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--brand-primary-border, rgba(139,124,255,.28));
+  border-radius: 16px;
+  background: var(--brand-primary-soft, rgba(139,124,255,.13));
+  font-family: inherit;
+}
+
+.task-card-active { animation: blk-glow 2s ease-in-out infinite; }
+
+.task-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.task-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--brand-primary-light, #b9b0ff);
+}
+
+.task-card-icon  { font-size: 17px; }
+.task-card-label { overflow-wrap: anywhere; }
+
+.task-card-cancel,
+.task-card-copy {
+  flex: 0 0 auto;
+  padding: 5px 11px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.task-card-cancel {
+  border: 1px solid rgba(239,119,127,.3);
+  background: rgba(239,119,127,.12);
+  color: var(--danger, #ef777f);
+}
+
+.task-card-copy {
+  border: 0;
+  background: rgba(101,199,165,.14);
+  color: var(--success, #65c7a5);
+}
+
+.task-card-input {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-inline-start: 3px solid var(--brand-primary, #8b7cff);
+  background: var(--bg-hover, rgba(255,255,255,.055));
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary, #a1a3b2);
+  overflow-wrap: anywhere;
+}
+
+.task-card-progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #a1a3b2);
+}
+
+.task-card-waiting {
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--bg-hover, rgba(255,255,255,.055));
+}
+
+.task-card-result {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid rgba(101,199,165,.28);
+  border-radius: 12px;
+  background: rgba(101,199,165,.1);
+}
+
+.task-card-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--success, #65c7a5);
+}
+
+.task-card-result-body {
+  max-height: 480px;
+  overflow-y: auto;
+  padding: 6px 2px;
+  font-size: 14px;
+  line-height: 1.85;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-primary, #f3f3f7);
+}
+
+.task-card-error,
+.task-card-cancelled {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.task-card-error {
+  border: 1px solid rgba(239,119,127,.28);
+  background: rgba(239,119,127,.1);
+  color: var(--danger, #ef777f);
+}
+
+.task-card-cancelled {
+  border: 1px solid var(--border, rgba(255,255,255,.075));
+  background: var(--bg-hover, rgba(255,255,255,.055));
+  color: var(--text-muted, #707383);
+  text-align: center;
+}
+
+@keyframes blk-spin    { to { transform: rotate(360deg); } }
+@keyframes blk-pulse   { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .55; transform: scale(.85); } }
+@keyframes blk-shimmer { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+@keyframes blk-glow    { 0%,100% { box-shadow: 0 0 0 0 rgba(139,124,255,0); } 50% { box-shadow: 0 0 22px 3px rgba(139,124,255,.16); } }
+
+
+/* ─────────────────────────────────────────────
+   8) الوضع الفاتح
+   ───────────────────────────────────────────── */
+
+.container.light .composer-mode-btn {
+  background: rgba(20,24,40,.035);
+  border-color: rgba(20,24,40,.12);
+  color: #5d6072;
+}
+
+.container.light .composer-mode-btn:hover:not(:disabled) {
+  background: rgba(20,24,40,.06);
+  color: #242536;
+}
+
+.container.light .composer-mode-btn.active {
+  background: rgba(118,102,237,.12);
+  border-color: rgba(118,102,237,.35);
+  color: #5a4bd6;
+}
+
+.container.light .composer-file-icon-wrap {
+  background: rgba(20,24,40,.04);
+  border-color: rgba(20,24,40,.12);
+}
+
+.container.light .composer-modes-label,
+.container.light .composer-file-name {
+  color: #7a7d8e;
+}
+
+.container.light .token-unlimited-badge {
+  color: #5a4bd6;
+}
+
+.container.light .task-card,
+.container.light .active-task-item {
+  background: rgba(118,102,237,.07);
+  border-color: rgba(118,102,237,.22);
+}
+
+.container.light .task-card-input,
+.container.light .task-card-waiting {
+  background: rgba(20,24,40,.04);
+  color: #4d5062;
+}
+
+.container.light .task-card-result-body,
+.container.light .active-task-title {
+  color: #242536;
+}
+
+
+/* ─────────────────────────────────────────────
+   9) الشاشات الصغيرة والمتوسطة (<= 1023px)
+   ───────────────────────────────────────────── */
+
+@media (max-width: 1023px) {
+
+  /* الـ sidebar المغلق: لا ظل ولا ظهور ولا تركيز (كان يتسرب للشاشة) */
+  .container .app-sidebar:not(.sidebar-open) {
+    visibility: hidden;
+    pointer-events: none;
+    box-shadow: none !important;
+    transition: transform .25s ease, visibility 0s linear .25s;
+  }
+
+  .container .app-sidebar.sidebar-open {
+    visibility: visible;
+    pointer-events: auto;
+    box-shadow: -20px 0 55px rgba(0,0,0,.3) !important;
+    transition: transform .25s ease, visibility 0s;
+  }
+
+  .composer-wrap .input-area {
+    gap: 6px;
+  }
+
+  .composer-wrap .mode-toggle {
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 380px) {
+  .composer-wrap {
+    padding-inline: 8px;
+  }
+
+  .composer-footnote {
+    font-size: 9px;
+    line-height: 1.5;
+    text-align: center;
+  }
+
+  .composer-shortcut {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-card-active,
+  .active-task-status-dot,
+  .active-task-progress-shimmer,
+  .task-card-progress-shimmer {
+    animation: none;
+  }
+}
+
+
+/* ============================================================
+   BLAK — Product UI refinement (Nov 2026)
+   Keeps existing data flows and Supabase behavior unchanged.
+   ============================================================ */
+
+:root {
+  --brand-primary: #5b8def;
+  --brand-primary-hover: #78a5f5;
+  --brand-primary-light: #a9c8ff;
+  --brand-primary-soft: rgba(91,141,239,.14);
+  --brand-primary-border: rgba(91,141,239,.30);
+  --brand-gradient: linear-gradient(135deg,#79a9f6 0%,#477fe0 100%);
+}
+
+.container {
+  background:
+    radial-gradient(ellipse at 50% -32%, rgba(74,126,218,.10), transparent 48%),
+    var(--local-bg);
+}
+
+.header {
+  min-height: 66px;
+  padding-inline: clamp(18px, 3.2vw, 42px);
+  background: rgba(12,15,22,.76);
+  border-bottom-color: rgba(255,255,255,.055);
+}
+
+.header-btn {
+  border-radius: 12px;
+}
+
+.messages {
+  width: min(100%, 900px);
+  padding-top: clamp(28px, 5vh, 54px);
+  padding-bottom: 28px;
+  gap: 28px;
+}
+
+.msg-content-wrapper {
+  max-width: min(82%, 760px);
+}
+
+.bubble {
+  border-radius: 4px 16px 16px 16px;
+  border-color: rgba(255,255,255,.065);
+  box-shadow: none;
+  line-height: 1.85;
+}
+
+.bubble-user {
+  border-radius: 16px 4px 16px 16px;
+  background: rgba(91,141,239,.13);
+  border-color: rgba(91,141,239,.19);
+}
+
+.bubble-ai,
+.bubble-ai-light {
+  background: transparent;
+  border-color: transparent;
+  padding-inline: 2px;
+}
+
+.avatar-small {
+  border-radius: 11px;
+  background: linear-gradient(145deg,#1e3458,#142033);
+  border-color: rgba(91,141,239,.25);
+  color: #b9d2ff;
+}
+
+.avatar {
+  background: linear-gradient(145deg,#203a65,#142033);
+  border-color: rgba(91,141,239,.28);
+  color: #c7dcff;
+}
+
+.welcome-screen {
+  width: min(100%, 760px);
+  padding-top: clamp(28px, 7vh, 78px);
+  text-align: center;
+}
+
+.welcome-mark {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 22px;
+  border-radius: 17px;
+  background: linear-gradient(145deg,#254777,#14233a);
+  border: 1px solid rgba(91,141,239,.28);
+  box-shadow: 0 12px 38px rgba(30,75,145,.18);
+}
+
+.welcome-mark span {
+  color: #c7dcff;
+}
+
+.welcome-eyebrow {
+  color: #8fb6f6;
+  letter-spacing: .04em;
+}
+
+.welcome-screen h1 {
+  margin-top: 10px;
+  font-size: clamp(27px, 4vw, 38px);
+  font-weight: 700;
+  letter-spacing: -.035em;
+}
+
+.welcome-screen h1 em {
+  color: #8fb6f6;
+  font-style: normal;
+}
+
+.welcome-screen p {
+  color: var(--text-secondary);
+  line-height: 1.9;
+}
+
+.prompt-grid {
+  margin-top: 34px;
+  gap: 11px;
+}
+
+.prompt-grid button {
+  min-height: 82px;
+  padding: 15px 16px;
+  border-radius: 15px;
+  border-color: rgba(255,255,255,.075);
+  background: rgba(255,255,255,.025);
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.prompt-grid button:hover {
+  border-color: rgba(91,141,239,.32);
+  background: rgba(91,141,239,.07);
+  transform: translateY(-2px);
+}
+
+.prompt-grid button > span {
+  color: #8fb6f6;
+}
+
+.composer-wrap {
+  width: min(100%, 900px);
+  margin-inline: auto;
+  padding-inline: 18px;
+}
+
+.composer-wrap > .input-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  padding: 11px 12px 9px;
+  border-radius: 21px;
+  border-color: rgba(255,255,255,.105);
+  background: rgba(22,25,34,.94);
+  box-shadow: 0 14px 48px rgba(0,0,0,.22), inset 0 1px rgba(255,255,255,.035);
+}
+
+.composer-wrap > .input-area:focus-within {
+  border-color: rgba(91,141,239,.42);
+  box-shadow: 0 14px 48px rgba(0,0,0,.22), 0 0 0 3px rgba(91,141,239,.07);
+}
+
+.composer-wrap .textarea {
+  min-height: 42px;
+  font-size: 14px;
+}
+
+.composer-modes {
+  flex: 0 0 100%;
+  order: 5;
+  width: 100%;
+  padding: 7px 2px 1px;
+  border-top: 1px solid rgba(255,255,255,.055);
+}
+
+.composer-modes-label {
+  color: #7f8798;
+  font-size: 11px;
+}
+
+.composer-mode-btn {
+  height: 29px;
+  padding-inline: 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.025);
+}
+
+.composer-mode-btn.active {
+  color: #b9d2ff;
+  background: rgba(91,141,239,.13);
+  border-color: rgba(91,141,239,.32);
+}
+
+.composer-footnote {
+  width: 100%;
+  padding: 8px 7px 0;
+  color: #777f90;
+}
+
+.app-sidebar {
+  flex-basis: 276px;
+  width: 276px !important;
+  padding: 18px 13px 13px;
+  background: #10141d !important;
+  border-left-color: rgba(255,255,255,.06) !important;
+}
+
+.sidebar-logo {
+  background: linear-gradient(145deg,#203a65,#142033);
+  border-color: rgba(91,141,239,.28);
+  color: #c7dcff;
+}
+
+.sidebar-new-chat {
+  border-radius: 12px;
+  background: rgba(91,141,239,.12);
+  border-color: rgba(91,141,239,.22);
+}
+
+.sidebar-new-chat:hover,
+.sidebar-chat.selected {
+  background: rgba(91,141,239,.12);
+}
+
+.sidebar-chat.selected {
+  border-color: rgba(91,141,239,.20);
+}
+
+.sidebar-history-tabs button.active {
+  color: #b9d2ff;
+  background: rgba(91,141,239,.13);
+}
+
+.sidebar-search:focus-within {
+  border-color: rgba(91,141,239,.42);
+}
+
+.send-btn {
+  background: linear-gradient(135deg,#79a9f6 0%,#477fe0 100%);
+  box-shadow: 0 5px 16px rgba(57,111,207,.24);
+}
+
+.sidebar-toggle {
+  display: grid;
+}
+
+@media (min-width: 1024px) {
+  .sidebar-toggle {
+    display: none;
+  }
+  .chat-workspace {
+    min-width: 0;
+  }
+  .composer-wrap {
+    padding-bottom: 14px;
+  }
+}
+
+@media (max-width: 1023px) {
+  .sidebar-toggle {
+    display: grid;
+  }
+  .composer-wrap {
+    width: 100%;
+    padding-inline: 10px;
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
+  .composer-wrap > .input-area {
+    gap: 5px;
+    padding: 8px;
+    border-radius: 17px;
+  }
+  .composer-modes {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-top: 8px;
+  }
+  .composer-mode-btn {
+    height: 28px;
+    padding-inline: 10px;
+  }
+  .messages {
+    padding-inline: clamp(13px, 4vw, 26px);
+  }
+}
+
+@media (max-width: 480px) {
+  .header {
+    min-height: 60px;
+    padding-inline: 11px;
+  }
+  .header-right {
+    gap: 4px;
+  }
+  .messages {
+    padding-top: 20px;
+    padding-bottom: 16px;
+    gap: 20px;
+  }
+  .msg-content-wrapper {
+    max-width: calc(100% - 36px);
+  }
+  .bubble {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  .bubble-ai,
+  .bubble-ai-light {
+    padding-inline: 1px;
+  }
+  .composer-wrap .textarea {
+    font-size: 13px;
+    min-height: 38px;
+  }
+  .composer-modes-label {
+    display: none;
+  }
+  .composer-footnote {
+    justify-content: center;
+    text-align: center;
+    font-size: 9px;
+  }
+}
+
+
+.container.light .composer-wrap > .input-area {
+  background: rgba(255,255,255,.94);
+  border-color: rgba(26,39,62,.12);
+  box-shadow: 0 12px 36px rgba(24,39,68,.08);
+}
+
+.container.light .composer-wrap > .input-area:focus-within {
+  border-color: rgba(62,119,213,.42);
+  box-shadow: 0 12px 36px rgba(24,39,68,.08), 0 0 0 3px rgba(62,119,213,.07);
+}
+
+.container.light .composer-wrap .textarea {
+  color: #202b3b;
+}
+
+.container.light .composer-modes {
+  border-top-color: rgba(26,39,62,.08);
+}
+
+.container.light .composer-mode-btn {
+  background: rgba(25,45,75,.035);
+  color: #657187;
+}
+
+.container.light .composer-mode-btn.active {
+  background: rgba(62,119,213,.10);
+  color: #285ca8;
+}
+
+.container.light .app-sidebar {
+  background: #fbfcff !important;
+  border-left-color: rgba(26,39,62,.10) !important;
+}
+
+.container.light .sidebar-brand,
+.container.light .sidebar-history-head,
+.container.light .sidebar-action,
+.container.light .sidebar-chat-open {
+  color: #263247;
+}
+
+.container.light .sidebar-search,
+.container.light .sidebar-chat,
+.container.light .prompt-grid button {
+  border-color: rgba(26,39,62,.10);
+  background: rgba(25,45,75,.025);
+}
+
+.container.light .bubble-user {
+  background: rgba(62,119,213,.10);
+  color: #1f3557;
+}
+
+.container.light .welcome-screen p {
+  color: #68758a;
+}
