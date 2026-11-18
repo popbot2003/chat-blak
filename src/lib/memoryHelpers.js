@@ -1,6 +1,6 @@
 // ============================================================
 // memoryHelpers.js — كل منطق الذاكرة والرجوع لسجل المحادثات
-// v2: الاستخراج بيمر عبر hyper-responder (Supabase Edge Function)
+// v3: retry logic للـ FK + إصلاح updateChatSummary
 // ============================================================
 import { supabase } from './supabase';
 
@@ -40,7 +40,7 @@ export async function updateMemorySetting(userId, field, value) {
   if (error) throw error;
 }
 
-// ─── 3) كشف الطلبات الصريحة ("تذكر / انسى") ─────────────────
+// ─── 3) كشف الطلبات الصريحة ─────────────────────────────────
 export function detectExplicitMemoryRequest(text) {
   if (!text || typeof text !== 'string') return null;
   const trimmed = text.trim();
@@ -65,21 +65,21 @@ export function detectExplicitMemoryRequest(text) {
   return null;
 }
 
-// ─── 4) حفظ ذكرى (مع منع التكرار) ───────────────────────────
+// ─── 4) حفظ ذكرى (مع retry لو المحادثة لسه ما اتخزنتش) ─────
 export async function saveMemory(userId, chatId, content, importance, source = 'auto') {
   if (!userId || !content) return null;
 
   const safeContent = content.slice(0, MEMORY_MAX_CONTENT_LEN).trim();
   const safeImportance = Math.max(1, Math.min(5, importance || MEMORY_MIN_IMPORTANCE));
 
-  const payload = {
+  const basePayload = {
     user_id: userId,
-    chat_id: chatId || null,
     content: safeContent,
     importance: safeImportance,
     source,
   };
 
+  // منع التكرار
   const { data: existing } = await supabase
     .from('memories')
     .select('id, importance')
@@ -98,11 +98,25 @@ export async function saveMemory(userId, chatId, content, importance, source = '
     return existing.id;
   }
 
-  const { data, error } = await supabase
-    .from('memories')
-    .insert(payload)
-    .select('id')
-    .single();
+  // محاولة الحفظ (بـ chat_id لو موجود)
+  const tryInsert = async (payload) =>
+    supabase.from('memories').insert(payload).select('id').single();
+
+  let payload = { ...basePayload, chat_id: chatId || null };
+  let { data, error } = await tryInsert(payload);
+
+  // لو FK فشل — المحادثة لسه ما اتخزنتش. نستنى 3.5 ثانية ونجرب تاني
+  if (error?.code === '23503' && payload.chat_id) {
+    console.info('[memory] FK retry after delay (chat not yet saved)...');
+    await new Promise((r) => setTimeout(r, 3500));
+    ({ data, error } = await tryInsert(payload));
+  }
+
+  // لو لسه فشل — نحفظ على مستوى المستخدم (chat_id = null)
+  if (error?.code === '23503') {
+    console.warn('[memory] chat not found, saving at user-level');
+    ({ data, error } = await tryInsert({ ...basePayload, chat_id: null }));
+  }
 
   if (error) {
     console.error('[memory] save failed:', error);
@@ -121,7 +135,7 @@ export async function deleteMemory(userId, memoryId) {
   if (error) throw error;
 }
 
-// ─── 6) حذف الذكريات المطابقة لطلب "انسى" ───────────────────
+// ─── 6) حذف الذكريات المطابقة ───────────────────────────────
 export async function deleteMatchingMemories(userId, query) {
   if (!query) return 0;
   const escaped = query.replace(/[%_\\]/g, '\\$&');
@@ -138,7 +152,7 @@ export async function deleteMatchingMemories(userId, query) {
   return data?.length || 0;
 }
 
-// ─── 7) قائمة كل الذكريات (للعرض في الإعدادات) ──────────────
+// ─── 7) قائمة كل الذكريات ───────────────────────────────────
 export async function listMemories(userId) {
   const { data, error } = await supabase
     .from('memories')
@@ -153,7 +167,7 @@ export async function listMemories(userId) {
   return data || [];
 }
 
-// ─── 8) تحميل الذكريات للحقن في البرومبت ────────────────────
+// ─── 8) تحميل الذكريات للبرومبت ─────────────────────────────
 export async function loadMemoriesForPrompt(userId) {
   if (!userId) return [];
   const { data, error } = await supabase
@@ -171,7 +185,7 @@ export async function loadMemoriesForPrompt(userId) {
   return data || [];
 }
 
-// ─── 9) البحث في ملخصات المحادثات السابقة ───────────────────
+// ─── 9) البحث في ملخصات المحادثات ───────────────────────────
 export async function searchChatSummaries(userId, query) {
   if (!userId || !query || query.trim().length < 3) return [];
   const { data, error } = await supabase.rpc('search_chat_summaries', {
@@ -186,7 +200,7 @@ export async function searchChatSummaries(userId, query) {
   return data || [];
 }
 
-// ─── 10) بناء بلوك البرومبت (ذاكرة + ملخصات) ────────────────
+// ─── 10) بناء بلوك البرومبت ─────────────────────────────────
 export function buildMemoryPromptBlock(memories, summaries) {
   const parts = [];
 
@@ -209,35 +223,25 @@ export function buildMemoryPromptBlock(memories, summaries) {
   return parts.join('\n\n');
 }
 
-// ─── 11) استخراج آمن لـ JSON من نص النموذج ───────────────────
+// ─── 11) JSON parser آمن ────────────────────────────────────
 function parseJsonSafe(raw) {
   if (!raw || typeof raw !== 'string') return null;
-
-  // محاولة 1: parse مباشر
   try {
     return JSON.parse(raw);
-  } catch {
-    // تجاهل
-  }
+  } catch { /* ignore */ }
 
-  // محاولة 2: استخرج أول { ... } متوازن
   const start = raw.indexOf('{');
   if (start === -1) return null;
-
   let depth = 0;
   let end = -1;
   for (let i = start; i < raw.length; i++) {
     if (raw[i] === '{') depth++;
     else if (raw[i] === '}') {
       depth--;
-      if (depth === 0) {
-        end = i;
-        break;
-      }
+      if (depth === 0) { end = i; break; }
     }
   }
   if (end === -1) return null;
-
   try {
     return JSON.parse(raw.slice(start, end + 1));
   } catch {
@@ -245,8 +249,7 @@ function parseJsonSafe(raw) {
   }
 }
 
-// ─── 12) استخراج الذكريات + الملخص في طلب واحد ──────────────
-// ⚠️ v2: يمر عبر hyper-responder بدل api.groq.com مباشرة
+// ─── 12) استخراج الذكريات + الملخص ──────────────────────────
 export async function extractMemoriesAndSummary({
   messages,
   wantMemories = true,
@@ -278,12 +281,11 @@ export async function extractMemoriesAndSummary({
 قواعد الملخص:
 - ملخص قصير (2-4 جمل) للموضوع الأساسي في المحادثة.
 - لو المحادثة تحية أو سؤال عابر، خلي الملخص null.
-- الملخص يتحدّث كل مرة، مش يتجمّع.
 
 ${wantMemories ? '' : 'ما تولّدش memories، خليها [].'}
 ${wantSummary ? '' : 'ما تولّدش summary، خليه null.'}
 
-أرجع JSON فقط، من غير أي نص تاني.`;
+أرجع JSON فقط.`;
 
   try {
     const { data, error } = await supabase.functions.invoke('hyper-responder', {
@@ -291,7 +293,7 @@ ${wantSummary ? '' : 'ما تولّدش summary، خليه null.'}
         messages: [
           {
             role: 'user',
-            content: `المحادثة:\n${convo}\n\nاستخرج الذكريات والملخص بالشكل المطلوب. JSON فقط:`,
+            content: `المحادثة:\n${convo}\n\nاستخرج الذكريات والملخص. JSON فقط:`,
           },
         ],
         systemPrompt,
@@ -306,7 +308,6 @@ ${wantSummary ? '' : 'ما تولّدش summary، خليه null.'}
       return { memories: [], summary: null };
     }
 
-    // hyper-responder بيرجّع Groq response زي ما هو
     const raw = data?.choices?.[0]?.message?.content || '';
     const parsed = parseJsonSafe(raw);
 
@@ -344,8 +345,6 @@ export async function updateChatSummary(chatId, summary) {
   const { error } = await supabase
     .from('chats')
     .update({ summary })
-    .eq('chat_id', chatId)
     .eq('id', chatId);
-  // ملاحظة: حسب الجدول — لو الـ PK اسمه id، استخدم eq('id', chatId). لو chat_id، عدّل.
   if (error) console.error('[memory] update summary failed:', error);
 }
