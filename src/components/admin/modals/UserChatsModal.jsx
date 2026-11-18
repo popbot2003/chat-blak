@@ -192,7 +192,7 @@ export default function UserChatsModal({
   const deleteAllBtnStyle = useMemo(
     () => ({
       background: "rgba(239,68,68,0.15)",
-      color: "#ef4444",
+      color: "var(--danger)",
       border: "1px solid rgba(239,68,68,0.3)",
       padding: isMobile ? "12px 16px" : "10px 16px",
       borderRadius: "10px",
@@ -329,7 +329,7 @@ export default function UserChatsModal({
                       style={{
                         ...chatBtnStyle,
                         background: "rgba(59,130,246,0.15)",
-                        color: "#3b82f6",
+                        color: "var(--brand-primary)",
                       }}
                       aria-label={`عرض ${chat.title || "المحادثة"}`}
                     >
@@ -340,7 +340,7 @@ export default function UserChatsModal({
                       style={{
                         ...chatBtnStyle,
                         background: "rgba(239,68,68,0.15)",
-                        color: "#ef4444",
+                        color: "var(--danger)",
                       }}
                       aria-label={`حذف ${chat.title || "المحادثة"}`}
                     >

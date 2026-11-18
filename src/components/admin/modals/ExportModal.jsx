@@ -121,7 +121,7 @@ export default function ExportModal({
       flex: isMobile ? "initial" : 1,
       width: isMobile ? "100%" : "auto",
       padding: isMobile ? "14px" : "12px",
-      background: "linear-gradient(135deg, #10b981, #059669)",
+      background: "var(--brand-gradient)",
       color: "#fff",
       border: "none",
       borderRadius: "10px",

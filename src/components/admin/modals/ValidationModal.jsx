@@ -251,7 +251,7 @@ export default function ValidationModal({
               style={{
                 ...statBadgeBase,
                 background: "rgba(16,185,129,0.15)",
-                color: "#10b981",
+                color: "var(--success)",
               }}
             >
               ✅ صالح: {validCount}
@@ -260,7 +260,7 @@ export default function ValidationModal({
               style={{
                 ...statBadgeBase,
                 background: "rgba(239,68,68,0.15)",
-                color: "#ef4444",
+                color: "var(--danger)",
               }}
             >
               ❌ غير صالح: {invalidCount}
@@ -293,7 +293,7 @@ export default function ValidationModal({
                       ? "rgba(16,185,129,0.05)"
                       : "rgba(239,68,68,0.05)",
                     borderRight: `3px solid ${
-                      result.valid ? "#10b981" : "#ef4444"
+                      result.valid ? "var(--success)" : "var(--danger)"
                     }`,
                   }}
                 >
@@ -322,7 +322,7 @@ export default function ValidationModal({
                     style={{
                       fontSize: isMobile ? "11px" : "12px",
                       marginTop: "6px",
-                      color: result.valid ? "#10b981" : "#ef4444",
+                      color: result.valid ? "var(--success)" : "var(--danger)",
                       fontWeight: "600",
                     }}
                   >

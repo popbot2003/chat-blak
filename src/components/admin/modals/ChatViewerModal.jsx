@@ -258,7 +258,7 @@ export default function ChatViewerModal({
                     borderRadius: "12px",
                     marginBottom: "10px",
                     borderRight:
-                      msg.role === "user" ? "3px solid #10b981" : "none",
+                      msg.role === "user" ? "3px solid var(--success)" : "none",
                     wordBreak: "break-word",
                   }}
                 >

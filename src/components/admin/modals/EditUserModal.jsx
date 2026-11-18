@@ -57,7 +57,7 @@ export default function EditUserModal({
             style={{
               flex: 1,
               padding: "12px",
-              background: "linear-gradient(135deg, #10b981, #059669)",
+              background: "var(--brand-gradient)",
               color: "#fff",
               border: "none",
               borderRadius: "10px",

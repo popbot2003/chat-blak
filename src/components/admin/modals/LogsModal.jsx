@@ -271,7 +271,7 @@ export default function LogsModal({
                             ? "rgba(59,130,246,0.12)"
                             : "rgba(148,163,184,0.12)",
                         color:
-                          log.check_type === "auto" ? "#3b82f6" : theme.textMuted,
+                          log.check_type === "auto" ? "var(--brand-primary)" : theme.textMuted,
                         fontWeight: "600",
                       }}
                     >
@@ -288,10 +288,10 @@ export default function LogsModal({
                       flexWrap: "wrap",
                     }}
                   >
-                    <span style={{ color: "#10b981", fontWeight: "600" }}>
+                    <span style={{ color: "var(--success)", fontWeight: "600" }}>
                       ✅ صالح: {log.valid_keys}
                     </span>
-                    <span style={{ color: "#ef4444", fontWeight: "600" }}>
+                    <span style={{ color: "var(--danger)", fontWeight: "600" }}>
                       ❌ غير صالح: {log.invalid_keys}
                     </span>
                     <span style={{ opacity: 0.7 }}>
