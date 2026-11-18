@@ -428,15 +428,25 @@ export async function extractAndSaveMemory(
       }
     );
 
-    if (!res.ok) return;
+    if (!res.ok) {
+      const errorText = await res.text().catch(() => "");
+      console.error("[Memory] فشل طلب استخراج الذكريات:", res.status, errorText);
+      return;
+    }
 
     const data      = await res.json();
     const content   = data.choices?.[0]?.message?.content?.trim() || "";
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return;
+    if (!jsonMatch) {
+      console.warn("[Memory] رد استخراج الذكريات ليس JSON صالحاً:", content);
+      return;
+    }
 
     const result = JSON.parse(jsonMatch[0]);
-    if (!result.should_save || !result.content) return;
+    if (!result.should_save || !result.content) {
+      console.info("[Memory] لم يتم العثور على معلومة تستحق الحفظ في هذا التبادل.");
+      return;
+    }
 
     await saveMemory(userId, {
       content:    result.content.slice(0, 500),
@@ -473,22 +483,31 @@ export async function saveMemory(userId, memory) {
     const { data: existing } = await existingQuery.limit(1);
 
     if (existing && existing.length > 0) {
-      await supabase
+      const { error: updateError } = await supabase
         .from("memories")
         .update({ last_used_at: new Date().toISOString() })
         .eq("id", existing[0].id);
+      if (updateError) throw updateError;
+      console.info("[Memory] تم تحديث استخدام ذاكرة موجودة.");
       return;
     }
 
-    await supabase.from("memories").insert({
-      user_id:      userId,
-      content:      memory.content,
-      category:     memory.category   || MEMORY_CATEGORIES.GENERAL,
-      importance:   memory.importance || 2,
-      chat_id:      memory.chat_id || null,
-      created_at:   new Date().toISOString(),
-      last_used_at: new Date().toISOString(),
-    });
+    const { data, error: insertError } = await supabase
+      .from("memories")
+      .insert({
+        user_id:      userId,
+        content:      memory.content,
+        category:     memory.category   || MEMORY_CATEGORIES.GENERAL,
+        importance:   memory.importance || 2,
+        chat_id:      memory.chat_id || null,
+        created_at:   new Date().toISOString(),
+        last_used_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (insertError) throw insertError;
+    console.info("[Memory] تم حفظ ذاكرة جديدة:", data?.id);
 
   } catch (err) {
     console.warn("[Memory] فشل الحفظ:", err.message);
