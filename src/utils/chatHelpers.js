@@ -382,10 +382,11 @@ export async function extractAndSaveMemory(
   userMessage,
   aiResponse,
   messageCount,
-  session
+  session,
+  chatId
 ) {
   if (messageCount % MEMORY_EXTRACT_INTERVAL !== 0) return;
-  if (!userId || !session?.access_token) return;
+  if (!userId || !session?.access_token || !chatId) return;
 
   const extractPrompt = `
 أنت مساعد لاستخراج المعلومات المهمة من المحادثات.
@@ -441,6 +442,7 @@ export async function extractAndSaveMemory(
       content:    result.content.slice(0, 500),
       category:   result.category  || MEMORY_CATEGORIES.GENERAL,
       importance: Math.min(5, Math.max(1, parseInt(result.importance) || 2)),
+      chat_id:    chatId || null,
     });
 
   } catch (err) {
@@ -456,12 +458,19 @@ export async function saveMemory(userId, memory) {
   if (!userId || !memory?.content) return;
 
   try {
-    const { data: existing } = await supabase
+    let existingQuery = supabase
       .from("memories")
       .select("id")
       .eq("user_id", userId)
-      .ilike("content", `%${memory.content.slice(0, 30)}%`)
-      .limit(1);
+      .ilike("content", `%${memory.content.slice(0, 30)}%`);
+
+    // منع دمج ذاكرة محادثة في محادثة أخرى؛ حتى يحذف CASCADE
+    // الذكريات التابعة للمحادثة الصحيحة فقط.
+    existingQuery = memory.chat_id
+      ? existingQuery.eq("chat_id", memory.chat_id)
+      : existingQuery.is("chat_id", null);
+
+    const { data: existing } = await existingQuery.limit(1);
 
     if (existing && existing.length > 0) {
       await supabase
@@ -476,6 +485,7 @@ export async function saveMemory(userId, memory) {
       content:      memory.content,
       category:     memory.category   || MEMORY_CATEGORIES.GENERAL,
       importance:   memory.importance || 2,
+      chat_id:      memory.chat_id || null,
       created_at:   new Date().toISOString(),
       last_used_at: new Date().toISOString(),
     });
