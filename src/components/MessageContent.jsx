@@ -1,89 +1,104 @@
-// ============================================
-// MessageContent.jsx
-// مكون عرض محتوى الرسالة (يدعم الكود البرمجي والتنسيق)
-//
-// Security:
-//   - HTML is fully escaped before rendering.
-//   - No dangerouslySetInnerHTML.
-//   - No raw HTML from AI/user can execute.
-//   - Only **bold** and line breaks are supported for now.
-// ============================================
 
+import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import CodeBlock from "./CodeBlock";
 
-// Escape HTML entities to prevent XSS.
-// Any HTML tag in the input becomes literal text.
-function escapeHtml(str) {
-  if (typeof str !== "string") return "";
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
-
-// Convert **bold** markers to <strong> AFTER escaping.
-// Because input is already escaped, only our <strong> tags remain real.
-function applyBold(escapedText) {
-  return escapedText.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-}
-
-// Convert newlines to <br/> AFTER escaping.
-function applyLineBreaks(text) {
-  return text.replace(/\n/g, "<br/>");
-}
-
 export default function MessageContent({ content }) {
-  if (!content) return null;
+  if (content === null || content === undefined || content === "") {
+    return null;
+  }
+
   if (typeof content !== "string") {
     return <span>{JSON.stringify(content)}</span>;
   }
 
-  // Remove leftover JSON fragments (same as before).
   const cleaned = content.replace(
     /\{"id":\s*"[^"]*",\s*"role":\s*"[^"]*"\}/g,
     ""
   );
 
-  // Split into text and code blocks.
-  const parts = [];
-  const regex = /```(\w*)\n?([\s\S]*?)```/g;
-  let last = 0;
-  let match;
+  return (
+    <div className="message-markdown" dir="auto">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        skipHtml
+        components={{
+          h1: ({ children }) => <h1 className="md-h1">{children}</h1>,
+          h2: ({ children }) => <h2 className="md-h2">{children}</h2>,
+          h3: ({ children }) => <h3 className="md-h3">{children}</h3>,
 
-  while ((match = regex.exec(cleaned)) !== null) {
-    if (match.index > last) {
-      parts.push({ type: "text", content: cleaned.slice(last, match.index) });
-    }
-    parts.push({
-      type: "code",
-      language: match[1] || "code",
-      content: match[2].trim(),
-    });
-    last = match.index + match[0].length;
-  }
+          p: ({ children }) => <p className="md-paragraph">{children}</p>,
 
-  if (last < cleaned.length) {
-    parts.push({ type: "text", content: cleaned.slice(last) });
-  }
+          ul: ({ children }) => <ul className="md-list">{children}</ul>,
+          ol: ({ children }) => <ol className="md-list md-ordered-list">{children}</ol>,
+          li: ({ children }) => <li>{children}</li>,
 
-  // Render.
-  return parts.map((part, index) => {
-    if (part.type === "code") {
-      return (
-        <CodeBlock key={index} lang={part.language} content={part.content} />
-      );
-    }
+          blockquote: ({ children }) => (
+            <blockquote className="md-blockquote">{children}</blockquote>
+          ),
 
-    // Text part: escape → bold → line breaks.
-    const safe = applyLineBreaks(applyBold(escapeHtml(part.content)));
+          table: ({ children }) => (
+            <div className="md-table-wrapper">
+              <table className="md-table">{children}</table>
+            </div>
+          ),
 
-    return (
-      <span
-        key={index}
-        dangerouslySetInnerHTML={{ __html: safe }}
-      />
-    );
-  });
+          thead: ({ children }) => <thead>{children}</thead>,
+          tbody: ({ children }) => <tbody>{children}</tbody>,
+          tr: ({ children }) => <tr>{children}</tr>,
+          th: ({ children }) => <th>{children}</th>,
+          td: ({ children }) => <td>{children}</td>,
+
+          a: ({ href, children }) => {
+            const safeHref =
+              typeof href === "string" &&
+              /^(https?:\/\/|mailto:)/i.test(href)
+                ? href
+                : undefined;
+
+            return (
+              <a
+                href={safeHref}
+                target={safeHref ? "_blank" : undefined}
+                rel={safeHref ? "noopener noreferrer" : undefined}
+              >
+                {children}
+              </a>
+            );
+          },
+
+          code: ({ className, children, ...props }) => {
+            const match = /language-([\w-]+)/.exec(className || "");
+            const code = String(children).replace(/\n$/, "");
+
+            if (match) {
+              return (
+                <CodeBlock
+                  lang={match[1]}
+                  content={code}
+                />
+              );
+            }
+
+            return (
+              <code className="md-inline-code" {...props}>
+                {children}
+              </code>
+            );
+          },
+
+          pre: ({ children }) => <>{children}</>,
+
+          hr: () => <hr className="md-divider" />,
+
+          strong: ({ children }) => <strong>{children}</>,
+          em: ({ children }) => <em>{children}</>,
+          del: ({ children }) => <del>{children}</>,
+        }}
+      >
+        {cleaned}
+      </ReactMarkdown>
+    </div>
+  );
 }
