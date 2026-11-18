@@ -76,6 +76,17 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentUser, setCurrentUser] = useState(user);
   const [showHistory, setShowHistory] = useState(false);
+  // طيّ القائمة الجانبية على الكمبيوتر (يُحفظ في المتصفح)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("blak-sidebar-collapsed") === "1"; }
+    catch { return false; }
+  });
+  const toggleSidebarCollapsed = () =>
+    setSidebarCollapsed((v) => {
+      const next = !v;
+      try { localStorage.setItem("blak-sidebar-collapsed", next ? "1" : "0"); } catch { /* ignore */ }
+      return next;
+    });
   const [showSettings, setShowSettings] = useState(false);
   const [sendMode, setSendMode] = useState("fast");
   const [showScrollButton, setShowScrollButton] = useState(false);
@@ -974,6 +985,8 @@ export default function Chat({ user, onLogout, isAdmin }) {
           onRenameChat={chatsHook.renameChat}
 
           isOpen={showHistory}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={toggleSidebarCollapsed}
           user={currentUser}
           isDark={isDark}
           isAdmin={isAdmin}
@@ -1002,9 +1015,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
             <ChatHeader
               user={currentUser}
               loading={loading}
-              onToggleHistory={() =>
-                setShowHistory((v) => !v)
-              }
+              sidebarCollapsed={sidebarCollapsed}
+              onToggleHistory={() => {
+                // كمبيوتر: يُظهر القائمة المطوية — هاتف/تابلت: يفتح الدرج
+                if (window.matchMedia("(min-width: 1024px)").matches) {
+                  if (sidebarCollapsed) toggleSidebarCollapsed();
+                } else {
+                  setShowHistory((v) => !v);
+                }
+              }}
               onNewChat={chatsHook.newChat}
             />
           </div>
