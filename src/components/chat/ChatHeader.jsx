@@ -1,7 +1,8 @@
-// ============================================
-// ChatHeader.jsx
-// رأس الشات — الاسم + الحالة + الأزرار
-// ============================================
+
+ // ============================================
+ // ChatHeader.jsx
+ // BLAK — Modern Chat Header
+ // ============================================
 
 export default function ChatHeader({
   user,
@@ -11,27 +12,51 @@ export default function ChatHeader({
   sidebarCollapsed = false,
 }) {
   return (
-    <div className="header">
+    <header className="header">
       <div className="header-left">
-        <button className={`header-btn sidebar-toggle ${sidebarCollapsed ? "sidebar-toggle--collapsed" : ""}`} onClick={onToggleHistory} title="القائمة" aria-label="فتح القائمة">☰</button>
-        <div className="avatar" aria-label="BLAK">B.</div>
+        <button
+          type="button"
+          className={`header-btn sidebar-toggle ${
+            sidebarCollapsed ? "sidebar-toggle--collapsed" : ""
+          }`}
+          onClick={onToggleHistory}
+          title="القائمة الجانبية"
+          aria-label="فتح القائمة الجانبية"
+        >
+          <span className="header-menu-icon">☰</span>
+        </button>
+
+        <div className="avatar" aria-label="BLAK">
+          <span>B.</span>
+        </div>
+
         <div className="brand-lockup">
-          <div className="header-name">BLAK <span className="brand-ar">بلاك</span></div>
-          <div className="header-status"><span className="status-dot" />{loading ? "يكتب الآن" : "مساعدك الذكي"}</div>
+          <div className="header-name">
+            <span className="brand-en">BLAK</span>
+            <span className="brand-ar">بلاك</span>
+          </div>
+
+          <div className={`header-status ${loading ? "is-loading" : ""}`}>
+            <span className="status-dot" />
+            <span>
+              {loading ? "يكتب الآن..." : "مساعدك الذكي"}
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="header-right">
         <button
+          type="button"
           onClick={onNewChat}
-          className="header-btn"
-          title="محادثة جديدة"
-          aria-label="محادثة جديدة"
+          className="header-btn header-new-chat"
+          title="بدء محادثة جديدة"
+          aria-label="بدء محادثة جديدة"
         >
-          ＋
+          <span className="new-chat-icon">＋</span>
+          <span className="new-chat-label">محادثة جديدة</span>
         </button>
-
       </div>
-    </div>
+    </header>
   );
 }
