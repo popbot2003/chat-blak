@@ -26,12 +26,6 @@ body {
   overscroll-behavior: none;     /* ✅ منع bounce على iOS */
 }
 
-/* ✅ قفل تمرير الخلفية عند فتح السايدبار */
-body.sidebar-is-open {
-  overflow: hidden !important;
-  touch-action: none;
-}
-
 button,textarea,input {
   font: inherit;
 }
@@ -129,8 +123,7 @@ textarea:focus-visible {
 }
 
 .container.light .header,
-.container.light .input-area,
-.container.light .history-panel {
+.container.light .input-area {
   background: rgba(255,255,255,.88);
   border-color: rgba(20,24,40,.09);
 }
@@ -149,4 +142,3 @@ textarea:focus-visible {
 .container.light .messages {
   color: #252735;
 }
-
