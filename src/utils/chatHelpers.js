@@ -168,18 +168,55 @@ export function mergeMessages(existing, newMsgs) {
 // 8. 🪟 Sliding Window
 // ══════════════════════════════════════════════
 
-export function buildContextWindow(messages, newUserMessage) {
-  const window = messages
+// ─── buildContextWindow ───────────────────────────────────────
+// RECENT_FULL  = عدد الرسائل الأخيرة اللي بتتبعت كاملة
+// لو المحادثة أطول من RECENT_FULL، الرسائل القديمة بتتلخص في
+// جملة واحدة تتحط في أول message كـ system/user context.
+// ده بيخلي الطلب ~2000-3000 token بدل 8000+.
+// ──────────────────────────────────────────────────────────────
+const RECENT_FULL = 6; // آخر 6 رسائل كاملة دايمًا
+
+export function buildContextWindow(messages, newUserMessage, chatSummary = null) {
+  const filtered = messages
     .filter((m) => m.role === "user" || m.role === "assistant")
-    .slice(-CONTEXT_WINDOW_SIZE)
     .map((m) => ({
       role:    m.role,
       content: typeof m.content === "string" ? m.content : JSON.stringify(m.content),
     }));
 
-  window.push({ role: "user", content: newUserMessage });
+  const recent  = filtered.slice(-RECENT_FULL);
+  const older   = filtered.slice(0, -RECENT_FULL);
 
-  return window;
+  const result = [];
+
+  // ─── ملخص الرسائل القديمة ──────────────────────────────────
+  if (older.length > 0 || chatSummary) {
+    // نفضّل الملخص المحفوظ لو موجود، وإلا نبني ملخصًا بسيطًا
+    let summaryText = chatSummary;
+    if (!summaryText && older.length > 0) {
+      // ملخص تلقائي خفيف: أول رسالة مستخدم + عدد التبادلات
+      const firstUser = older.find((m) => m.role === "user");
+      const turns = Math.floor(older.length / 2);
+      summaryText =
+        `ملخص بداية المحادثة (${turns} تبادل${turns > 1 ? " سابق" : ""}): ` +
+        (firstUser ? firstUser.content.slice(0, 200) : "");
+    }
+    if (summaryText) {
+      result.push({
+        role:    "user",
+        content: `[سياق المحادثة السابقة]: ${summaryText}`,
+      });
+      result.push({
+        role:    "assistant",
+        content: "فهمت. أكمل.",
+      });
+    }
+  }
+
+  result.push(...recent);
+  result.push({ role: "user", content: newUserMessage });
+
+  return result;
 }
 
 
