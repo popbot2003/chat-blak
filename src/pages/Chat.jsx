@@ -1,11 +1,13 @@
+
 // ============================================
-// Chat.jsx — بلاك 🖤 v19.0
+// Chat.jsx — بلاك 🖤 v19.1
 // ✅ ربط الأرشفة والاستعادة بالقائمة الجانبية
 // ✅ نظام ذاكرة v2 (memoryHelpers)
 // ✅ مفاتيح منفصلة للذاكرة والرجوع للسجل
 // ✅ Sliding Window
 // ✅ DuckDuckGo عند الطلب
 // ✅ Cache لفحص is_blocked
+// ✅ ضمان حفظ المحادثة قبل حفظ الذكريات
 // ============================================
 
 import { useState, useRef, useEffect, useCallback } from "react";
@@ -92,18 +94,25 @@ export default function Chat({ user, onLogout, isAdmin }) {
     try { return localStorage.getItem("blak-sidebar-collapsed") === "1"; }
     catch { return false; }
   });
+
   const toggleSidebarCollapsed = () =>
     setSidebarCollapsed((v) => {
       const next = !v;
-      try { localStorage.setItem("blak-sidebar-collapsed", next ? "1" : "0"); } catch { /* ignore */ }
+      try {
+        localStorage.setItem("blak-sidebar-collapsed", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
       return next;
     });
+
   const [showSettings, setShowSettings] = useState(false);
   const [sendMode, setSendMode] = useState("fast");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   const [aiMode, setAiMode] = useState({ thinking: false, search: false });
   const aiModeRef = useRef(aiMode);
+
   useEffect(() => {
     aiModeRef.current = aiMode;
   }, [aiMode]);
@@ -182,7 +191,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
             "black-user",
             JSON.stringify(payload.new)
           );
-          // لو مفاتيح الذاكرة اتغيرت من مكان تاني (تبويب تاني/جهاز)
+
           if (
             typeof payload.new.memory_enabled !== "undefined" ||
             typeof payload.new.chat_reference_enabled !== "undefined"
@@ -277,6 +286,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   const refreshMemoryState = useCallback(async () => {
     if (!user?.id) return;
+
     try {
       const settings = await getUserMemorySettings(user.id);
       setMemorySettings(settings);
@@ -297,11 +307,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
     refreshMemoryState();
   }, [refreshMemoryState]);
 
-  // استمع لحدث "memory-updated" اللي بيتبعت بعد حفظ/حذف ذكرى
   useEffect(() => {
-    const handler = () => { refreshMemoryState(); };
+    const handler = () => {
+      refreshMemoryState();
+    };
+
     window.addEventListener("memory-updated", handler);
-    return () => window.removeEventListener("memory-updated", handler);
+
+    return () => {
+      window.removeEventListener("memory-updated", handler);
+    };
   }, [refreshMemoryState]);
 
 
@@ -332,16 +347,19 @@ export default function Chat({ user, onLogout, isAdmin }) {
       const limitCheck = checkUserDailyLimit(currentUserRef.current);
 
       if (!limitCheck.canChat) {
-        setMessages((prev) =>
-          sortMessagesByTime([
+        setMessages((prev) => {
+          const next = sortMessagesByTime([
             ...prev,
             {
               role: "assistant",
               content: limitCheck.reason,
               id: Date.now(),
             },
-          ])
-        );
+          ]);
+
+          messagesRef.current = next;
+          return next;
+        });
 
         setLoading(false);
         throw new Error(limitCheck.reason);
@@ -367,20 +385,36 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       setInput("");
 
-      // ═══ كشف طلب صريح "تذكر / انسى" ═══
+      // ═══════════════════════════════════════════
+      // حفظ المحادثة قبل حفظ الذاكرة الصريحة
+      // ═══════════════════════════════════════════
+
       const activeSettings = memorySettingsRef.current;
+
       if (activeSettings.memory_enabled) {
         const explicitReq = detectExplicitMemoryRequest(text);
+
         if (explicitReq?.action === "save") {
           try {
-            await saveMemory(
-              user.id,
-              currentChatIdRef.current,
-              explicitReq.content,
-              MEMORY_EXPLICIT_IMPORTANCE,
-              "explicit"
+            const chatSaved = await chatsHook.saveChatToSupabase(
+              currentChatIdRef.current
             );
-            window.dispatchEvent(new CustomEvent("memory-updated"));
+
+            if (!chatSaved) {
+              console.warn(
+                "[memory] skipped explicit save: chat not saved"
+              );
+            } else {
+              await saveMemory(
+                user.id,
+                currentChatIdRef.current,
+                explicitReq.content,
+                MEMORY_EXPLICIT_IMPORTANCE,
+                "explicit"
+              );
+
+              window.dispatchEvent(new CustomEvent("memory-updated"));
+            }
           } catch (err) {
             console.error("[memory] explicit save failed:", err);
           }
@@ -395,6 +429,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
       }
 
       // ═══ رفع الملفات ═══
+
       let filesForRequest = fileUploadHook.attachedFiles;
 
       if (
@@ -453,13 +488,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
           enhancedText + fileCard
         );
 
-        // ═══ بناء systemPrompt الأساسي (بدون ذاكرة) ═══
+        // ═══ بناء systemPrompt الأساسي ═══
+
         let systemPrompt = getPersonalityPrompt(
           currentUserRef.current?.personality || "blak",
           currentUserRef.current?.gender || "ولد"
         );
 
-        // ═══ بلوك الذاكرة v2 (ذكريات + ملخصات) ═══
+        // ═══ بلوك الذاكرة v2 ═══
+
         try {
           let memoryBlock = "";
           const wantMem = activeSettings.memory_enabled;
@@ -477,7 +514,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
                 )
               : [];
 
-            memoryBlock = buildMemoryPromptBlock(memoriesForPrompt, summaries);
+            memoryBlock = buildMemoryPromptBlock(
+              memoriesForPrompt,
+              summaries
+            );
           }
 
           if (memoryBlock) {
@@ -554,32 +594,43 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
         setStreamingText("");
 
-        setMessages((prev) => {
-          const next = sortMessagesByTime([
-            ...prev,
-            {
-              role: "assistant",
-              content: reply,
-              id: Date.now(),
-            },
-          ]);
+        // تحديث المرجع مباشرة قبل بدء أي عملية حفظ
+        const assistantMessage = {
+          role: "assistant",
+          content: reply,
+          id: Date.now(),
+        };
 
-          messagesRef.current = next;
-          return next;
-        });
+        const nextMessages = sortMessagesByTime([
+          ...messagesRef.current,
+          assistantMessage,
+        ]);
+
+        messagesRef.current = nextMessages;
+        setMessages(nextMessages);
 
         setLoading(false);
         abortControllerRef.current = null;
 
         triggerAutoSaveRef.current?.();
 
-        // ═══ استخراج الذاكرة + الملخص (طلب واحد) ═══
-        if (activeSettings.memory_enabled || activeSettings.chat_reference_enabled) {
+        // ═══════════════════════════════════════════
+        // استخراج الذاكرة + الملخص
+        // لا يتم حفظهما قبل التأكد من حفظ المحادثة
+        // ═══════════════════════════════════════════
+
+        if (
+          activeSettings.memory_enabled ||
+          activeSettings.chat_reference_enabled
+        ) {
           const convoForExtraction = [
-            ...updatedMessages
-              .filter((m) => m.role === "user" || m.role === "assistant")
+            ...nextMessages
+              .filter(
+                (m) =>
+                  m.role === "user" ||
+                  m.role === "assistant"
+              )
               .slice(-5),
-            { role: "assistant", content: reply },
           ];
 
           extractMemoriesAndSummary({
@@ -588,11 +639,37 @@ export default function Chat({ user, onLogout, isAdmin }) {
             wantSummary: activeSettings.chat_reference_enabled,
           })
             .then(async ({ memories: extracted, summary }) => {
-              if (activeSettings.memory_enabled && extracted.length > 0) {
+
+              const chatId = currentChatIdRef.current;
+
+              if (!chatId) {
+                console.warn(
+                  "[memory] skipped extraction: missing chat id"
+                );
+                return;
+              }
+
+              // تأكيد حفظ المحادثة أولًا
+              const chatSaved = await chatsHook.saveChatToSupabase(
+                chatId
+              );
+
+              if (!chatSaved) {
+                console.warn(
+                  "[memory] skipped extraction: chat not saved"
+                );
+                return;
+              }
+
+              // حفظ الذكريات بعد نجاح حفظ المحادثة
+              if (
+                activeSettings.memory_enabled &&
+                extracted.length > 0
+              ) {
                 for (const m of extracted) {
                   await saveMemory(
                     user.id,
-                    currentChatIdRef.current,
+                    chatId,
                     m.content,
                     m.importance,
                     "auto"
@@ -600,16 +677,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
                 }
               }
 
+              // حفظ الملخص بعد نجاح حفظ المحادثة
               if (
                 activeSettings.chat_reference_enabled &&
-                summary &&
-                currentChatIdRef.current
+                summary
               ) {
-                await updateChatSummary(currentChatIdRef.current, summary);
+                await updateChatSummary(chatId, summary);
               }
 
               if (extracted.length > 0 || summary) {
-                window.dispatchEvent(new CustomEvent("memory-updated"));
+                window.dispatchEvent(
+                  new CustomEvent("memory-updated")
+                );
               }
             })
             .catch((err) => {
@@ -619,29 +698,36 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
       } catch (err) {
         if (err.name === "AbortError") {
-          setMessages((prev) =>
-            sortMessagesByTime([
-              ...prev,
-              {
-                role: "assistant",
-                content: "⏹️ تم إيقاف التوليد.",
-                id: Date.now(),
-              },
-            ])
-          );
+          const stoppedMessage = {
+            role: "assistant",
+            content: "⏹️ تم إيقاف التوليد.",
+            id: Date.now(),
+          };
+
+          const nextMessages = sortMessagesByTime([
+            ...messagesRef.current,
+            stoppedMessage,
+          ]);
+
+          messagesRef.current = nextMessages;
+          setMessages(nextMessages);
+
         } else {
           console.error("[Chat] خطأ:", err.message);
 
-          setMessages((prev) =>
-            sortMessagesByTime([
-              ...prev,
-              {
-                role: "assistant",
-                content: "❌ حدث خطأ: " + err.message,
-                id: Date.now(),
-              },
-            ])
-          );
+          const errorMessage = {
+            role: "assistant",
+            content: "❌ حدث خطأ: " + err.message,
+            id: Date.now(),
+          };
+
+          const nextMessages = sortMessagesByTime([
+            ...messagesRef.current,
+            errorMessage,
+          ]);
+
+          messagesRef.current = nextMessages;
+          setMessages(nextMessages);
         }
 
         setLoading(false);
@@ -649,7 +735,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
         abortControllerRef.current = null;
       }
     },
-    [user.id, fileUploadHook.attachedFiles, messages]
+    [
+      user.id,
+      fileUploadHook.attachedFiles,
+      chatsHook.saveChatToSupabase,
+    ]
   );
 
 
@@ -1033,7 +1123,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
     showToast("✅ تم تحديث الإعدادات بنجاح");
 
-    // لو الإعدادات فيها تغيير في مفاتيح الذاكرة → نحدّث الحالة
     if (
       "memory_enabled" in profileUpdates ||
       "chat_reference_enabled" in profileUpdates
@@ -1222,7 +1311,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
               onSave={handleSaveSettings}
               onDeleteAccount={handleDeleteAccount}
               theme={theme}
-              onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              onToggleTheme={() =>
+                setTheme((t) => (t === "dark" ? "light" : "dark"))
+              }
             />
           )}
 
