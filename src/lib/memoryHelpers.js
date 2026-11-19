@@ -105,16 +105,12 @@ export async function saveMemory(userId, chatId, content, importance, source = '
   let payload = { ...basePayload, chat_id: chatId || null };
   let { data, error } = await tryInsert(payload);
 
-  // لو FK فشل — المحادثة لسه ما اتخزنتش. نستنى 3.5 ثانية ونجرب تاني
+  // لو FK فشل بسبب إن المحادثة لسه ما اتخزنتش في DB:
+  // نحفظ على مستوى المستخدم فورًا (chat_id = null) من غير انتظار.
+  // المفضل هو استدعاء saveMemory بعد تأكيد حفظ المحادثة (زي ما بيحصل
+  // في Chat.jsx للحفظ الصريح). لو وصلنا هنا فمعناه تأخر غير متوقع.
   if (error?.code === '23503' && payload.chat_id) {
-    console.info('[memory] FK retry after delay (chat not yet saved)...');
-    await new Promise((r) => setTimeout(r, 3500));
-    ({ data, error } = await tryInsert(payload));
-  }
-
-  // لو لسه فشل — نحفظ على مستوى المستخدم (chat_id = null)
-  if (error?.code === '23503') {
-    console.warn('[memory] chat not found, saving at user-level');
+    console.warn('[memory] FK failed, saving at user-level (no chat_id)');
     ({ data, error } = await tryInsert({ ...basePayload, chat_id: null }));
   }
 
