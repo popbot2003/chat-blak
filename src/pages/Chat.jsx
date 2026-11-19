@@ -53,9 +53,11 @@ import {
   buildMemoryPromptBlock,
   detectExplicitMemoryRequest,
   saveMemory,
+  deleteMemory,
   deleteMatchingMemories,
   extractMemoriesAndSummary,
   updateChatSummary,
+  updateMemorySetting,
 } from "../lib/memoryHelpers";
 
 import { copyToClipboard } from "../utils/helpers";
@@ -1179,7 +1181,42 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
 
   // ═══════════════════════════════════════════
-  // 13. Render
+  // 13. معالجات الذاكرة
+  // ═══════════════════════════════════════════
+
+  async function handleToggleMemory(field) {
+    if (!user?.id) return;
+    const next = !memorySettings[field];
+    setMemorySettings((prev) => ({ ...prev, [field]: next }));
+    try {
+      await updateMemorySetting(user.id, field, next);
+    } catch {
+      setMemorySettings((prev) => ({ ...prev, [field]: !next }));
+    }
+  }
+
+  async function handleDeleteMemory(memoryId) {
+    if (!user?.id) return;
+    await deleteMemory(memoryId);
+    await refreshMemoryState();
+  }
+
+  async function handleClearAllMemories() {
+    if (!user?.id) return;
+    await supabase.from("memories").delete().eq("user_id", user.id);
+    await refreshMemoryState();
+  }
+
+  async function handleClearHistory() {
+    if (!user?.id) return;
+    await supabase.from("chats").delete().eq("user_id", user.id);
+    chatsHook.newChat();
+    await refreshMemoryState();
+    showToast("تم حذف السجل");
+  }
+
+  // ═══════════════════════════════════════════
+  // 14. Render
   // ═══════════════════════════════════════════
 
   if (!isLoaded) {
@@ -1320,6 +1357,12 @@ export default function Chat({ user, onLogout, isAdmin }) {
               onToggleTheme={() =>
                 setTheme((t) => (t === "dark" ? "light" : "dark"))
               }
+              memorySettings={memorySettings}
+              memories={memories}
+              onToggleMemory={handleToggleMemory}
+              onDeleteMemory={handleDeleteMemory}
+              onClearAllMemories={handleClearAllMemories}
+              onClearHistory={handleClearHistory}
             />
           )}
 
