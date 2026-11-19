@@ -306,8 +306,8 @@ export function useChats({
   // ==========================================
 
   const saveChatToSupabase = useCallback(
-    async () => {
-      const chatId = currentChatIdRef.current;
+    async (requestedChatId = null) => {
+      const chatId = requestedChatId || currentChatIdRef.current;
 
       if (!chatId || !messagesRef?.current) return false;
 
@@ -804,7 +804,6 @@ export function useChats({
       }
     };
   }, []);
-
 
   // ==========================================
   // إعادة تسمية محادثة
