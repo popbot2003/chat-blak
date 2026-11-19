@@ -123,9 +123,10 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   // الذاكرة — v2
   const [memories, setMemories] = useState([]);
+  // الافتراضي true — القيمة الحقيقية بتيجي من Supabase Realtime عند التحميل
   const [memorySettings, setMemorySettings] = useState({
-    memory_enabled: false,
-    chat_reference_enabled: false,
+    memory_enabled: true,
+    chat_reference_enabled: true,
   });
 
   const [currentChatId, setCurrentChatId] = useState(() => {
