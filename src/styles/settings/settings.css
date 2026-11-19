@@ -56,3 +56,16 @@
   .settings__foot .ui-btn { flex: 1; }
   .settings__danger { flex-direction: column; align-items: stretch; }
 }
+
+/* ─── قسم الذاكرة ─────────────────────────────────────────── */
+.settings__memories { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.settings__memories-head { display: flex; align-items: center; justify-content: space-between; }
+.settings__badge { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 6px; border-radius: 999px; background: var(--brand-primary); color: #fff; font-size: 11px; font-weight: 700; }
+.settings__empty { font-size: var(--text-sm); color: var(--text-secondary); padding: var(--space-3) 0; }
+.settings__memory-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+.settings__memory-item { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-card); }
+.settings__memory-text { font-size: var(--text-sm); color: var(--text-primary); line-height: 1.6; flex: 1; }
+.settings__memory-del { flex-shrink: 0; color: var(--text-secondary); padding: 2px 6px !important; }
+.settings__memory-del:hover { color: var(--danger); }
+.settings__confirm-row { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.ui-btn--xs { padding: 4px 10px !important; font-size: var(--text-xs) !important; }
