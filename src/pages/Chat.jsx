@@ -484,9 +484,14 @@ export default function Chat({ user, onLogout, isAdmin }) {
           ? updatedMessages.slice(0, -1)
           : updatedMessages;
 
+        // جلب ملخص المحادثة الحالية لتقليل tokens عند المحادثات الطويلة
+        const currentChat = chatsHook.allChats?.find(
+          (c) => c.id === currentChatIdRef.current
+        );
         const contextMsgs = buildContextWindow(
           historyForContext.filter((m) => m.type !== "task"),
-          enhancedText + fileCard
+          enhancedText + fileCard,
+          currentChat?.summary || null
         );
 
         // ═══ بناء systemPrompt الأساسي ═══
