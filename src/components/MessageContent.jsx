@@ -31,7 +31,9 @@ export default function MessageContent({ content }) {
           p: ({ children }) => <p className="md-paragraph">{children}</p>,
 
           ul: ({ children }) => <ul className="md-list">{children}</ul>,
-          ol: ({ children }) => <ol className="md-list md-ordered-list">{children}</ol>,
+          ol: ({ children }) => (
+            <ol className="md-list md-ordered-list">{children}</ol>
+          ),
           li: ({ children }) => <li>{children}</li>,
 
           blockquote: ({ children }) => (
@@ -43,12 +45,6 @@ export default function MessageContent({ content }) {
               <table className="md-table">{children}</table>
             </div>
           ),
-
-          thead: ({ children }) => <thead>{children}</thead>,
-          tbody: ({ children }) => <tbody>{children}</tbody>,
-          tr: ({ children }) => <tr>{children}</tr>,
-          th: ({ children }) => <th>{children}</th>,
-          td: ({ children }) => <td>{children}</td>,
 
           a: ({ href, children }) => {
             const safeHref =
@@ -74,10 +70,7 @@ export default function MessageContent({ content }) {
 
             if (match) {
               return (
-                <CodeBlock
-                  lang={match[1]}
-                  content={code}
-                />
+                <CodeBlock lang={match[1]} content={code} />
               );
             }
 
@@ -92,9 +85,9 @@ export default function MessageContent({ content }) {
 
           hr: () => <hr className="md-divider" />,
 
-          strong: ({ children }) => <strong>{children}</>,
-          em: ({ children }) => <em>{children}</>,
-          del: ({ children }) => <del>{children}</>,
+          strong: ({ children }) => <strong>{children}</strong>,
+          em: ({ children }) => <em>{children}</em>,
+          del: ({ children }) => <del>{children}</del>,
         }}
       >
         {cleaned}
