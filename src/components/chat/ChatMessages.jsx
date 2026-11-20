@@ -7,6 +7,7 @@
 import MessageContent from "../MessageContent";
 import TypingDots from "../TypingDots";
 import TaskMessage from "./TaskMessage";
+import SourcesBar from "./SourcesBar";
 
 export default function ChatMessages({
   messages,
@@ -65,10 +66,6 @@ export default function ChatMessages({
               msg.role === "user" ? "msg-row-user" : "msg-row-ai"
             }`}
           >
-            {msg.role === "assistant" && (
-              <div className="avatar-small">B.</div>
-            )}
-
             <div className="msg-content-wrapper">
               <div
                 className={`bubble ${
@@ -81,6 +78,10 @@ export default function ChatMessages({
               >
                 <MessageContent content={msg.content} />
               </div>
+
+              {msg.role === "assistant" && msg.sources?.length > 0 && (
+                <SourcesBar sources={msg.sources} />
+              )}
 
               {msg.role === "assistant" && (
                 <button
