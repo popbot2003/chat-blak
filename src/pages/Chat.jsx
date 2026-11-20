@@ -814,9 +814,15 @@ export default function Chat({ user, onLogout, isAdmin }) {
   }, []);
 
   useEffect(() => {
-    if (!loading && !streamingText && isLoaded) {
+    // على الكمبيوتر فقط: تركيز تلقائي بعد الرد
+    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (!loading && !streamingText && isLoaded && !isTouch) {
       const t = setTimeout(() => inputRef.current?.focus(), 150);
       return () => clearTimeout(t);
+    }
+    // على الهاتف: أغلق لوحة المفاتيح بعد الرد
+    if (!loading && !streamingText && isLoaded) {
+      inputRef.current?.blur();
     }
   }, [loading, streamingText, isLoaded]);
 
