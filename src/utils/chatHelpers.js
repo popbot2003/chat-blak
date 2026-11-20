@@ -101,10 +101,10 @@ export function getFileIcon(file) {
 
 export function showToast(message, type = "success") {
   const colors = {
-    error:   "var(--color-error)",
-    info:    "var(--color-info)",
-    success: "var(--color-success)",
-    warning: "var(--color-warning)",
+    error:   "#e53e3e",
+    info:    "#3182ce",
+    success: "#38a169",
+    warning: "#d69e2e",
   };
   const div = document.createElement("div");
   div.style.cssText = `
@@ -117,10 +117,11 @@ export function showToast(message, type = "success") {
     padding: 10px 20px;
     border-radius: 12px;
     z-index: 9999;
-    font-size: 14px;
-    font-family: var(--font-body);
+    font-size: 15px;
+    font-family: var(--font-body, system-ui, sans-serif);
     pointer-events: none;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+    white-space: nowrap;
   `;
   div.textContent = message;
   document.body.appendChild(div);
