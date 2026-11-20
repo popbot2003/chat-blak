@@ -196,10 +196,17 @@ export default function AddKeyModal({
             ➕ إضافة مفتاح API
           </h3>
 
+          <p style={{ fontSize: "13px", color: "#aaa", marginBottom: "10px", lineHeight: 1.6 }}>
+            <strong>مفاتيح Groq:</strong> اسمها الحرية (مثلاً: مفتاح 1)<br />
+            <strong>مفاتيح البحث — Tavily:</strong> اسمها يبدأ بـ <code>tavily_</code> (tavily_1)<br />
+            <strong>مفاتيح البحث — Brave:</strong> اسمها يبدأ بـ <code>brave_</code> (brave_1)<br />
+            <strong>مفاتيح البحث — Serper:</strong> اسمها يبدأ بـ <code>serper_</code> (serper_1)
+          </p>
+
           <input
             style={modalInputStyle}
             type="text"
-            placeholder="اسم المفتاح"
+            placeholder="اسم المفتاح (مثلاً: tavily_1 أو مفتاح groq 1)"
             value={newKeyName}
             onChange={handleNameChange}
             autoComplete="off"
@@ -209,7 +216,7 @@ export default function AddKeyModal({
           <input
             style={{ ...modalInputStyle, fontFamily: "monospace" }}
             type="text"
-            placeholder="gsk_xxxxxxxxxxxx"
+            placeholder="المفتاح السري"
             value={newKeyValue}
             onChange={handleValueChange}
             autoComplete="off"
