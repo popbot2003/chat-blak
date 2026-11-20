@@ -33,8 +33,7 @@ import {
 import { getPersonalityPrompt } from "../config/personalities";
 
 import {
-  needsWebSearch,
-  searchDuckDuckGo,
+  needsWebSearch as _legacyNeedsWebSearch,
   cleanResponse,
   showToast,
   sortMessagesByTime,
@@ -62,6 +61,8 @@ import {
 
 import { copyToClipboard } from "../utils/helpers";
 import { smartDetectIntent } from "../utils/intentDetection";
+import { webSearch, buildSearchContext, needsWebSearch } from "../lib/searchHelpers";
+import SourcesBar from "../components/chat/SourcesBar";
 import { checkUserDailyLimit } from "../utils/validators";
 
 import { useFileUpload } from "../hooks/useFileUpload";
@@ -460,19 +461,18 @@ export default function Chat({ user, onLogout, isAdmin }) {
       try {
         let enhancedText = text;
 
-        const searchRequested = aiModeRef.current.search;
-
-        if (searchRequested || needsWebSearch(text)) {
-          const searchResult = await searchDuckDuckGo(text);
-
-          if (searchResult) {
+        // ─── البحث التلقائي الذكي ───────────────────────────────
+        let searchSources = null;
+        if (needsWebSearch(text)) {
+          const searchData = await webSearch(text);
+          if (searchData?.results?.length) {
+            searchSources = searchData.results;
+            const ctx = buildSearchContext(searchSources);
             enhancedText =
               text +
-              "\n\n[نتائج البحث]:\n" +
-              searchResult +
-              "\n\nاستخدم المعلومات دي كمرجع فقط، وردك بنفس لغة المستخدم.";
-          } else if (searchRequested) {
-            showToast("🔍 لم أجد نتائج بحث مفيدة، سأجيب من معرفتي", "info");
+              "\n\n[نتائج بحث حقيقية — اذكر المصادر برقمها [1] [2]...]:\n" +
+              ctx +
+              "\n\nاعتمد على النتائج دي وذكر المصدر برقمه. لو ما وجدتش معلومة، قول ذلك.";
           }
         }
 
@@ -607,6 +607,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
           role: "assistant",
           content: reply,
           id: Date.now(),
+          sources: searchSources || null,
         };
 
         const nextMessages = sortMessagesByTime([
