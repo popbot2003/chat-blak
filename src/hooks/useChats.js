@@ -332,29 +332,15 @@ export function useChats({
       const sequence = ++loadSequenceRef.current;
 
       try {
-        const lastChatId = localStorage.getItem("black-last-chat-id");
+        // عند كل دخول تبدأ بمحادثة جديدة (مش آخر محادثة)
+        // المحادثات القديمة موجودة في القائمة الجانبية
+        const lastChatId = null;
         if (!lastChatId) return;
-
-        const exists = (chats || []).some(
-          (chat) =>
-            chat.id === lastChatId &&
-            !chat.is_archived
-        );
-
-        if (
-          !exists ||
-          deletedChatsRef.current.has(lastChatId)
-        ) {
-          localStorage.removeItem("black-last-chat-id");
-          return;
-        }
 
         const { data, error } = await supabase
           .from("chats")
           .select("*")
-          .eq("id", lastChatId)
-          .eq("user_id", user.id)
-          .is("archived_at", null)
+          .eq("id", "__never__")
           .single();
 
         if (error) throw error;
@@ -667,8 +653,6 @@ export function useChats({
     async (chatId) => {
       if (!chatId || !user?.id) return;
 
-      if (!window.confirm("حذف هذه المحادثة نهائيًا؟")) return;
-
       deletedChatsRef.current.add(chatId);
 
       const isCurrent = chatId === currentChatIdRef.current;
@@ -757,7 +741,7 @@ export function useChats({
           }
         }
 
-        showToast("✅ تم حذف المحادثة وطلب إلغاء مهامها", "success");
+        showToast("تم الحذف", "success");
       } catch (error) {
         deletedChatsRef.current.delete(chatId);
 
