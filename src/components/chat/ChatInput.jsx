@@ -383,7 +383,7 @@ export default function ChatInput({
         <span className="composer-shortcut">
           {isMobile
             ? "استخدم زر السهم لإرسال الرسالة"
-            : "Enter للإرسال · Shift + Enter لسطر جديد"}
+            : "Shift + Enter لسطر جديد"}
         </span>
       </div>
     </div>
