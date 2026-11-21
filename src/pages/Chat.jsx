@@ -19,6 +19,7 @@ import ChatMessages from "../components/chat/ChatMessages";
 import ChatSettings from "../components/chat/ChatSettings";
 import ChatInput from "../components/chat/ChatInput";
 import ActiveTasksNotification from "../components/chat/ActiveTasksNotification";
+import TasksPanel from "../components/tasks/TasksPanel";
 import LoadingScreen from "../components/LoadingScreen";
 
 import { supabase } from "../lib/supabase";
@@ -110,6 +111,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   const [showSettings, setShowSettings] = useState(false);
   const [sendMode, setSendMode] = useState("fast");
+  const [showTasks, setShowTasks] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
   const [aiMode, setAiMode] = useState(() => {
@@ -1243,7 +1245,9 @@ export default function Chat({ user, onLogout, isAdmin }) {
         <ChatHistory
           chats={chatsHook.allChats}
           currentChatId={currentChatId}
-
+          showTasks={showTasks}
+          onToggleTasks={() => setShowTasks((v) => !v)}
+          activeTasksCount={tasksHook.allActiveTasks.length}
           onClose={() => setShowHistory(false)}
 
           onOpenChat={(id) => {
@@ -1341,7 +1345,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
             loading={loading}
             streamingText={streamingText}
             attachedFiles={fileUploadHook.attachedFiles}
-            sendMode={sendMode}
+
             aiMode={aiMode}
             onAiModeChange={setAiMode}
             onSend={sendMessage}
@@ -1356,6 +1360,16 @@ export default function Chat({ user, onLogout, isAdmin }) {
             uploadProgress={fileUploadHook.uploadProgress}
             inputRef={inputRef}
           />
+
+          {showTasks && (
+            <div className="tasks-overlay">
+              <TasksPanel
+                user={currentUser}
+                activeTasks={tasksHook.allActiveTasks}
+                onCancelTask={tasksHook.cancelTask}
+              />
+            </div>
+          )}
 
           {showSettings && (
             <ChatSettings
