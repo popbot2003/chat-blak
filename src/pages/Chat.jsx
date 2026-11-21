@@ -62,7 +62,6 @@ import {
 import { copyToClipboard } from "../utils/helpers";
 import { smartDetectIntent } from "../utils/intentDetection";
 import { webSearch, buildSearchContext, needsWebSearch } from "../lib/searchHelpers";
-import SourcesBar from "../components/chat/SourcesBar";
 import { checkUserDailyLimit } from "../utils/validators";
 
 import { useFileUpload } from "../hooks/useFileUpload";
@@ -1204,7 +1203,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
 
   async function handleDeleteMemory(memoryId) {
     if (!user?.id) return;
-    await deleteMemory(memoryId);
+    await deleteMemory(user.id, memoryId);
     await refreshMemoryState();
   }
 
