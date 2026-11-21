@@ -108,11 +108,9 @@ export default function ChatInput({
 
   const isDisabled = loading && !streamingText;
 
-  const thinkingEnabled = Boolean(aiMode?.thinking);
-  const searchEnabled = Boolean(aiMode?.search);
-
-  const isAutoMode =
-    !thinkingEnabled && !searchEnabled;
+  // وضعان فقط: سريع (افتراضي) أو تفكير — واحد دايمًا مفعّل
+  const isFastMode     = !Boolean(aiMode?.thinking);
+  const isThinkingMode =  Boolean(aiMode?.thinking);
 
   function handleKeyDown(e) {
     // على الهاتف: Enter يضيف سطرًا جديدًا، والإرسال من زر السهم فقط.
@@ -125,26 +123,12 @@ export default function ChatInput({
 
   function updateAiMode(mode) {
     if (loading || !onAiModeChange) return;
-
-    const nextMode = {
-      thinking: thinkingEnabled,
-      search: searchEnabled,
-    };
-
-    if (mode === "auto") {
-      nextMode.thinking = false;
-      nextMode.search = false;
-    }
-
-    if (mode === "thinking") {
-      nextMode.thinking = !thinkingEnabled;
-    }
-
-    if (mode === "search") {
-      nextMode.search = !searchEnabled;
-    }
-
-    onAiModeChange(nextMode);
+    // Radio: الضغط على المفعّل ما يغيرش حاجة
+    if (mode === "fast"     && isFastMode)     return;
+    if (mode === "thinking" && isThinkingMode) return;
+    onAiModeChange({ thinking: mode === "thinking", search: false });
+    // حفظ الاختيار للجلسة الجاية
+    localStorage.setItem("black-ai-mode", mode);
   }
 
   function isUploadingFile(file) {
@@ -324,49 +308,32 @@ export default function ChatInput({
       {!isTaskMode && (
         <div
           className="composer-modes"
+          role="radiogroup"
+          aria-label="وضع الذكاء الاصطناعي"
           dir="rtl"
         >
-          <span className="composer-modes-label">
-            الوضع
-          </span>
-
           <button
             type="button"
-            className={`composer-mode-btn ${
-              isAutoMode ? "active" : ""
-            }`}
-            onClick={() => updateAiMode("auto")}
+            role="radio"
+            className={`composer-mode-btn ${isFastMode ? "active" : ""}`}
+            onClick={() => updateAiMode("fast")}
             disabled={loading}
-            aria-pressed={isAutoMode}
+            aria-checked={isFastMode}
           >
-            <span className="composer-mode-icon">✦</span>
-            ذكي
+            <span className="composer-mode-icon">⚡</span>
+            سريع
           </button>
 
           <button
             type="button"
-            className={`composer-mode-btn ${
-              thinkingEnabled ? "active" : ""
-            }`}
+            role="radio"
+            className={`composer-mode-btn ${isThinkingMode ? "active" : ""}`}
             onClick={() => updateAiMode("thinking")}
             disabled={loading}
-            aria-pressed={thinkingEnabled}
+            aria-checked={isThinkingMode}
           >
             <span className="composer-mode-icon">◈</span>
             تفكير
-          </button>
-
-          <button
-            type="button"
-            className={`composer-mode-btn ${
-              searchEnabled ? "active" : ""
-            }`}
-            onClick={() => updateAiMode("search")}
-            disabled={loading}
-            aria-pressed={searchEnabled}
-          >
-            <span className="composer-mode-icon">⌕</span>
-            بحث
           </button>
         </div>
       )}
