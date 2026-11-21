@@ -1,0 +1,201 @@
+/* ============================================
+   src/styles/tasks/tasks.css — BLACK 🖤
+   ============================================ */
+
+.tasks-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: var(--space-3);
+  overflow-y: auto;
+}
+
+.tasks-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.tasks-panel__title {
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tasks-panel__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .6; }
+}
+
+.tasks-panel__confirm {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.tasks-panel__empty {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  text-align: center;
+  margin-top: var(--space-6);
+}
+
+/* ─── قائمة المهام ─── */
+.tasks-panel__list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tasks-panel__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: background .15s;
+}
+
+.tasks-panel__item:hover { background: var(--bg-hover); }
+
+.tasks-panel__item.is-active {
+  border-color: var(--brand-primary);
+  background: color-mix(in srgb, var(--brand-primary) 8%, transparent);
+}
+
+.tasks-panel__item-main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.tasks-panel__item-title {
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.5;
+  flex: 1;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.tasks-panel__item-status {
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.tasks-panel__item-date {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ─── تفاصيل المهمة ─── */
+.tasks-panel__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tasks-panel__status-badge {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.tasks-panel__task-title {
+  font-size: var(--text-base);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.6;
+}
+
+.tasks-panel__steps ol {
+  padding-inline-start: var(--space-4);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  line-height: 1.8;
+}
+
+.tasks-panel__result,
+.tasks-panel__error {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  line-height: 1.7;
+}
+
+.tasks-panel__result {
+  background: color-mix(in srgb, var(--brand-primary) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--brand-primary) 20%, transparent);
+}
+
+.tasks-panel__error {
+  background: color-mix(in srgb, #e53e3e 6%, transparent);
+  border: 1px solid color-mix(in srgb, #e53e3e 20%, transparent);
+}
+
+.tasks-panel__detail-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+/* ─── Overlay المهام ─────────────────────────────────────── */
+.tasks-overlay {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-main);
+  z-index: 10;
+  overflow-y: auto;
+}
+
+/* ─── شارة المهام في الشريط الجانبي ─────────────────────── */
+.sb-tasks-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--brand-primary);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  margin-inline-start: auto;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.sb-item.is-active {
+  background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
+  color: var(--brand-primary);
+}
