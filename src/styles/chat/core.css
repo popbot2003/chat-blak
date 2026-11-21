@@ -250,25 +250,9 @@
   flex-direction: row-reverse;
 }
 
-.avatar-small {
-  flex: 0 0 30px;
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(174, 162, 255, .25);
-  border-radius: 10px;
-  background: linear-gradient(145deg, #29253e, #171923);
-  color: #c8c0ff;
-  font-family: Inter, sans-serif;
-  font-size: 12px;
-  font-weight: 800;
-}
-
+.avatar-small,
 .avatar-user {
-  border-color: var(--border);
-  background: #20232d;
-  color: #b8bbc8;
+  display: none;
 }
 
 .msg-content-wrapper {
@@ -283,8 +267,8 @@
   padding: 14px 17px;
   border: 1px solid var(--border);
   border-radius: 5px 17px 17px 17px;
-  font-size: 14px;
-  line-height: 1.9;
+  font-size: 16px;
+  line-height: 1.8;
   overflow-wrap: anywhere;
   word-break: break-word;
   box-shadow: 0 5px 18px rgba(0, 0, 0, .07);
@@ -648,7 +632,7 @@
 
   .bubble {
     padding: 11px 13px;
-    font-size: 13px;
+    font-size: 15px;
   }
 
   .input-area {
@@ -957,3 +941,19 @@
   }
 }
 
+
+/* ─── مؤشر الكتابة التدريجية ─────────────────────────── */
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--brand-primary);
+  border-radius: 2px;
+  margin-inline-start: 2px;
+  vertical-align: middle;
+  animation: blink .7s step-end infinite;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
