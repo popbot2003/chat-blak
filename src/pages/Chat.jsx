@@ -112,7 +112,11 @@ export default function Chat({ user, onLogout, isAdmin }) {
   const [sendMode, setSendMode] = useState("fast");
   const [showScrollButton, setShowScrollButton] = useState(false);
 
-  const [aiMode, setAiMode] = useState({ thinking: false, search: false });
+  const [aiMode, setAiMode] = useState(() => {
+    // استعادة الوضع المحفوظ — السريع افتراضياً
+    const saved = localStorage.getItem("black-ai-mode");
+    return { thinking: saved === "thinking", search: false };
+  });
   const aiModeRef = useRef(aiMode);
 
   useEffect(() => {
