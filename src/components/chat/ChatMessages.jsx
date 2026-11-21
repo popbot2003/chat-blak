@@ -8,6 +8,29 @@ import MessageContent from "../MessageContent";
 import TypingDots from "../TypingDots";
 import TaskMessage from "./TaskMessage";
 import SourcesBar from "./SourcesBar";
+import { useTypewriter } from "../../hooks/useTypewriter";
+
+// ─── مكوّن رسالة بتأثير الكتابة ────────────────────────────
+function TypewriterMessage({ msg, isDark, copiedId, onCopy }) {
+  const isAI = msg.role === "assistant";
+  const { displayed, done } = useTypewriter(msg.content, isAI);
+  return (
+    <>
+      <div className={`bubble ${msg.role === "user" ? "bubble-user" : isDark ? "bubble-ai" : "bubble-ai-light"}`}>
+        <MessageContent content={displayed} />
+        {isAI && !done && <span className="typewriter-cursor" aria-hidden="true" />}
+      </div>
+      {isAI && done && msg.sources?.length > 0 && (
+        <SourcesBar sources={msg.sources} />
+      )}
+      {isAI && (
+        <button onClick={() => onCopy(msg.content, msg.id)} className="copy-msg-btn" title="نسخ">
+          {copiedId === msg.id ? "✓" : "📋"}
+        </button>
+      )}
+    </>
+  );
+}
 
 export default function ChatMessages({
   messages,
@@ -67,60 +90,24 @@ export default function ChatMessages({
             }`}
           >
             <div className="msg-content-wrapper">
-              <div
-                className={`bubble ${
-                  msg.role === "user"
-                    ? "bubble-user"
-                    : isDark
-                    ? "bubble-ai"
-                    : "bubble-ai-light"
-                }`}
-              >
-                <MessageContent content={msg.content} />
-              </div>
-
-              {msg.role === "assistant" && msg.sources?.length > 0 && (
-                <SourcesBar sources={msg.sources} />
-              )}
-
-              {msg.role === "assistant" && (
-                <button
-                  onClick={() => onCopy(msg.content, msg.id)}
-                  className="copy-msg-btn"
-                  title="نسخ"
-                >
-                  {copiedId === msg.id ? "✓" : "📋"}
-                </button>
-              )}
+              <TypewriterMessage
+                msg={msg}
+                isDark={isDark}
+                copiedId={copiedId}
+                onCopy={onCopy}
+              />
             </div>
-
-            {msg.role === "user" && (
-              <div className="avatar-small avatar-user">أنت</div>
-            )}
           </div>
         );
       })}
 
-      {/* النص المتدفق (streaming) */}
-      {streamingText && (
-        <div className="msg-row msg-row-ai">
-          <div className="avatar-small">B.</div>
-          <div
-            className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
-          >
-            <MessageContent content={streamingText} />
-          </div>
-        </div>
-      )}
-
       {/* مؤشر الكتابة */}
       {loading && !streamingText && (
         <div className="msg-row msg-row-ai">
-          <div className="avatar-small">B.</div>
-          <div
-            className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}
-          >
-            <TypingDots />
+          <div className="msg-content-wrapper">
+            <div className={`bubble ${isDark ? "bubble-ai" : "bubble-ai-light"}`}>
+              <TypingDots />
+            </div>
           </div>
         </div>
       )}
