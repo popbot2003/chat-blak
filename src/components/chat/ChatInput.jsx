@@ -76,8 +76,6 @@ export default function ChatInput({
   loading,
   streamingText,
   attachedFiles = [],
-  sendMode = "fast",
-
   // أوضاع الذكاء
   aiMode = {
     thinking: false,
@@ -89,7 +87,6 @@ export default function ChatInput({
   onStop,
   onFileUpload,
   onRemoveFile,
-  onToggleMode,
   uploadProgress,
 
   inputRef: externalInputRef,
@@ -100,7 +97,6 @@ export default function ChatInput({
   const textareaRef = externalInputRef || internalInputRef;
   const isMobile = useMediaQuery("(max-width: 768px)");
 
-  const isTaskMode = sendMode === "task";
   const showStop = Boolean(loading);
 
   const canSend =
@@ -237,25 +233,6 @@ export default function ChatInput({
           accept=".txt,.js,.jsx,.ts,.tsx,.py,.html,.css,.json,.csv,.md,.xml,.yaml,.yml,.pdf,image/*"
         />
 
-        {/* وضع المهام القديم */}
-        <button
-          type="button"
-          onClick={onToggleMode}
-          className={`mode-toggle ${
-            isTaskMode
-              ? "mode-toggle-task"
-              : "mode-toggle-chat"
-          }`}
-          title={
-            isTaskMode
-              ? "التبديل إلى المحادثة"
-              : "التبديل إلى مهمة"
-          }
-          disabled={loading}
-        >
-          {isTaskMode ? "مهمة" : "محادثة"}
-        </button>
-
         {/* حقل الكتابة */}
         <textarea
           ref={textareaRef}
@@ -267,8 +244,6 @@ export default function ChatInput({
               ? "بلاك بيكتب..."
               : attachedFiles.length > 0
               ? "اكتب سؤالك عن الملفات..."
-              : isTaskMode
-              ? "اكتب مهمة لتنفيذها في الخلفية..."
               : "اكتب لبلاك..."
           }
           rows={1}
@@ -281,21 +256,9 @@ export default function ChatInput({
         <button
           type="button"
           onClick={handleSendClick}
-          className={`send-btn ${
-            loading
-              ? "send-btn-stop"
-              : isTaskMode
-              ? "send-btn-task"
-              : ""
-          }`}
+          className={`send-btn ${loading ? "send-btn-stop" : ""}`}
           disabled={!loading && !canSend}
-          title={
-            loading
-              ? "إيقاف التوليد"
-              : isTaskMode
-              ? "إرسال كمهمة"
-              : "إرسال"
-          }
+          title={loading ? "إيقاف التوليد" : "إرسال"}
           aria-label={
             loading ? "إيقاف التوليد" : "إرسال الرسالة"
           }
@@ -305,8 +268,7 @@ export default function ChatInput({
 
 
       {/* أوضاع الذكاء الاصطناعي — داخل منطقة الإدخال */}
-      {!isTaskMode && (
-        <div
+      <div
           className="composer-modes"
           role="radiogroup"
           aria-label="وضع الذكاء الاصطناعي"
