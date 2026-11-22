@@ -1352,11 +1352,6 @@ export default function Chat({ user, onLogout, isAdmin }) {
             onStop={handleStop}
             onFileUpload={fileUploadHook.handleFileUpload}
             onRemoveFile={fileUploadHook.removeFile}
-            onToggleMode={() =>
-              setSendMode((m) =>
-                m === "fast" ? "task" : "fast"
-              )
-            }
             uploadProgress={fileUploadHook.uploadProgress}
             inputRef={inputRef}
           />
