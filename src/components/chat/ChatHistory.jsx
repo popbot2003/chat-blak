@@ -65,6 +65,9 @@ export default function ChatHistory({
   onGoToAdmin, onOpenSettings, onToggleTheme, onLogout,
   onArchiveChat, onRestoreChat, onRenameChat,
   collapsed = false, onToggleCollapse,
+  showTasks = false,
+  onToggleTasks,
+  activeTasksCount = 0,
 }) {
   const [search, setSearch] = useState("");
   const [archivedView, setArchivedView] = useState(false);
