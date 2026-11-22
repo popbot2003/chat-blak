@@ -298,7 +298,6 @@ export default function ChatInput({
             تفكير
           </button>
         </div>
-      )}
       </div>
 
       {/* تنبيه الاستخدام */}
@@ -317,4 +316,4 @@ export default function ChatInput({
       </div>
     </div>
   );
-    }
+}
