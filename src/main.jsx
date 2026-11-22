@@ -21,6 +21,7 @@ import "./styles/chat/responsive-final.css";
 import "./styles/auth.css";
 import "./styles/settings/settings.css";
 import "./styles/admin/admin.css";
+import "./styles/tasks/tasks.css";
 
 // ── التطبيق ──
 import App from "./App.jsx";
