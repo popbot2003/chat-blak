@@ -1362,6 +1362,7 @@ export default function Chat({ user, onLogout, isAdmin }) {
                 user={currentUser}
                 activeTasks={tasksHook.allActiveTasks}
                 onCancelTask={tasksHook.cancelTask}
+                onCreateTask={tasksHook.createTask}
               />
             </div>
           )}
