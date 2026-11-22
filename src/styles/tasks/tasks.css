@@ -199,3 +199,69 @@
   background: color-mix(in srgb, var(--brand-primary) 12%, transparent);
   color: var(--brand-primary);
 }
+
+/* ─── خانة إنشاء مهمة ───────────────────────────────────── */
+.tasks-panel__composer {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  margin-bottom: var(--space-3);
+  flex-shrink: 0;
+}
+
+.tasks-panel__input {
+  flex: 1;
+  resize: none;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  outline: none;
+  transition: border-color .15s;
+}
+.tasks-panel__input:focus { border-color: var(--brand-primary); }
+.tasks-panel__input::placeholder { color: var(--text-secondary); }
+
+.tasks-panel__send {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: none;
+  transition: opacity .15s;
+}
+.tasks-panel__send:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ─── أقسام القائمة ─────────────────────────────────────── */
+.tasks-panel__section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin: var(--space-3) 0 var(--space-1);
+}
+
+.tasks-panel__empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-6);
+  color: var(--text-secondary);
+  text-align: center;
+  font-size: var(--text-sm);
+}
+.tasks-panel__empty-state span { font-size: 32px; }
+.tasks-panel__empty-hint { font-size: 12px; opacity: .7; }
